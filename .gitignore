@@ -2,3 +2,10 @@
 .swiftpm/
 build/
 .DS_Store
+
+# Personal libraries and developer signing material
+library.json
+*.mobileprovision
+*.p12
+xcuserdata/
+*.xcuserstate

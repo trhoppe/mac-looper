@@ -1,3 +1,5 @@
+#include <TargetConditionals.h>
+#if TARGET_OS_OSX
 #include "LooperCore.h"
 #include <stdatomic.h>
 #include <CoreServices/CoreServices.h>
@@ -7,6 +9,8 @@
 struct TLHardware {
     AudioUnit unit;
     TLCore *core;
+    TLGraphRender graphRender;
+    void *graphContext;
     AudioBufferList *input;
     float *inputStorage, *outputLeft, *outputRight;
     uint32_t maxFrames, inputs, outputs, il, ir, ol, or;
@@ -41,8 +45,13 @@ static OSStatus render(void *context, AudioUnitRenderActionFlags *flags, const A
         // Don't capture invented silence into an in-progress loop. UI stops this engine.
         return noErr;
     }
-    tl_process(h->core, h->input->mBuffers[h->il].mData, h->input->mBuffers[h->ir].mData,
-               h->outputLeft, h->outputRight, frames);
+    if (h->graphRender) {
+        OSStatus status = h->graphRender(h->graphContext, h->input, h->outputLeft, h->outputRight, frames, time);
+        if (status) { atomic_store_explicit(&h->error, status, memory_order_relaxed); return noErr; }
+    } else {
+        tl_process(h->core, h->input->mBuffers[h->il].mData, h->input->mBuffers[h->ir].mData,
+                   h->outputLeft, h->outputRight, frames);
+    }
     if (output->mNumberBuffers >= h->outputs) {
         memcpy(output->mBuffers[h->ol].mData, h->outputLeft, frames * sizeof(float));
         if (h->ol != h->or) memcpy(output->mBuffers[h->or].mData, h->outputRight, frames * sizeof(float));
@@ -108,6 +117,7 @@ fail:
     tl_hardware_destroy(h);
     return NULL;
 }
+void tl_hardware_set_graph(TLHardware *h, TLGraphRender render, void *context) { if (h) { h->graphRender = render; h->graphContext = context; } }
 OSStatus tl_hardware_start(TLHardware *h) { return h ? AudioOutputUnitStart(h->unit) : kAudio_ParamError; }
 void tl_hardware_destroy(TLHardware *h) {
     if (!h) return;
@@ -120,3 +130,5 @@ OSStatus tl_hardware_error(TLHardware *h) { return h ? atomic_load_explicit(&h->
 uint64_t tl_hardware_callbacks(TLHardware *h) { return h ? atomic_load_explicit(&h->callbacks, memory_order_relaxed) : 0; }
 
 uint32_t tl_hardware_callback_frames(TLHardware *h) { return h ? atomic_load_explicit(&h->callbackFrames, memory_order_relaxed) : 0; }
+
+#endif

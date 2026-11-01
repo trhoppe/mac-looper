@@ -1,4 +1,5 @@
 import Foundation
+#if os(macOS)
 import CoreAudio
 
 struct AudioDevice: Identifiable, Equatable {
@@ -9,11 +10,6 @@ struct AudioDevice: Identifiable, Equatable {
     let outputs: Int
     let rate: Double
     var isAM4: Bool { name.caseInsensitiveCompare("AM4") == .orderedSame }
-}
-
-struct AudioFailure: LocalizedError {
-    let message: String
-    var errorDescription: String? { message }
 }
 
 // All discovery and configuration happens on the main actor, outside the audio callback.
@@ -151,3 +147,5 @@ enum AudioDevices {
         }
     }
 }
+
+#endif

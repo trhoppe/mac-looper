@@ -1,6 +1,5 @@
 import Foundation
 import AVFoundation
-import CoreAudio
 
 struct FilePlaybackSnapshot: Sendable {
     let duration: Double
@@ -8,63 +7,33 @@ struct FilePlaybackSnapshot: Sendable {
     let playing: Bool
 }
 
-// Native file decoding/playback stays on its own actor, never on the UI or looper's
-// realtime thread. It has no input node and cannot feed samples into loop capture.
+// File opening runs on this actor; the shared engine owns playback and mixing.
 actor FilePlayback {
-    private var player: AVAudioPlayer?
     private var session: UUID?
-    private var completed = false
-    private var wasPlaying = false
-
-    func load(_ url: URL, session: UUID, volume: Float, repeating: Bool) throws -> FilePlaybackSnapshot {
+    func load(_ url: URL, session: UUID, volume: Float, repeating: Bool) async throws -> FilePlaybackSnapshot {
         try Task.checkCancellation()
-        player?.stop(); player = nil
-        self.session = session; completed = false; wasPlaying = false
-        let next = try AVAudioPlayer(contentsOf: url)
-        guard next.duration.isFinite, next.duration > 0 else { throw AudioFailure(message: "This audio file has no playable duration.") }
-        next.volume = volume; next.numberOfLoops = repeating ? -1 : 0
-        player = next
-        return snapshot(session: session)!
+        let previous = self.session
+        self.session = session
+        await AudioEngineHost.shared.unloadFile(session: previous)
+        try Task.checkCancellation()
+        guard self.session == session else { throw CancellationError() }
+        let asset = try PlaybackAsset(url)
+        try Task.checkCancellation()
+        guard self.session == session else { throw CancellationError() }
+        await AudioEngineHost.shared.loadFile(asset, session: session, volume: volume, repeating: repeating)
+        return FilePlaybackSnapshot(duration: asset.duration, position: 0, playing: false)
     }
-    func play(session: UUID, output: AudioDevice) throws {
-        guard self.session == session, let player else { return }
-        guard AudioDevices.alive(output.id), AudioDevices.string(output.id, kAudioDevicePropertyDeviceUID) == output.uid else {
-            throw AudioFailure(message: "The selected output is disconnected. Choose an output in Audio Settings.")
-        }
-        try AudioDevices.require32Frames(output.id, name: output.name)
-        player.currentDevice = output.uid
-        guard player.currentDevice == output.uid else { throw AudioFailure(message: "Could not route the file player to \(output.name).") }
-        if completed || player.currentTime >= player.duration { player.currentTime = 0 }
-        guard player.prepareToPlay() else { throw AudioFailure(message: "Could not prepare this audio file for playback.") }
-        try AudioDevices.require32Frames(output.id, name: output.name)
-        guard player.play() else { throw AudioFailure(message: "Could not play this audio file through \(output.name).") }
-        completed = false; wasPlaying = true
-    }
-    func pause(session: UUID) {
+    func play(session: UUID, output: AudioDevice) async throws {
         guard self.session == session else { return }
-        player?.pause(); wasPlaying = false
+        try await AudioEngineHost.shared.playFile(session: session, output: output)
     }
-    func stop(session: UUID) {
-        guard self.session == session else { return }
-        // Pause + seek keeps the selected file ready without rebuilding its decoder.
-        player?.pause(); player?.currentTime = 0; completed = false; wasPlaying = false
-    }
-    func seek(session: UUID, to seconds: Double) {
-        guard self.session == session, let player, seconds.isFinite else { return }
-        player.currentTime = min(player.duration, max(0, seconds)); completed = false
-    }
-    func configure(session: UUID, volume: Float, repeating: Bool) {
-        guard self.session == session else { return }
-        player?.setVolume(min(1, max(0, volume)), fadeDuration: 0.02)
-        player?.numberOfLoops = repeating ? -1 : 0
-    }
-    func snapshot(session: UUID) -> FilePlaybackSnapshot? {
-        guard self.session == session, let player else { return nil }
-        if wasPlaying && !player.isPlaying { completed = true; wasPlaying = false }
-        return FilePlaybackSnapshot(duration: player.duration, position: completed ? player.duration : player.currentTime, playing: player.isPlaying)
-    }
-    func unload(session expected: UUID? = nil) {
+    func pause(session: UUID) async { guard self.session == session else { return }; await AudioEngineHost.shared.pauseFile(session: session) }
+    func stop(session: UUID) async { guard self.session == session else { return }; await AudioEngineHost.shared.stopFile(session: session) }
+    func seek(session: UUID, to seconds: Double) async { guard self.session == session else { return }; await AudioEngineHost.shared.seekFile(session: session, to: seconds) }
+    func configure(session: UUID, volume: Float, repeating: Bool) async { guard self.session == session else { return }; await AudioEngineHost.shared.configureFile(session: session, volume: volume, repeating: repeating) }
+    func snapshot(session: UUID) async -> FilePlaybackSnapshot? { guard self.session == session else { return nil }; return await AudioEngineHost.shared.fileSnapshot(session: session) }
+    func unload(session expected: UUID? = nil) async {
         if let expected, session != expected { return }
-        player?.stop(); player = nil; session = nil; completed = false; wasPlaying = false
+        await AudioEngineHost.shared.unloadFile(session: session); session = nil
     }
 }

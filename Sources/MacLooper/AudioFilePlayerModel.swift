@@ -1,5 +1,7 @@
 import SwiftUI
+#if os(macOS)
 import AppKit
+#endif
 
 @MainActor final class AudioFilePlayerModel: ObservableObject {
     @Published private(set) var groups: [AudioFolderGroup] = []
@@ -12,6 +14,7 @@ import AppKit
     @Published private(set) var position = 0.0
     @Published private(set) var playing = false
     @Published var query = "" { didSet { visibleGroups = AudioLibrary.filter(groups, query: query) } }
+    @Published var requestingFolder = false
     @Published var error: String?
     @Published private(set) var scanNotice: String?
     @Published var volume = 0.7 { didSet { configure() } }
@@ -25,10 +28,16 @@ import AppKit
     private var timer: Timer?
     private var polling = false
     private var scopedFolder: URL?
+    private var scopedFile: URL?
+    private let defaults: UserDefaults
 
-    init() {
+    init(defaults: UserDefaults = .standard, restoreFolder: Bool = true) {
+        self.defaults = defaults
         timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
             Task { @MainActor in await self?.poll() }
+        }
+        if restoreFolder, let url = SongLibraryModel.resolve(defaults.data(forKey: "audioPlayerFolder")) {
+            openFolder(url)
         }
     }
     var trackCount: Int { groups.reduce(0) { $0 + $1.tracks.count } }
@@ -41,6 +50,7 @@ import AppKit
         Task { await playback.pause(session: token) }
     }
     func chooseFolder() {
+        #if os(macOS)
         let panel = NSOpenPanel()
         panel.title = "Open an audio folder"
         panel.message = "Audio files in this folder and its subfolders will appear in the browser."
@@ -50,16 +60,21 @@ import AppKit
             guard response == .OK, let url = panel.url else { return }
             Task { @MainActor in self?.openFolder(url) }
         }
+        #else
+        requestingFolder = true
+        #endif
     }
     func openFolder(_ url: URL) {
         worker?.cancel(); loadTask?.cancel()
         scanGeneration = UUID(); let generation = scanGeneration
         let previousSession = session
         session = UUID(); selected = nil; loading = false; playing = false; position = 0; duration = 0
-        let previousScope = scopedFolder
+        let previousScope = scopedFolder, previousFileScope = scopedFile
+        scopedFile = nil
         scopedFolder = url.startAccessingSecurityScopedResource() ? url : nil
-        Task { await playback.unload(session: previousSession); previousScope?.stopAccessingSecurityScopedResource() }
+        Task { await playback.unload(session: previousSession); previousScope?.stopAccessingSecurityScopedResource(); previousFileScope?.stopAccessingSecurityScopedResource() }
         folder = url; groups = []; visibleGroups = []; scanning = true; error = nil; scanNotice = nil
+        if let bookmark = SongLibraryModel.bookmark(url) { defaults.set(bookmark, forKey: "audioPlayerFolder") }
         let task = Task.detached(priority: .userInitiated) { try AudioLibrary.scan(url) }
         worker = task
         Task {
@@ -73,12 +88,18 @@ import AppKit
             if scanGeneration == generation { scanning = false; worker = nil }
         }
     }
+    func selectFile(_ url: URL) {
+        select(AudioTrack(url: url, directory: ""))
+    }
     func select(_ track: AudioTrack) {
         guard selected?.id != track.id else { return }
         loadTask?.cancel()
+        let previousScope = scopedFile
+        scopedFile = track.url.startAccessingSecurityScopedResource() ? track.url : nil
         session = UUID(); let token = session
         selected = track; loading = true; playing = false; duration = 0; position = 0; error = nil
         loadTask = Task {
+            defer { previousScope?.stopAccessingSecurityScopedResource() }
             do {
                 let result = try await playback.load(track.url, session: token, volume: Float(volume), repeating: repeatTrack)
                 guard session == token, !Task.isCancelled else { return }
@@ -144,8 +165,8 @@ import AppKit
     }
     func shutdown() {
         worker?.cancel(); loadTask?.cancel(); timer?.invalidate()
-        let scope = scopedFolder; scopedFolder = nil
+        let scope = scopedFolder, fileScope = scopedFile; scopedFolder = nil; scopedFile = nil
         let token = session
-        Task { await playback.unload(session: token); scope?.stopAccessingSecurityScopedResource() }
+        Task { await playback.unload(session: token); scope?.stopAccessingSecurityScopedResource(); fileScope?.stopAccessingSecurityScopedResource() }
     }
 }

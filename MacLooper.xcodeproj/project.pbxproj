@@ -1,0 +1,960 @@
+// !$*UTF8*$!
+{
+	"archiveVersion" = "1";
+	"classes" = {
+	};
+	"objectVersion" = "56";
+	"objects" = {
+		"11C3DDF36D9D67CB58370A54" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/MacLooper/AppPreview.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"89FE78801A985B500B0289BE" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/MacLooper/AudioDevices.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"11BE9BBC37E56BAEAEEC9EAD" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/MacLooper/AudioEngineHost.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"2FDB0B73322A98AFF0989A10" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/MacLooper/AudioFilePlayerModel.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"3DC417EB73F7003742E9B549" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/MacLooper/AudioFileRail.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"3DBF5D0D5E5691D6836D7649" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/MacLooper/AudioLibrary.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"E2CD89D17D1D022B5CF4E6C5" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/MacLooper/AudioTypes.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"6A1BD18AC78FACDEF8AEE07F" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/MacLooper/ChordChartView.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"7F3B570D2D70C19D0E9CD6AB" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/MacLooper/ContentView.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"37E90C6C2473753C2146C190" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/MacLooper/FilePlayback.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"929A2F5E1AA2D2C76959A31D" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/MacLooper/IPadAudioDevices.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"D5649EC117D750B78D6E05D4" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/MacLooper/LooperModel.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"3D30A083AE83ADD69EFF4337" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/MacLooper/LooperPanel.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"798871092DAD7073641FF444" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/MacLooper/MacLooperApp.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"1763C05D4FB09C7459AD520D" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/MacLooper/PlaybackAsset.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"C9AA4E6B4121A9502C001522" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/MacLooper/SongBrowserView.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"E8964440F829DFE735343C21" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/MacLooper/SongLibraryModel.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"9ED39A968A752FA4EE265C55" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "folder.assetcatalog";
+			"path" = "Assets/Shared.xcassets";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"582681C2EAE02B3F3D399C0C" = {
+			"isa" = "XCLocalSwiftPackageReference";
+			"relativePath" = ".";
+		};
+		"347C5000B9C2D8FA065C16E9" = {
+			"isa" = "PBXFileReference";
+			"explicitFileType" = "wrapper.application";
+			"includeInIndex" = "0";
+			"path" = "Mac Looper.app";
+			"sourceTree" = "BUILT_PRODUCTS_DIR";
+		};
+		"D25D4279C35D2B798B8A8B4F" = {
+			"isa" = "XCSwiftPackageProductDependency";
+			"package" = "582681C2EAE02B3F3D399C0C";
+			"productName" = "JamCore";
+		};
+		"A369DC9573862AA33CE2C30E" = {
+			"isa" = "PBXBuildFile";
+			"productRef" = "D25D4279C35D2B798B8A8B4F";
+		};
+		"28B15BFCD6A4F660833177B6" = {
+			"isa" = "XCSwiftPackageProductDependency";
+			"package" = "582681C2EAE02B3F3D399C0C";
+			"productName" = "LooperCore";
+		};
+		"1F77C1BD194B31E3C007EB75" = {
+			"isa" = "PBXBuildFile";
+			"productRef" = "28B15BFCD6A4F660833177B6";
+		};
+		"34FCA638CE1984F052CA1CEE" = {
+			"isa" = "XCSwiftPackageProductDependency";
+			"package" = "582681C2EAE02B3F3D399C0C";
+			"productName" = "LooperAudioUnit";
+		};
+		"36D8BF34E6EAE2F74C237376" = {
+			"isa" = "PBXBuildFile";
+			"productRef" = "34FCA638CE1984F052CA1CEE";
+		};
+		"AA865ED4AC983DE909866580" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "11C3DDF36D9D67CB58370A54";
+		};
+		"3CA991873719CEA026855408" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "89FE78801A985B500B0289BE";
+		};
+		"136D4F0FB22C09BD298E3089" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "11BE9BBC37E56BAEAEEC9EAD";
+		};
+		"3F09B906C982C23BBEED5708" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "2FDB0B73322A98AFF0989A10";
+		};
+		"C264998A8CB017464DD9284D" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "3DC417EB73F7003742E9B549";
+		};
+		"74687B90D060A3E4DB79D208" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "3DBF5D0D5E5691D6836D7649";
+		};
+		"774D441B64155B46D11C80B9" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "E2CD89D17D1D022B5CF4E6C5";
+		};
+		"E38D387ABD8F74DEFC889331" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "6A1BD18AC78FACDEF8AEE07F";
+		};
+		"EFB627AF251D4EFDA5AE15A7" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "7F3B570D2D70C19D0E9CD6AB";
+		};
+		"8CFB19579FA975869E9A45FB" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "37E90C6C2473753C2146C190";
+		};
+		"2614A94B4BC4434ABF2DDE22" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "929A2F5E1AA2D2C76959A31D";
+		};
+		"D5E428B19E85E7CAF6F17B6D" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "D5649EC117D750B78D6E05D4";
+		};
+		"0962DF64D73C3C7D335DD27E" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "3D30A083AE83ADD69EFF4337";
+		};
+		"2D1F663B78A05CD4557BA704" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "798871092DAD7073641FF444";
+		};
+		"1F222D8300114981C375476C" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "1763C05D4FB09C7459AD520D";
+		};
+		"2645E32922A1F66C47CEC260" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "C9AA4E6B4121A9502C001522";
+		};
+		"A8939EAA709FD15E5DA641D5" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "E8964440F829DFE735343C21";
+		};
+		"C2857F81920011C4F9CFB1FC" = {
+			"isa" = "PBXSourcesBuildPhase";
+			"buildActionMask" = "2147483647";
+			"files" = (
+				"AA865ED4AC983DE909866580",
+				"3CA991873719CEA026855408",
+				"136D4F0FB22C09BD298E3089",
+				"3F09B906C982C23BBEED5708",
+				"C264998A8CB017464DD9284D",
+				"74687B90D060A3E4DB79D208",
+				"774D441B64155B46D11C80B9",
+				"E38D387ABD8F74DEFC889331",
+				"EFB627AF251D4EFDA5AE15A7",
+				"8CFB19579FA975869E9A45FB",
+				"2614A94B4BC4434ABF2DDE22",
+				"D5E428B19E85E7CAF6F17B6D",
+				"0962DF64D73C3C7D335DD27E",
+				"2D1F663B78A05CD4557BA704",
+				"1F222D8300114981C375476C",
+				"2645E32922A1F66C47CEC260",
+				"A8939EAA709FD15E5DA641D5",
+			);
+			"runOnlyForDeploymentPostprocessing" = "0";
+		};
+		"175C3D428E17ABC99EE7D959" = {
+			"isa" = "PBXFrameworksBuildPhase";
+			"buildActionMask" = "2147483647";
+			"files" = (
+				"A369DC9573862AA33CE2C30E",
+				"1F77C1BD194B31E3C007EB75",
+				"36D8BF34E6EAE2F74C237376",
+			);
+			"runOnlyForDeploymentPostprocessing" = "0";
+		};
+		"95F105ED24D475358143C77C" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "9ED39A968A752FA4EE265C55";
+		};
+		"CEA1BBEFADE2FA83020B9AA6" = {
+			"isa" = "PBXResourcesBuildPhase";
+			"buildActionMask" = "2147483647";
+			"files" = (
+				"95F105ED24D475358143C77C",
+			);
+			"runOnlyForDeploymentPostprocessing" = "0";
+		};
+		"9234186587FA96BDAF4DCA3C" = {
+			"isa" = "XCBuildConfiguration";
+			"buildSettings" = {
+				"SWIFT_VERSION" = "5.0";
+				"CLANG_ENABLE_MODULES" = "YES";
+				"CLANG_ENABLE_OBJC_ARC" = "YES";
+				"SWIFT_STRICT_CONCURRENCY" = "minimal";
+				"ENABLE_USER_SCRIPT_SANDBOXING" = "YES";
+				"LD_RUNPATH_SEARCH_PATHS" = "$(inherited) @executable_path/../Frameworks";
+				"PRODUCT_NAME" = "Mac Looper";
+				"EXECUTABLE_NAME" = "MacLooper";
+				"PRODUCT_MODULE_NAME" = "MacLooper";
+				"GENERATE_INFOPLIST_FILE" = "YES";
+				"INFOPLIST_KEY_CFBundleDisplayName" = "Mac Looper";
+				"INFOPLIST_KEY_NSMicrophoneUsageDescription" = "Mac Looper listens to your guitar interface to trigger and capture a loop. Live guitar is monitored by your interface.";
+				"CURRENT_PROJECT_VERSION" = "5";
+				"MARKETING_VERSION" = "0.3.0";
+				"CODE_SIGN_STYLE" = "Automatic";
+				"DEVELOPMENT_TEAM" = "S37ZVC89JW";
+				"ASSETCATALOG_COMPILER_APPICON_NAME" = "AppIconMac";
+				"SDKROOT" = "macosx";
+				"MACOSX_DEPLOYMENT_TARGET" = "14.0";
+				"SUPPORTED_PLATFORMS" = "macosx";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "local.thoppe.maclooper";
+				"ENABLE_APP_SANDBOX" = "NO";
+				"CODE_SIGN_IDENTITY" = "-";
+				"SWIFT_OPTIMIZATION_LEVEL" = "-Onone";
+				"DEBUG_INFORMATION_FORMAT" = "dwarf";
+				"SWIFT_ACTIVE_COMPILATION_CONDITIONS" = "$(inherited) DEBUG";
+				"ENABLE_TESTABILITY" = "YES";
+				"ONLY_ACTIVE_ARCH" = "YES";
+			};
+			"name" = "Debug";
+		};
+		"F1C1BDBFE4D3F5A34C9FB878" = {
+			"isa" = "XCBuildConfiguration";
+			"buildSettings" = {
+				"SWIFT_VERSION" = "5.0";
+				"CLANG_ENABLE_MODULES" = "YES";
+				"CLANG_ENABLE_OBJC_ARC" = "YES";
+				"SWIFT_STRICT_CONCURRENCY" = "minimal";
+				"ENABLE_USER_SCRIPT_SANDBOXING" = "YES";
+				"LD_RUNPATH_SEARCH_PATHS" = "$(inherited) @executable_path/../Frameworks";
+				"PRODUCT_NAME" = "Mac Looper";
+				"EXECUTABLE_NAME" = "MacLooper";
+				"PRODUCT_MODULE_NAME" = "MacLooper";
+				"GENERATE_INFOPLIST_FILE" = "YES";
+				"INFOPLIST_KEY_CFBundleDisplayName" = "Mac Looper";
+				"INFOPLIST_KEY_NSMicrophoneUsageDescription" = "Mac Looper listens to your guitar interface to trigger and capture a loop. Live guitar is monitored by your interface.";
+				"CURRENT_PROJECT_VERSION" = "5";
+				"MARKETING_VERSION" = "0.3.0";
+				"CODE_SIGN_STYLE" = "Automatic";
+				"DEVELOPMENT_TEAM" = "S37ZVC89JW";
+				"ASSETCATALOG_COMPILER_APPICON_NAME" = "AppIconMac";
+				"SDKROOT" = "macosx";
+				"MACOSX_DEPLOYMENT_TARGET" = "14.0";
+				"SUPPORTED_PLATFORMS" = "macosx";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "local.thoppe.maclooper";
+				"ENABLE_APP_SANDBOX" = "NO";
+				"CODE_SIGN_IDENTITY" = "-";
+				"SWIFT_OPTIMIZATION_LEVEL" = "-O";
+				"DEBUG_INFORMATION_FORMAT" = "dwarf-with-dsym";
+			};
+			"name" = "Release";
+		};
+		"F5DFAF9FA0A909481204EC4F" = {
+			"isa" = "XCConfigurationList";
+			"buildConfigurations" = (
+				"9234186587FA96BDAF4DCA3C",
+				"F1C1BDBFE4D3F5A34C9FB878",
+			);
+			"defaultConfigurationIsVisible" = "0";
+			"defaultConfigurationName" = "Release";
+		};
+		"62B4A2F1E0B5C3F1EE0C65C9" = {
+			"isa" = "PBXNativeTarget";
+			"buildConfigurationList" = "F5DFAF9FA0A909481204EC4F";
+			"buildPhases" = (
+				"C2857F81920011C4F9CFB1FC",
+				"175C3D428E17ABC99EE7D959",
+				"CEA1BBEFADE2FA83020B9AA6",
+			);
+			"buildRules" = (
+			);
+			"dependencies" = (
+			);
+			"name" = "MacLooper-macOS";
+			"packageProductDependencies" = (
+				"D25D4279C35D2B798B8A8B4F",
+				"28B15BFCD6A4F660833177B6",
+				"34FCA638CE1984F052CA1CEE",
+			);
+			"productName" = "Mac Looper";
+			"productReference" = "347C5000B9C2D8FA065C16E9";
+			"productType" = "com.apple.product-type.application";
+		};
+		"2D7F403A62505FBF2C0EC577" = {
+			"isa" = "PBXFileReference";
+			"explicitFileType" = "wrapper.application";
+			"includeInIndex" = "0";
+			"path" = "Mac Looper.app";
+			"sourceTree" = "BUILT_PRODUCTS_DIR";
+		};
+		"201FDA2043418E1DB4D0CFAB" = {
+			"isa" = "XCSwiftPackageProductDependency";
+			"package" = "582681C2EAE02B3F3D399C0C";
+			"productName" = "JamCore";
+		};
+		"DE3871BDFE00FE33684452B6" = {
+			"isa" = "PBXBuildFile";
+			"productRef" = "201FDA2043418E1DB4D0CFAB";
+		};
+		"3261A8089BF489128FB150E4" = {
+			"isa" = "XCSwiftPackageProductDependency";
+			"package" = "582681C2EAE02B3F3D399C0C";
+			"productName" = "LooperCore";
+		};
+		"D75F13A104430A494A6DC55E" = {
+			"isa" = "PBXBuildFile";
+			"productRef" = "3261A8089BF489128FB150E4";
+		};
+		"06381130393C9D8DABA352E2" = {
+			"isa" = "XCSwiftPackageProductDependency";
+			"package" = "582681C2EAE02B3F3D399C0C";
+			"productName" = "LooperAudioUnit";
+		};
+		"E1710DAE914DCC379DA260BB" = {
+			"isa" = "PBXBuildFile";
+			"productRef" = "06381130393C9D8DABA352E2";
+		};
+		"C0AF370DB8ACF5EE07B35234" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "11C3DDF36D9D67CB58370A54";
+		};
+		"58F99258B794C5056584F530" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "89FE78801A985B500B0289BE";
+		};
+		"E03D8CD5A6679439407EC37B" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "11BE9BBC37E56BAEAEEC9EAD";
+		};
+		"65896D6D8EFD03382D97E4B7" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "2FDB0B73322A98AFF0989A10";
+		};
+		"284330BA7C138834CD3D1E50" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "3DC417EB73F7003742E9B549";
+		};
+		"E9143E4CBEF07A6E113F0BE7" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "3DBF5D0D5E5691D6836D7649";
+		};
+		"000035ED34357047421299A6" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "E2CD89D17D1D022B5CF4E6C5";
+		};
+		"9E4AEE76A7EF625FB1725E32" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "6A1BD18AC78FACDEF8AEE07F";
+		};
+		"F583BF9727266127F098504F" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "7F3B570D2D70C19D0E9CD6AB";
+		};
+		"083CE74F4811917D01CB3D3F" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "37E90C6C2473753C2146C190";
+		};
+		"70E2F95249E52F23F143D825" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "929A2F5E1AA2D2C76959A31D";
+		};
+		"6AB030F49145017D0C180E30" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "D5649EC117D750B78D6E05D4";
+		};
+		"52E5F72E81016648DC9E8F9C" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "3D30A083AE83ADD69EFF4337";
+		};
+		"AD0E7A142B22344DC87C8647" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "798871092DAD7073641FF444";
+		};
+		"44B1D5AC46EC46B353D849FF" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "1763C05D4FB09C7459AD520D";
+		};
+		"0073B19CA3AE054BD541F82B" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "C9AA4E6B4121A9502C001522";
+		};
+		"92A6F96C952D4EF79F042674" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "E8964440F829DFE735343C21";
+		};
+		"399735C58E6ED2C3209A38B3" = {
+			"isa" = "PBXSourcesBuildPhase";
+			"buildActionMask" = "2147483647";
+			"files" = (
+				"C0AF370DB8ACF5EE07B35234",
+				"58F99258B794C5056584F530",
+				"E03D8CD5A6679439407EC37B",
+				"65896D6D8EFD03382D97E4B7",
+				"284330BA7C138834CD3D1E50",
+				"E9143E4CBEF07A6E113F0BE7",
+				"000035ED34357047421299A6",
+				"9E4AEE76A7EF625FB1725E32",
+				"F583BF9727266127F098504F",
+				"083CE74F4811917D01CB3D3F",
+				"70E2F95249E52F23F143D825",
+				"6AB030F49145017D0C180E30",
+				"52E5F72E81016648DC9E8F9C",
+				"AD0E7A142B22344DC87C8647",
+				"44B1D5AC46EC46B353D849FF",
+				"0073B19CA3AE054BD541F82B",
+				"92A6F96C952D4EF79F042674",
+			);
+			"runOnlyForDeploymentPostprocessing" = "0";
+		};
+		"C3C9FDCD2A145E3BC4C59DA4" = {
+			"isa" = "PBXFrameworksBuildPhase";
+			"buildActionMask" = "2147483647";
+			"files" = (
+				"DE3871BDFE00FE33684452B6",
+				"D75F13A104430A494A6DC55E",
+				"E1710DAE914DCC379DA260BB",
+			);
+			"runOnlyForDeploymentPostprocessing" = "0";
+		};
+		"494381D883DD67FD84805AAB" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "9ED39A968A752FA4EE265C55";
+		};
+		"8CB82E825EA5CA440CC61309" = {
+			"isa" = "PBXResourcesBuildPhase";
+			"buildActionMask" = "2147483647";
+			"files" = (
+				"494381D883DD67FD84805AAB",
+			);
+			"runOnlyForDeploymentPostprocessing" = "0";
+		};
+		"0C5F83ACE8D007D820D45E72" = {
+			"isa" = "XCBuildConfiguration";
+			"buildSettings" = {
+				"SWIFT_VERSION" = "5.0";
+				"CLANG_ENABLE_MODULES" = "YES";
+				"CLANG_ENABLE_OBJC_ARC" = "YES";
+				"SWIFT_STRICT_CONCURRENCY" = "minimal";
+				"ENABLE_USER_SCRIPT_SANDBOXING" = "YES";
+				"LD_RUNPATH_SEARCH_PATHS" = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks";
+				"PRODUCT_NAME" = "Mac Looper";
+				"EXECUTABLE_NAME" = "MacLooper";
+				"PRODUCT_MODULE_NAME" = "MacLooper";
+				"GENERATE_INFOPLIST_FILE" = "YES";
+				"INFOPLIST_KEY_CFBundleDisplayName" = "Mac Looper";
+				"INFOPLIST_KEY_NSMicrophoneUsageDescription" = "Mac Looper listens to your guitar interface to trigger and capture a loop. Live guitar is monitored by your interface.";
+				"CURRENT_PROJECT_VERSION" = "5";
+				"MARKETING_VERSION" = "0.3.0";
+				"CODE_SIGN_STYLE" = "Automatic";
+				"DEVELOPMENT_TEAM" = "S37ZVC89JW";
+				"ASSETCATALOG_COMPILER_APPICON_NAME" = "AppIconPad";
+				"SDKROOT" = "iphoneos";
+				"SUPPORTED_PLATFORMS" = "iphoneos iphonesimulator";
+				"IPHONEOS_DEPLOYMENT_TARGET" = "18.0";
+				"TARGETED_DEVICE_FAMILY" = "2";
+				"SUPPORTS_MACCATALYST" = "NO";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "com.thoppe.maclooper";
+				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation" = "YES";
+				"INFOPLIST_KEY_UILaunchScreen_Generation" = "YES";
+				"INFOPLIST_KEY_UIFileSharingEnabled" = "YES";
+				"INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace" = "YES";
+				"INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad" = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				"SWIFT_OPTIMIZATION_LEVEL" = "-Onone";
+				"DEBUG_INFORMATION_FORMAT" = "dwarf";
+				"SWIFT_ACTIVE_COMPILATION_CONDITIONS" = "$(inherited) DEBUG";
+				"ENABLE_TESTABILITY" = "YES";
+				"ONLY_ACTIVE_ARCH" = "YES";
+			};
+			"name" = "Debug";
+		};
+		"45A7D534EDE4B87C880C8170" = {
+			"isa" = "XCBuildConfiguration";
+			"buildSettings" = {
+				"SWIFT_VERSION" = "5.0";
+				"CLANG_ENABLE_MODULES" = "YES";
+				"CLANG_ENABLE_OBJC_ARC" = "YES";
+				"SWIFT_STRICT_CONCURRENCY" = "minimal";
+				"ENABLE_USER_SCRIPT_SANDBOXING" = "YES";
+				"LD_RUNPATH_SEARCH_PATHS" = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks";
+				"PRODUCT_NAME" = "Mac Looper";
+				"EXECUTABLE_NAME" = "MacLooper";
+				"PRODUCT_MODULE_NAME" = "MacLooper";
+				"GENERATE_INFOPLIST_FILE" = "YES";
+				"INFOPLIST_KEY_CFBundleDisplayName" = "Mac Looper";
+				"INFOPLIST_KEY_NSMicrophoneUsageDescription" = "Mac Looper listens to your guitar interface to trigger and capture a loop. Live guitar is monitored by your interface.";
+				"CURRENT_PROJECT_VERSION" = "5";
+				"MARKETING_VERSION" = "0.3.0";
+				"CODE_SIGN_STYLE" = "Automatic";
+				"DEVELOPMENT_TEAM" = "S37ZVC89JW";
+				"ASSETCATALOG_COMPILER_APPICON_NAME" = "AppIconPad";
+				"SDKROOT" = "iphoneos";
+				"SUPPORTED_PLATFORMS" = "iphoneos iphonesimulator";
+				"IPHONEOS_DEPLOYMENT_TARGET" = "18.0";
+				"TARGETED_DEVICE_FAMILY" = "2";
+				"SUPPORTS_MACCATALYST" = "NO";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "com.thoppe.maclooper";
+				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation" = "YES";
+				"INFOPLIST_KEY_UILaunchScreen_Generation" = "YES";
+				"INFOPLIST_KEY_UIFileSharingEnabled" = "YES";
+				"INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace" = "YES";
+				"INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad" = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				"SWIFT_OPTIMIZATION_LEVEL" = "-O";
+				"DEBUG_INFORMATION_FORMAT" = "dwarf-with-dsym";
+			};
+			"name" = "Release";
+		};
+		"41E3B2B1775FBE57EC48DAFD" = {
+			"isa" = "XCConfigurationList";
+			"buildConfigurations" = (
+				"0C5F83ACE8D007D820D45E72",
+				"45A7D534EDE4B87C880C8170",
+			);
+			"defaultConfigurationIsVisible" = "0";
+			"defaultConfigurationName" = "Release";
+		};
+		"8DA9A47D78C32181D21ED263" = {
+			"isa" = "PBXNativeTarget";
+			"buildConfigurationList" = "41E3B2B1775FBE57EC48DAFD";
+			"buildPhases" = (
+				"399735C58E6ED2C3209A38B3",
+				"C3C9FDCD2A145E3BC4C59DA4",
+				"8CB82E825EA5CA440CC61309",
+			);
+			"buildRules" = (
+			);
+			"dependencies" = (
+			);
+			"name" = "MacLooper-iPad";
+			"packageProductDependencies" = (
+				"201FDA2043418E1DB4D0CFAB",
+				"3261A8089BF489128FB150E4",
+				"06381130393C9D8DABA352E2",
+			);
+			"productName" = "Mac Looper";
+			"productReference" = "2D7F403A62505FBF2C0EC577";
+			"productType" = "com.apple.product-type.application";
+		};
+		"4DB826298CC87F844A97B12D" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Tests/JamCoreTests/ChordProTests.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"11413520F336346DAB475C75" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Tests/JamCoreTests/LibraryTests.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"724C495D24C6DDA1C0C6D092" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Tests/LooperCoreTests/LoopAudioUnitTests.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"3F5947B615DEDF81783F8BC3" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Tests/LooperCoreTests/LooperCoreTests.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"A23611D98FDCD3302A78F3CA" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Tests/LooperCoreTests/SharedGraphTests.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"AD5D520508EF8024D25C00BA" = {
+			"isa" = "PBXFileReference";
+			"explicitFileType" = "wrapper.cfbundle";
+			"path" = "MacLooper-iPadTests.xctest";
+			"sourceTree" = "BUILT_PRODUCTS_DIR";
+		};
+		"4CDFBF35D0586BF0077A9D42" = {
+			"isa" = "XCSwiftPackageProductDependency";
+			"package" = "582681C2EAE02B3F3D399C0C";
+			"productName" = "JamCore";
+		};
+		"3D20F625C7EF471434E76018" = {
+			"isa" = "PBXBuildFile";
+			"productRef" = "4CDFBF35D0586BF0077A9D42";
+		};
+		"3FCCD81FE33E706D292E9921" = {
+			"isa" = "XCSwiftPackageProductDependency";
+			"package" = "582681C2EAE02B3F3D399C0C";
+			"productName" = "LooperCore";
+		};
+		"4CE1AA7A36254C58D37D6EE3" = {
+			"isa" = "PBXBuildFile";
+			"productRef" = "3FCCD81FE33E706D292E9921";
+		};
+		"D601B9979E7CF966D0517889" = {
+			"isa" = "XCSwiftPackageProductDependency";
+			"package" = "582681C2EAE02B3F3D399C0C";
+			"productName" = "LooperAudioUnit";
+		};
+		"64F309353B714873BAF20606" = {
+			"isa" = "PBXBuildFile";
+			"productRef" = "D601B9979E7CF966D0517889";
+		};
+		"3B07A601889A5C98A1E12C74" = {
+			"isa" = "PBXContainerItemProxy";
+			"containerPortal" = "98F54143AB4E86B28C3AFEE0";
+			"proxyType" = "1";
+			"remoteGlobalIDString" = "8DA9A47D78C32181D21ED263";
+			"remoteInfo" = "MacLooper-iPad";
+		};
+		"2A21D9E9044D0B11FAFCCFE3" = {
+			"isa" = "PBXTargetDependency";
+			"target" = "8DA9A47D78C32181D21ED263";
+			"targetProxy" = "3B07A601889A5C98A1E12C74";
+		};
+		"826AAA89EB7188D0A8FFE29F" = {
+			"isa" = "XCBuildConfiguration";
+			"buildSettings" = {
+				"SWIFT_VERSION" = "5.0";
+				"CLANG_ENABLE_MODULES" = "YES";
+				"CLANG_ENABLE_OBJC_ARC" = "YES";
+				"SWIFT_STRICT_CONCURRENCY" = "minimal";
+				"ENABLE_USER_SCRIPT_SANDBOXING" = "YES";
+				"LD_RUNPATH_SEARCH_PATHS" = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks";
+				"SDKROOT" = "iphoneos";
+				"SUPPORTED_PLATFORMS" = "iphoneos iphonesimulator";
+				"IPHONEOS_DEPLOYMENT_TARGET" = "18.0";
+				"TARGETED_DEVICE_FAMILY" = "2";
+				"PRODUCT_NAME" = "MacLooper-iPadTests";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "com.thoppe.maclooper.tests";
+				"GENERATE_INFOPLIST_FILE" = "YES";
+				"DEVELOPMENT_TEAM" = "S37ZVC89JW";
+				"CODE_SIGN_STYLE" = "Automatic";
+				"TEST_HOST" = "$(BUILT_PRODUCTS_DIR)/Mac Looper.app/MacLooper";
+				"BUNDLE_LOADER" = "$(TEST_HOST)";
+				"SWIFT_OPTIMIZATION_LEVEL" = "-Onone";
+				"DEBUG_INFORMATION_FORMAT" = "dwarf";
+				"SWIFT_ACTIVE_COMPILATION_CONDITIONS" = "$(inherited) DEBUG";
+				"ENABLE_TESTABILITY" = "YES";
+				"ONLY_ACTIVE_ARCH" = "YES";
+			};
+			"name" = "Debug";
+		};
+		"4E3063326E67F3617774807F" = {
+			"isa" = "XCBuildConfiguration";
+			"buildSettings" = {
+				"SWIFT_VERSION" = "5.0";
+				"CLANG_ENABLE_MODULES" = "YES";
+				"CLANG_ENABLE_OBJC_ARC" = "YES";
+				"SWIFT_STRICT_CONCURRENCY" = "minimal";
+				"ENABLE_USER_SCRIPT_SANDBOXING" = "YES";
+				"LD_RUNPATH_SEARCH_PATHS" = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks";
+				"SDKROOT" = "iphoneos";
+				"SUPPORTED_PLATFORMS" = "iphoneos iphonesimulator";
+				"IPHONEOS_DEPLOYMENT_TARGET" = "18.0";
+				"TARGETED_DEVICE_FAMILY" = "2";
+				"PRODUCT_NAME" = "MacLooper-iPadTests";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "com.thoppe.maclooper.tests";
+				"GENERATE_INFOPLIST_FILE" = "YES";
+				"DEVELOPMENT_TEAM" = "S37ZVC89JW";
+				"CODE_SIGN_STYLE" = "Automatic";
+				"TEST_HOST" = "$(BUILT_PRODUCTS_DIR)/Mac Looper.app/MacLooper";
+				"BUNDLE_LOADER" = "$(TEST_HOST)";
+				"SWIFT_OPTIMIZATION_LEVEL" = "-O";
+				"DEBUG_INFORMATION_FORMAT" = "dwarf-with-dsym";
+			};
+			"name" = "Release";
+		};
+		"BB53212113842AF78DE45E94" = {
+			"isa" = "XCConfigurationList";
+			"buildConfigurations" = (
+				"826AAA89EB7188D0A8FFE29F",
+				"4E3063326E67F3617774807F",
+			);
+			"defaultConfigurationIsVisible" = "0";
+			"defaultConfigurationName" = "Release";
+		};
+		"E4F063198B09E6529FDC75B8" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "4DB826298CC87F844A97B12D";
+		};
+		"9B086B244A27E009D7B0ED59" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "11413520F336346DAB475C75";
+		};
+		"C5E9A158AFD24525AD359F12" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "724C495D24C6DDA1C0C6D092";
+		};
+		"0362FD7C785A8ADFCF7EFA47" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "3F5947B615DEDF81783F8BC3";
+		};
+		"3F97769473C2363C4BCA3C87" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "A23611D98FDCD3302A78F3CA";
+		};
+		"9F3002A5D69B22D357A58AA9" = {
+			"isa" = "PBXSourcesBuildPhase";
+			"buildActionMask" = "2147483647";
+			"files" = (
+				"E4F063198B09E6529FDC75B8",
+				"9B086B244A27E009D7B0ED59",
+				"C5E9A158AFD24525AD359F12",
+				"0362FD7C785A8ADFCF7EFA47",
+				"3F97769473C2363C4BCA3C87",
+			);
+			"runOnlyForDeploymentPostprocessing" = "0";
+		};
+		"99C7943D90D870A50ADE9160" = {
+			"isa" = "PBXFrameworksBuildPhase";
+			"buildActionMask" = "2147483647";
+			"files" = (
+				"3D20F625C7EF471434E76018",
+				"4CE1AA7A36254C58D37D6EE3",
+				"64F309353B714873BAF20606",
+			);
+			"runOnlyForDeploymentPostprocessing" = "0";
+		};
+		"D41C8A5C27AD12AE4D7B5F9B" = {
+			"isa" = "PBXNativeTarget";
+			"buildConfigurationList" = "BB53212113842AF78DE45E94";
+			"buildPhases" = (
+				"9F3002A5D69B22D357A58AA9",
+				"99C7943D90D870A50ADE9160",
+			);
+			"buildRules" = (
+			);
+			"dependencies" = (
+				"2A21D9E9044D0B11FAFCCFE3",
+			);
+			"name" = "MacLooper-iPadTests";
+			"packageProductDependencies" = (
+				"4CDFBF35D0586BF0077A9D42",
+				"3FCCD81FE33E706D292E9921",
+				"D601B9979E7CF966D0517889",
+			);
+			"productName" = "MacLooper-iPadTests";
+			"productReference" = "AD5D520508EF8024D25C00BA";
+			"productType" = "com.apple.product-type.bundle.unit-test";
+		};
+		"482182478A3ECD4745BEA917" = {
+			"isa" = "PBXGroup";
+			"children" = (
+				"11C3DDF36D9D67CB58370A54",
+				"89FE78801A985B500B0289BE",
+				"11BE9BBC37E56BAEAEEC9EAD",
+				"2FDB0B73322A98AFF0989A10",
+				"3DC417EB73F7003742E9B549",
+				"3DBF5D0D5E5691D6836D7649",
+				"E2CD89D17D1D022B5CF4E6C5",
+				"6A1BD18AC78FACDEF8AEE07F",
+				"7F3B570D2D70C19D0E9CD6AB",
+				"37E90C6C2473753C2146C190",
+				"929A2F5E1AA2D2C76959A31D",
+				"D5649EC117D750B78D6E05D4",
+				"3D30A083AE83ADD69EFF4337",
+				"798871092DAD7073641FF444",
+				"1763C05D4FB09C7459AD520D",
+				"C9AA4E6B4121A9502C001522",
+				"E8964440F829DFE735343C21",
+			);
+			"name" = "Shared App";
+			"sourceTree" = "<group>";
+		};
+		"8B7A6DECC0651D269EA794C7" = {
+			"isa" = "PBXGroup";
+			"children" = (
+				"4DB826298CC87F844A97B12D",
+				"11413520F336346DAB475C75",
+				"724C495D24C6DDA1C0C6D092",
+				"3F5947B615DEDF81783F8BC3",
+				"A23611D98FDCD3302A78F3CA",
+			);
+			"name" = "Shared Tests";
+			"sourceTree" = "<group>";
+		};
+		"6CB02E119BD41FE48D1F7837" = {
+			"isa" = "PBXGroup";
+			"children" = (
+				"9ED39A968A752FA4EE265C55",
+			);
+			"name" = "Resources";
+			"sourceTree" = "<group>";
+		};
+		"1EE63A94BAD0DF0FCB0E7B8C" = {
+			"isa" = "PBXGroup";
+			"children" = (
+				"347C5000B9C2D8FA065C16E9",
+				"2D7F403A62505FBF2C0EC577",
+				"AD5D520508EF8024D25C00BA",
+			);
+			"name" = "Products";
+			"sourceTree" = "<group>";
+		};
+		"DC76E9F0C0006E8F919E0C51" = {
+			"isa" = "PBXGroup";
+			"children" = (
+				"482182478A3ECD4745BEA917",
+				"8B7A6DECC0651D269EA794C7",
+				"6CB02E119BD41FE48D1F7837",
+				"1EE63A94BAD0DF0FCB0E7B8C",
+			);
+			"sourceTree" = "<group>";
+		};
+		"89E1FD6268CC0F221A2BE178" = {
+			"isa" = "XCBuildConfiguration";
+			"buildSettings" = {
+				"SWIFT_VERSION" = "5.0";
+				"CLANG_ENABLE_MODULES" = "YES";
+				"CLANG_ENABLE_OBJC_ARC" = "YES";
+				"SWIFT_STRICT_CONCURRENCY" = "minimal";
+				"ENABLE_USER_SCRIPT_SANDBOXING" = "YES";
+				"LD_RUNPATH_SEARCH_PATHS" = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks";
+				"SWIFT_OPTIMIZATION_LEVEL" = "-Onone";
+				"DEBUG_INFORMATION_FORMAT" = "dwarf";
+				"SWIFT_ACTIVE_COMPILATION_CONDITIONS" = "$(inherited) DEBUG";
+				"ENABLE_TESTABILITY" = "YES";
+				"ONLY_ACTIVE_ARCH" = "YES";
+			};
+			"name" = "Debug";
+		};
+		"E6DE6C99132752C914FEF632" = {
+			"isa" = "XCBuildConfiguration";
+			"buildSettings" = {
+				"SWIFT_VERSION" = "5.0";
+				"CLANG_ENABLE_MODULES" = "YES";
+				"CLANG_ENABLE_OBJC_ARC" = "YES";
+				"SWIFT_STRICT_CONCURRENCY" = "minimal";
+				"ENABLE_USER_SCRIPT_SANDBOXING" = "YES";
+				"LD_RUNPATH_SEARCH_PATHS" = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks";
+				"SWIFT_OPTIMIZATION_LEVEL" = "-O";
+				"DEBUG_INFORMATION_FORMAT" = "dwarf-with-dsym";
+			};
+			"name" = "Release";
+		};
+		"862894B703A6DEDF96A9DD6C" = {
+			"isa" = "XCConfigurationList";
+			"buildConfigurations" = (
+				"89E1FD6268CC0F221A2BE178",
+				"E6DE6C99132752C914FEF632",
+			);
+			"defaultConfigurationIsVisible" = "0";
+			"defaultConfigurationName" = "Release";
+		};
+		"98F54143AB4E86B28C3AFEE0" = {
+			"isa" = "PBXProject";
+			"attributes" = {
+				"LastUpgradeCheck" = "2720";
+				"TargetAttributes" = {
+					"8DA9A47D78C32181D21ED263" = {
+						"DevelopmentTeam" = "S37ZVC89JW";
+					};
+					"D41C8A5C27AD12AE4D7B5F9B" = {
+						"TestTargetID" = "8DA9A47D78C32181D21ED263";
+						"DevelopmentTeam" = "S37ZVC89JW";
+					};
+				};
+			};
+			"buildConfigurationList" = "862894B703A6DEDF96A9DD6C";
+			"compatibilityVersion" = "Xcode 14.0";
+			"developmentRegion" = "en";
+			"hasScannedForEncodings" = "0";
+			"knownRegions" = (
+				"en",
+				"Base",
+			);
+			"mainGroup" = "DC76E9F0C0006E8F919E0C51";
+			"productRefGroup" = "1EE63A94BAD0DF0FCB0E7B8C";
+			"projectDirPath" = "";
+			"projectRoot" = "";
+			"packageReferences" = (
+				"582681C2EAE02B3F3D399C0C",
+			);
+			"targets" = (
+				"62B4A2F1E0B5C3F1EE0C65C9",
+				"8DA9A47D78C32181D21ED263",
+				"D41C8A5C27AD12AE4D7B5F9B",
+			);
+		};
+	};
+	"rootObject" = "98F54143AB4E86B28C3AFEE0";
+}

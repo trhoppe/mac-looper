@@ -1,18 +1,38 @@
 import SwiftUI
+#if os(macOS)
 import AppKit
+#endif
+import JamCore
 
+#if os(macOS)
 @MainActor final class AppDelegate: NSObject, NSApplicationDelegate {
     var model: LooperModel?
     var files: AudioFilePlayerModel?
+    var library: SongLibraryModel?
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
-    func applicationWillTerminate(_ notification: Notification) { model?.stopAudio(); files?.shutdown() }
+    func applicationWillTerminate(_ notification: Notification) { model?.shutdown(); files?.shutdown(); library?.shutdown() }
 }
 
+#endif
+
 @main @MainActor struct MacLooperApp: App {
+    #if os(macOS)
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
+    #endif
     @StateObject private var model = LooperModel()
     @StateObject private var files = AudioFilePlayerModel()
+    @StateObject private var library = SongLibraryModel()
     init() {
+        if CommandLine.arguments.contains("--smoke-test") { setbuf(stdout, nil) }
+        if let index = CommandLine.arguments.firstIndex(of: "--library-check"), CommandLine.arguments.count > index + 1 {
+            do {
+                let data = try Data(contentsOf: URL(fileURLWithPath: CommandLine.arguments[index + 1]))
+                let value = try JustChordsLibrary(data: data)
+                for song in value.songs { _ = ChordProDocument(source: song.chordPro, transpose: song.transposition) }
+                print("PASS: \(value.songs.count) songs, \(value.playlists.count) playlists, \(value.tags.count) tags; exact JSON bytes preserved: \(data == value.originalData)")
+                exit(0)
+            } catch { fputs("\(error.localizedDescription)\n", stderr); exit(1) }
+        }
         if CommandLine.arguments.contains("--devices") {
             do {
                 for d in try AudioDevices.list() {
@@ -24,11 +44,13 @@ import AppKit
     }
     var body: some Scene {
         WindowGroup("Mac Looper") {
-            ContentView(model: model, files: files)
+            ContentView(model: model, files: files, library: library)
                 .preferredColorScheme(.dark)
                 .task {
-                    delegate.model = model; delegate.files = files
-                    #if DEBUG
+                    #if os(macOS)
+                    delegate.model = model; delegate.files = files; delegate.library = library
+                    #endif
+                    #if DEBUG && os(macOS)
                     if let index = CommandLine.arguments.firstIndex(of: "--render-preview"), CommandLine.arguments.count > index + 1 {
                         if let folderIndex = CommandLine.arguments.firstIndex(of: "--audio-folder"), CommandLine.arguments.count > folderIndex + 1 {
                             files.openFolder(URL(fileURLWithPath: CommandLine.arguments[folderIndex + 1]))
@@ -40,15 +62,24 @@ import AppKit
                     }
                     #endif
                     if CommandLine.arguments.contains("--smoke-test") {
+                        let savedOutput = UserDefaults.standard.string(forKey: "outputUID")
+                        defer { if let savedOutput { UserDefaults.standard.set(savedOutput, forKey: "outputUID") } }
+                        if CommandLine.arguments.contains("--smoke-direct"), let direct = model.outputs.first(where: \.isAM4) { model.outputUID = direct.uid }
+                        print("Smoke: requesting loop audio")
                         await model.startAudio()
+                        print("Smoke: loop audio returned running=\(model.running) error=\(model.error ?? "none")")
+                        guard model.running else { print("FAIL: " + (model.error ?? "Audio did not start")); model.shutdown(); exit(1) }
                         let player = FilePlayback(), token = UUID()
                         var fileExpected = false
                         if let index = CommandLine.arguments.firstIndex(of: "--smoke-file"), CommandLine.arguments.count > index + 1 {
                             fileExpected = true
                             do {
                                 guard let output = model.output else { throw AudioFailure(message: "No output selected.") }
+                                print("Smoke: loading file")
                                 _ = try await player.load(URL(fileURLWithPath: CommandLine.arguments[index + 1]), session: token, volume: 0, repeating: true)
+                                print("Smoke: playing file")
                                 try await player.play(session: token, output: output)
+                                print("Smoke: file play returned")
                             } catch { model.error = error.localizedDescription }
                         }
                         try? await Task.sleep(for: .seconds(3))
@@ -62,8 +93,10 @@ import AppKit
                     }
                 }
         }
-        .defaultSize(width: 1061, height: 650)
+        #if os(macOS)
+        .defaultSize(width: 1320, height: 860)
         .windowResizability(.contentMinSize)
+        #endif
         .commands {
             CommandGroup(replacing: .newItem) { }
             CommandMenu("Loop") {

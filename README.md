@@ -1,8 +1,9 @@
 # Mac Looper
 
-A small standalone macOS guitar looper. SwiftUI interface, Core Audio device routing,
-and a C render core with sample-accurate threshold capture. No DAW, plug-ins, projects,
-MIDI, or software monitoring. Live guitar stays on the AM4.
+A native Mac and iPad guitar-jamming app. Chord charts and backing playback share
+one SwiftUI workspace, with the guitar looper always visible along the bottom.
+A shared C render core provides sample-accurate threshold capture. Live guitar
+monitoring stays on the AM4. No DAW, projects, MIDI, or plug-in setup is required.
 
 ## Run
 
@@ -13,8 +14,61 @@ open "build/Mac Looper.app"
 
 Requires macOS 14 or newer and Xcode or the Swift command line tools to build. The script
 uses `/Applications/Xcode.app` when available without changing the system's developer setting.
-The resulting app runs independently of Xcode. Open `Package.swift` in Xcode to edit/debug;
-use the packaged app for microphone permission and normal use.
+The resulting app runs independently of Xcode. Open `MacLooper.xcodeproj` for native Mac/iPad targets, or `Package.swift` for
+shared-code development. Use the packaged Mac app for normal use.
+
+### iPad
+
+Requires iPadOS 18 or newer. Open `MacLooper.xcodeproj`, select **MacLooper-iPad**,
+and choose your iPad as the destination. In Xcode Settings → Accounts, sign in to
+your Apple Account; select your development team under Signing & Capabilities if
+needed. Unlock the connected iPad and press Run. The iPad app uses the distinct
+`com.thoppe.maclooper` identifier; it does not replace AM4 Remote.
+
+`./scripts/build-ipad.sh` builds a signed device app after account setup. Simulator
+testing does not require signing. Select the iPad scheme and an iPad simulator,
+then Product → Test.
+
+The iPad uses the connected USB interface and iPadOS audio routing. **AM4 Proxy is
+a Mac driver, not an iPad output choice.** The default capture choice requires a USB
+input rather than silently using the iPad microphone. The app requests and verifies
+32 samples for loop capture. iPadOS can choose a larger quantum; the app accepts
+that actual buffer and shows the render size in the header and Audio Settings.
+There is no buffer selector. The Mac retains its strict 32-sample requirement.
+
+## Chord charts and iCloud library
+
+Mac Looper reads JustChords’ `library.json`, including songs, playlist/folder order,
+tags, saved key/transpose and capo settings. The native read-only ChordPro viewer
+shows chords over lyrics, section headings, comments and tablature. Text size is
+adjustable. Chart editing and AUv3 hosting are future stages.
+
+On this Mac, defaults are:
+
+- **Source:** iCloud Drive → JustChords → `library.json` (read-only).
+- **Own library:** iCloud Drive → **Mac Looper** → `library.json`.
+
+At launch, the app checks the source once. It does not poll while open or sync when
+returning to the foreground. Choosing a new source or library folder in Settings
+loads that explicit choice immediately. A complete valid source replaces the own copy atomically. A failed
+or incomplete update keeps the last good library and reports the problem. The JSON
+copy retains the **exact source bytes**, including unknown fields, IDs, trash and
+JustChords settings. Viewing never rewrites the JustChords file. This preserves the
+format for a future return to JustChords; no two-way editing is implemented yet.
+
+On iPad, open Settings in Mac Looper, choose **Mac Looper iCloud folder…**, and select
+the same folder in Files. For launch-time sync from JustChords, also choose its
+`library.json` as the source. These choices persist across launches. Without those
+choices the iPad uses its own local Documents/Library folder. No private user JSON
+or backing audio is included in the app bundle or Git repository.
+
+Use **Songs** to choose a playlist or tag, search titles/artists, and select a chart.
+The backing player stays available beside/below it, and the looper stays at the
+bottom. Selecting a song leaves backing-track selection and playback alone. Its BPM
+is adopted only while the loop is empty; an existing loop’s timing remains fixed.
+
+Select backing audio manually in the right rail. Chart browsing and backing-track
+selection are independent; there are no attachment controls in the chart.
 
 ## Jam
 
@@ -47,12 +101,14 @@ in relation to the drums. Independent app clocks may drift over a long session.
 
 ## Audio-file player
 
-The right rail is a separate backing-track player:
+The right rail (or compact player beneath the chart on a narrower iPad) plays backing audio:
 
 1. Click the folder button or **Open Folder…** and choose your audio folder.
 2. The app recursively scans its subfolders and lists audio files under their full relative
    subdirectory headings. Files directly in the chosen folder appear under that folder's name.
    Filenames use natural sorting (Take 2 before Take 10). Search matches filenames and folder headings.
+   The last selected folder is remembered and automatically rescanned after reopening the app;
+   security-scoped access is retained on both platforms. Playback does not start automatically.
 3. Select a file to load it in the bottom-right player. Selecting does **not** autoplay.
 4. Use Play/Pause, Stop, the seek bar, previous/next file, repeat-one, and the file player's own volume.
    Previous/next selects the adjacent file in the complete folder listing without autoplay.
@@ -65,7 +121,12 @@ unreadable folders are reported without blocking the scan.
 
 Common audio formats are discovered by file extension and macOS audio types. Native macOS decoding
 handles playback; a listed format that needs an unavailable codec reports an error when selected.
-Scanning and native file decoding/player operations run off the UI and looper's realtime thread.
+Scanning and file decoding run off the UI and looper’s realtime thread. Playback
+shares one AVAudioEngine mixer with guitar-loop playback. Guitar capture is
+upstream of this mixer, so neither backing audio nor future instrument buses enter
+the loop. Mono or non-48 kHz backing files are decoded in bounded buffers into an
+OS-purgeable local stereo/48 kHz cache, preserving the original file and avoiding a
+live graph reconnect when switching file formats.
 
 ## Timing and audio path
 
@@ -108,21 +169,30 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test
 "build/Mac Looper.app/Contents/MacOS/MacLooper" --smoke-test
 ```
 
-The 17 deterministic DSP tests cover bar math, exact threshold sample and pre-roll, attack
-preservation, stereo/right-channel triggering, callback-size independence, long playback,
-wrap endpoints, no live monitoring, Stop/Play/Clear/cancel, queue overflow, invalid settings,
-and non-finite input, including exact capture in 32-sample blocks. Ten additional tests cover
-recursive scanning, natural sorting, folder/filename search, exclusions, cancellation, native file
-loading/seeking/stopping, stale selections, corrupt files, and disconnected output rejection.
-The smoke test opens the selected devices for three seconds without
-arming or playing audio and checks that audio callbacks advance at exactly 32 samples. It requires macOS
-microphone permission. Add `--smoke-file /path/to/audio.wav` to verify simultaneous file playback at zero volume.
-The current build passed 4,771 real AM4 → AM4 Proxy callbacks at 32 frames while playing a silent
-WAV in the same process, plus native file play/pause/seek/resume/stop through AM4 Proxy. This checks
-routing and timing; the silent diagnostic does not assess audible file quality.
+The regression suite covers exact threshold capture, pre-roll, loop duration and
+wraps, no monitoring, controls and queue bounds, 32-frame quanta, the native loop
+Audio Unit, four-channel manual realtime routing, and backing/capture separation
+in a real AVAudioEngine graph. Additional tests cover folder scanning/search,
+file transport, stale selections, disconnected outputs, rate/channel conversion,
+ChordPro rendering data, lossless JSON, malformed updates and portable backing links.
+Tests use synthetic chart fixtures; your private library is not committed.
 
-Implementation: `Sources/MacLooper` contains UI/device lifecycle; `Sources/LooperCore` contains
-AUHAL callbacks and DSP. Build products and SwiftPM caches are ignored. No external dependencies.
+The smoke diagnostic opens the selected Mac devices for three seconds without
+arming a loop and checks actual callbacks. It needs microphone permission and
+working hardware. Add `--smoke-file /path/to/audio.wav` to check simultaneous file
+playback at zero volume. `--smoke-direct` temporarily tests direct AM4 output and
+restores the saved output preference afterward. `--library-check /path/library.json`
+validates all songs and exact JSON preservation without printing chart contents.
+Hardware checks can fail independently of the deterministic tests; see
+[stage validation](docs/stage-validation.md) for this build’s actual results.
+
+Implementation: `Sources/JamCore` owns portable library/ChordPro logic;
+`Sources/LooperCore` owns sample-accurate C DSP and the Mac AUHAL adapter;
+`Sources/LooperAudioUnit` hosts that DSP in a shared Audio Unit;
+`Sources/MacLooper` owns shared SwiftUI, playback and platform routing. The Mac
+adapter drives AVAudioEngine manual realtime rendering through the established
+AUHAL route; iPad uses AVAudioSession and native AVAudioEngine I/O. Build products,
+private libraries, signing files and caches are ignored. No external dependencies.
 
 References: [Apple AUHAL routing note](https://developer.apple.com/library/archive/technotes/tn2091/)
 and [AM4 owner's manual](https://www.fractalaudio.com/downloads/manuals/AM4/AM4-Owners-Manual.pdf).

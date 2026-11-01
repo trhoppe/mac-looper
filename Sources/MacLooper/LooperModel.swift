@@ -1,6 +1,8 @@
 import SwiftUI
 import AVFoundation
+#if os(macOS)
 import CoreAudio
+#endif
 import LooperCore
 
 @MainActor final class LooperModel: ObservableObject {
@@ -24,11 +26,9 @@ import LooperCore
     @Published var waveform = [Float](repeating: 0, count: 256)
     @Published var sampleRate = 48000.0
     @Published var cycles: UInt64 = 0
-    private var core: OpaquePointer?
-    private var hardware: OpaquePointer?
-    private var activeRoute: AudioDevices.Route?
-    private var activeInput: AudioDevice?
-    private var activeOutput: AudioDevice?
+    private let host = AudioEngineHost.shared
+    private var core: OpaquePointer? { host.core }
+    private var stopTask: Task<Void, Never>?
     private var timer: Timer?
     private var ticks = 0
     private var lastCallbacks: UInt64 = 0
@@ -41,8 +41,8 @@ import LooperCore
             Task { @MainActor in self?.poll() }
         }
     }
-    var audioCallbackCount: UInt64 { tl_hardware_callbacks(hardware) }
-    var audioCallbackFrames: UInt32 { tl_hardware_callback_frames(hardware) }
+    var audioCallbackCount: UInt64 { host.callbacks }
+    var audioCallbackFrames: UInt32 { host.callbackFrames }
     var inputs: [AudioDevice] { devices.filter { $0.inputs > 0 } }
     var outputs: [AudioDevice] { devices.filter { $0.outputs > 0 } }
     var input: AudioDevice? { inputs.first { $0.uid == inputUID } }
@@ -77,9 +77,21 @@ import LooperCore
     func refreshDevices() {
         do {
             devices = try AudioDevices.list()
+            #if os(macOS)
             if inputUID.isEmpty { inputUID = inputs.first(where: \.isAM4)?.uid ?? "" }
             if outputUID.isEmpty { outputUID = outputs.first(where: { $0.name == "AM4 Proxy" })?.uid ?? "" }
+            #else
+            if inputUID.isEmpty || inputUID.hasPrefix("AppleUSBAudio") { inputUID = "ios-default-input" }
+            outputUID = "ios-system-output"
+            #endif
         } catch { self.error = error.localizedDescription }
+    }
+    private static var microphoneHelp: String {
+        #if os(macOS)
+        "Allow Mac Looper in System Settings → Privacy & Security → Microphone."
+        #else
+        "Allow Mac Looper in Settings → Privacy & Security → Microphone."
+        #endif
     }
     func startAudio() async {
         guard !running, !starting else { return }
@@ -91,32 +103,20 @@ import LooperCore
             let permission = AVCaptureDevice.authorizationStatus(for: .audio)
             if permission == .notDetermined {
                 guard await AVCaptureDevice.requestAccess(for: .audio) else {
-                    throw AudioFailure(message: "Allow Mac Looper in System Settings → Privacy & Security → Microphone.")
+                    throw AudioFailure(message: Self.microphoneHelp)
                 }
             } else if permission != .authorized {
-                throw AudioFailure(message: "Allow Mac Looper in System Settings → Privacy & Security → Microphone.")
+                throw AudioFailure(message: Self.microphoneHelp)
             }
             guard token == generation else { return }
             refreshDevices()
-            guard let input, let output else { throw AudioFailure(message: "Connect AM4 and AM4 Proxy, or choose an available input and output.") }
-            let route = try await AudioDevices.route(input: input, output: output)
-            guard token == generation else { if let id = route.aggregate { AudioHardwareDestroyAggregateDevice(id) }; return }
-            activeRoute = route; activeInput = input; activeOutput = output
-            sampleRate = route.rate
-            guard inputChannel >= 0, inputChannel < input.inputs else { throw AudioFailure(message: "Choose an available input channel.") }
-            guard let newCore = tl_create(route.rate, UInt32(ceil(route.rate * 64)) + 4) else {
-                throw AudioFailure(message: "Could not reserve loop memory.")
-            }
-            core = newCore
-            tl_set_threshold(newCore, Float(pow(10, thresholdDB / 20))); tl_set_volume(newCore, Float(volume))
-            var status: OSStatus = 0
-            let il = route.inputOffset + inputChannel
-            let ir = route.inputOffset + min(inputChannel + 1, input.inputs - 1)
-            hardware = tl_hardware_create(newCore, route.device, route.rate, UInt32(route.inputs), UInt32(route.outputs),
-                                          UInt32(il), UInt32(ir), UInt32(route.outputOffset),
-                                          UInt32(route.outputOffset + min(1, output.outputs - 1)), &status)
-            guard hardware != nil else { throw AudioFailure(message: "Could not open the selected audio route (Core Audio \(status)).") }
-            try AudioDevices.check(tl_hardware_start(hardware), "Start audio")
+            guard let input, let output else { throw AudioFailure(message: "Connect your interface and choose an available input and output in Audio Settings.") }
+            if let stopTask { await stopTask.value; self.stopTask = nil }
+            try await host.startLoop(input: input, output: output, channel: inputChannel)
+            guard token == generation else { await host.stopLoop(); return }
+            sampleRate = host.sampleRate
+            guard let core else { throw AudioFailure(message: "The guitar processor did not initialize.") }
+            tl_set_threshold(core, Float(pow(10, thresholdDB / 20))); tl_set_volume(core, Float(volume))
             UserDefaults.standard.set(inputUID, forKey: "inputUID"); UserDefaults.standard.set(outputUID, forKey: "outputUID")
             running = true; lastCallbacks = 0; stalledTicks = 0
         } catch {
@@ -126,11 +126,8 @@ import LooperCore
     }
     func stopAudio() {
         generation += 1
-        // Stop and dispose the AudioUnit before freeing callback-owned memory.
-        tl_hardware_destroy(hardware); hardware = nil
-        tl_destroy(core); core = nil
-        if let aggregate = activeRoute?.aggregate { AudioHardwareDestroyAggregateDevice(aggregate) }
-        activeRoute = nil; activeInput = nil; activeOutput = nil
+        stopTask?.cancel()
+        stopTask = Task { await host.stopLoop() }
         running = false; starting = false; state = Int32(TL_EMPTY)
         progress = 0; recorded = 0; length = 0; meterDB = -90; outputDB = -90; cycles = 0
         waveform = [Float](repeating: 0, count: 256)
@@ -149,23 +146,23 @@ import LooperCore
         guard let core else { return }
         if !tl_command(core, Int32(TL_CMD_PLAY_STOP), 0) { error = "Audio controls are busy. Try again." }
     }
+    func shutdown() {
+        stopTask?.cancel(); timer?.invalidate(); host.shutdown(); running = false
+    }
     private func poll() {
         ticks += 1
         if ticks % 60 == 0 {
             refreshDevices()
-            if running, let i = activeInput, let o = activeOutput,
-               (!AudioDevices.alive(i.id) || !AudioDevices.alive(o.id) ||
-                abs(AudioDevices.number(i.id, kAudioDevicePropertyNominalSampleRate, fallback: 0.0) - sampleRate) > 0.1 ||
-                abs(AudioDevices.number(o.id, kAudioDevicePropertyNominalSampleRate, fallback: 0.0) - sampleRate) > 0.1) {
+            if running, (!host.isRunning || (output.map { !AudioDevices.alive($0.id) } ?? true)) {
                 stopAudio(); error = "The audio device disconnected or its sample rate changed. Reconnect and start audio again."
             }
         }
-        guard running, let core, let hardware else { return }
-        let callbacks = tl_hardware_callbacks(hardware)
+        guard running, let core else { return }
+        let callbacks = host.callbacks
         stalledTicks = callbacks == lastCallbacks ? stalledTicks + 1 : 0
         lastCallbacks = callbacks
-        if tl_hardware_error(hardware) != 0 || stalledTicks > 90 {
-            let code = tl_hardware_error(hardware)
+        if host.renderError != 0 || stalledTicks > 90 {
+            let code = host.renderError
             let frames = audioCallbackFrames
             stopAudio()
             error = code == TL_BUFFER_SIZE_ERROR

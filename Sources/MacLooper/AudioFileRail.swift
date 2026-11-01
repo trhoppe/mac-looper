@@ -3,6 +3,8 @@ import SwiftUI
 struct AudioFileRail: View {
     @ObservedObject var model: AudioFilePlayerModel
     let accent: Color
+    var compact = false
+    @State private var showingBrowser = false
     @State private var scrubbing = false
     @State private var scrubPosition = 0.0
     private var selection: Binding<URL?> {
@@ -11,6 +13,21 @@ struct AudioFileRail: View {
         })
     }
     var body: some View {
+        Group {
+            if compact {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("Backing Track").font(.caption.weight(.medium)).foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Browse…") { showingBrowser = true }
+                            .popover(isPresented: $showingBrowser) { AudioFileRail(model: model, accent: accent).frame(height: 560) }
+                    }
+                    player
+                }.padding(12).background(.white.opacity(0.025))
+            } else { fullRail }
+        }
+    }
+    private var fullRail: some View {
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 14) {
                 HStack {

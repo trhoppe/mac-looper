@@ -1,4 +1,4 @@
-#if DEBUG
+#if DEBUG && os(macOS)
 import AppKit
 
 // Render only this app's own view tree for layout review; no screen capture permission.
