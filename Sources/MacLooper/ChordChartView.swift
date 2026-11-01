@@ -67,12 +67,16 @@ struct ChordChartView: View {
                     }.frame(maxWidth: .infinity, alignment: .leading).padding(20)
                 }.id(song.id)
             } else {
-                VStack(spacing: 14) {
-                    Image(systemName: "music.book").font(.system(size: 42)).foregroundStyle(accent.opacity(0.7))
-                    Text("Choose a song").font(.title3)
-                    Text("Open your JustChords library in Settings. Your chart and backing track stay together here.")
-                        .foregroundStyle(.secondary).multilineTextAlignment(.center).frame(maxWidth: 360)
-                }.frame(maxWidth: .infinity, maxHeight: .infinity)
+                GeometryReader { geo in
+                    VStack(spacing: 22) {
+                        Image("LooperArtwork").resizable().scaledToFit()
+                            .frame(width: min(320, geo.size.width * 0.55), height: min(320, geo.size.height * 0.55))
+                            .opacity(0.14).accessibilityHidden(true)
+                        Text("Choose a song").font(.title3).foregroundStyle(.secondary)
+                        Text("Select a song from your library to open its chart.")
+                            .font(.callout).foregroundStyle(.tertiary).multilineTextAlignment(.center)
+                    }.frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
             }
         }.frame(maxWidth: .infinity, maxHeight: .infinity).background(.white.opacity(0.015))
     }

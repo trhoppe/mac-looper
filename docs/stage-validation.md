@@ -16,15 +16,15 @@ overdub, saved loop sessions and a second guitar track remain later work.
 
 ## Verification (November 1, 2026)
 
-- Mac regression tests: **47 passed, 0 failures** (`build/stage-tests.log`).
-- Physical iPad: **32 passed, 0 failures** (`build/ipad-device-tests.log`).
+- Mac regression tests: **48 passed, 0 failures** (`build/ux-tests.log`).
+- Physical iPad: **32 passed, 0 failures** (`build/ux-ipad-tests.log`).
 - Signed native iPad app installed and launched normally on Tom’s iPad.
 - Packaged Mac release build succeeded (`build/stage-mac-build.log`).
 - Real library: **38 songs, 3 playlists, 6 tags**, exact JSON bytes retained.
   Original JustChords source SHA-256 still matches the supplied file. The library
   was seeded into the iPad’s private app data, never the app bundle or Git.
-- AM4 → AM4 Proxy live test: **4,904 callbacks at exactly 32 frames**, concurrent
-  silent backing playback (`build/final-audio-smoke.log`). The initial Core Audio
+- AM4 → AM4 Proxy live test: **6,230 callbacks at exactly 32 frames**, concurrent
+  silent backing playback (`build/ux-audio-smoke.log`). The initial Core Audio
   35 startup error cleared after the AM4 USB reconnect.
 - Synthetic four-channel Mac realtime routing and shared AVAudioEngine mixing
   passed: no monitoring, exact capture, backing excluded from capture.
@@ -54,12 +54,29 @@ those choices; Mac absolute paths are not reused on iPad.
    that folder and rescans on the next launch; it does not autoplay.
 2. Select an MP3 and verify Play/Pause, seek, repeat and independent file volume.
    Browsing charts leaves the backing selection alone.
-3. On Mac choose AM4 inputs 1–2 and AM4 Proxy outputs 1–2. Start Audio and check
-   32 samples. On iPad connect AM4 via USB and check its actual displayed buffer.
+3. Audio connects automatically at launch. On Mac check AM4 inputs 1–2, AM4 Proxy
+   outputs 1–2 and 32 samples in Settings. On iPad connect AM4 via USB and check
+   its actual displayed buffer. Settings reconnects after changing an empty loop’s route.
 4. Set BPM and 2 bars, Arm, then strum. Confirm threshold wait, exact capture and
    automatic looping, no doubled live guitar, and no backing in the guitar loop.
 5. Change/seek/stop backing while the loop plays. Clear; repeat at 4/8 bars.
-6. Test iPad portrait/landscape, device disconnect/reconnect and Start Audio recovery.
+6. Test iPad portrait/landscape and automatic recovery after a USB reconnect.
+   Retry Connection is available in Settings if a route fails to initialize.
 7. Edit a test chart in JustChords. Confirm Mac Looper keeps its current version
    while open, then loads the update after quitting/relaunching. Verify that
    JustChords’ source is unchanged and the own JSON remains byte-identical.
+
+## Startup and icon update
+
+- App opens with no selected chart or backing file; the library and remembered
+  audio folder load independently. The welcome area shows the faded app artwork.
+- Audio initializes automatically without arming/capturing a loop. New available
+  hardware is detected, and changing settings reconnects the empty loop route.
+- Left Arrow / Backing Track → Restart Track rewinds a playing file and continues
+  playback. Live hardware diagnostic verified rewind keeps playback and capture running.
+- Tags selector/filter removed; stored JustChords JSON and tags are unchanged.
+- Circular cyan loop icon now has sharp arrow edges and a flat no-glow finish,
+  inspired by the user's AM4 icon. iPad assets have a full-bleed navy background
+  and no alpha channel, verified at 152 and 1024 pixels, avoiding the white border.
+- Mac foreground UI confirmed no selected song/file, restored 28-file backing folder,
+  all songs present, no Tags selector, and automatic 48 kHz / 32-sample connection.

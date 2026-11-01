@@ -6,7 +6,6 @@ import JamCore
     @Published private(set) var library: JustChordsLibrary?
     @Published var selectedSongID: String?
     @Published var playlistID: String?
-    @Published var tagID: String?
     @Published var query = ""
     @Published private(set) var status = "Choose your library in Settings"
     @Published private(set) var error: String?
@@ -42,7 +41,7 @@ import JamCore
     var selectedSong: LibrarySong? { songs.first(where: { $0.id == selectedSongID }) ?? library?.songs.first(where: { $0.id == selectedSongID }) }
     var songs: [LibrarySong] {
         (library?.songs(in: playlistID) ?? []).filter { song in
-            (tagID == nil || song.tags.contains(tagID!)) && (query.isEmpty || song.title.localizedCaseInsensitiveContains(query) || song.artist.localizedCaseInsensitiveContains(query))
+            query.isEmpty || song.title.localizedCaseInsensitiveContains(query) || song.artist.localizedCaseInsensitiveContains(query)
         }
     }
     var destination: URL { folderURL.appendingPathComponent("library.json") }
@@ -103,7 +102,7 @@ import JamCore
             }
             error = nil
             status = source == nil ? "\(next.songs.count) songs · library up to date" : "\(next.songs.count) songs · synced from JustChords"
-            if selectedSongID == nil || !next.songs.contains(where: { $0.id == selectedSongID }) { selectedSongID = next.songs(in: playlistID).first?.id }
+            if let id = selectedSongID, !next.songs.contains(where: { $0.id == id }) { selectedSongID = nil }
         } catch {
             guard token == revision else { return }
             self.error = error.localizedDescription

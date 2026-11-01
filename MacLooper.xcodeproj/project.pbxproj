@@ -280,7 +280,7 @@
 				"GENERATE_INFOPLIST_FILE" = "YES";
 				"INFOPLIST_KEY_CFBundleDisplayName" = "Mac Looper";
 				"INFOPLIST_KEY_NSMicrophoneUsageDescription" = "Mac Looper listens to your guitar interface to trigger and capture a loop. Live guitar is monitored by your interface.";
-				"CURRENT_PROJECT_VERSION" = "5";
+				"CURRENT_PROJECT_VERSION" = "6";
 				"MARKETING_VERSION" = "0.3.0";
 				"CODE_SIGN_STYLE" = "Automatic";
 				"DEVELOPMENT_TEAM" = "S37ZVC89JW";
@@ -314,7 +314,7 @@
 				"GENERATE_INFOPLIST_FILE" = "YES";
 				"INFOPLIST_KEY_CFBundleDisplayName" = "Mac Looper";
 				"INFOPLIST_KEY_NSMicrophoneUsageDescription" = "Mac Looper listens to your guitar interface to trigger and capture a loop. Live guitar is monitored by your interface.";
-				"CURRENT_PROJECT_VERSION" = "5";
+				"CURRENT_PROJECT_VERSION" = "6";
 				"MARKETING_VERSION" = "0.3.0";
 				"CODE_SIGN_STYLE" = "Automatic";
 				"DEVELOPMENT_TEAM" = "S37ZVC89JW";
@@ -524,7 +524,7 @@
 				"GENERATE_INFOPLIST_FILE" = "YES";
 				"INFOPLIST_KEY_CFBundleDisplayName" = "Mac Looper";
 				"INFOPLIST_KEY_NSMicrophoneUsageDescription" = "Mac Looper listens to your guitar interface to trigger and capture a loop. Live guitar is monitored by your interface.";
-				"CURRENT_PROJECT_VERSION" = "5";
+				"CURRENT_PROJECT_VERSION" = "6";
 				"MARKETING_VERSION" = "0.3.0";
 				"CODE_SIGN_STYLE" = "Automatic";
 				"DEVELOPMENT_TEAM" = "S37ZVC89JW";
@@ -563,7 +563,7 @@
 				"GENERATE_INFOPLIST_FILE" = "YES";
 				"INFOPLIST_KEY_CFBundleDisplayName" = "Mac Looper";
 				"INFOPLIST_KEY_NSMicrophoneUsageDescription" = "Mac Looper listens to your guitar interface to trigger and capture a loop. Live guitar is monitored by your interface.";
-				"CURRENT_PROJECT_VERSION" = "5";
+				"CURRENT_PROJECT_VERSION" = "6";
 				"MARKETING_VERSION" = "0.3.0";
 				"CODE_SIGN_STYLE" = "Automatic";
 				"DEVELOPMENT_TEAM" = "S37ZVC89JW";

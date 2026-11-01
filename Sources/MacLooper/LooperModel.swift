@@ -34,6 +34,9 @@ import LooperCore
     private var lastCallbacks: UInt64 = 0
     private var stalledTicks = 0
     private var generation = 0
+    private var automaticAudio = false
+    private var lastAutomaticRoute: String?
+    private var routeTask: Task<Void, Never>?
 
     init() {
         refreshDevices()
@@ -85,6 +88,43 @@ import LooperCore
             outputUID = "ios-system-output"
             #endif
         } catch { self.error = error.localizedDescription }
+    }
+    // Startup connects the route, but never arms a loop or starts backing playback.
+    func startAutomatically() async {
+        guard !automaticAudio else { return }
+        automaticAudio = true
+        lastAutomaticRoute = automaticRouteKey
+        await startAudio()
+    }
+    private var automaticRouteKey: String? {
+        guard let input, let output else { return nil }
+        #if os(iOS)
+        let session = AVAudioSession.sharedInstance()
+        if input.uid == "ios-default-input" {
+            let usb = session.availableInputs?.first(where: { $0.portType == .usbAudio })
+                ?? session.currentRoute.outputs.first(where: { $0.portType == .usbAudio })
+            guard let usb else { return nil }
+            return "\(usb.uid)|\(inputChannel)"
+        }
+        #endif
+        return "\(input.uid)|\(input.id)|\(output.uid)|\(output.id)|\(inputChannel)"
+    }
+    func routeDidChange() {
+        guard automaticAudio else { return }
+        routeTask?.cancel()
+        stopAudio()
+        routeTask = Task {
+            do { try await Task.sleep(for: .milliseconds(150)) } catch { return }
+            lastAutomaticRoute = automaticRouteKey
+            await startAudio()
+        }
+    }
+    private func reconnectIfAvailable() {
+        guard automaticAudio, !running, !starting else { return }
+        guard let route = automaticRouteKey else { lastAutomaticRoute = nil; return }
+        guard route != lastAutomaticRoute else { return }
+        lastAutomaticRoute = route
+        Task { await startAudio() }
     }
     private static var microphoneHelp: String {
         #if os(macOS)
@@ -147,15 +187,16 @@ import LooperCore
         if !tl_command(core, Int32(TL_CMD_PLAY_STOP), 0) { error = "Audio controls are busy. Try again." }
     }
     func shutdown() {
-        stopTask?.cancel(); timer?.invalidate(); host.shutdown(); running = false
+        routeTask?.cancel(); stopTask?.cancel(); timer?.invalidate(); host.shutdown(); running = false
     }
     private func poll() {
         ticks += 1
         if ticks % 60 == 0 {
             refreshDevices()
             if running, (!host.isRunning || (output.map { !AudioDevices.alive($0.id) } ?? true)) {
-                stopAudio(); error = "The audio device disconnected or its sample rate changed. Reconnect and start audio again."
+                stopAudio(); error = "The audio device disconnected or its sample rate changed. Reconnect the interface or use Retry Connection in Settings."
             }
+            reconnectIfAvailable()
         }
         guard running, let core else { return }
         let callbacks = host.callbacks
@@ -167,7 +208,7 @@ import LooperCore
             stopAudio()
             error = code == TL_BUFFER_SIZE_ERROR
                 ? "The audio driver delivered \(frames) samples instead of 32. Audio was stopped."
-                : "Audio stopped responding (Core Audio \(code)). Check your devices and start audio again."
+                : "Audio stopped responding (Core Audio \(code)). Check your devices and use Retry Connection in Settings."
             return
         }
         let s = tl_snapshot(core)

@@ -19,6 +19,8 @@ final class LibraryLaunchTests: XCTestCase {
         defer { opened.shutdown() }
         for _ in 0..<200 where opened.library == nil { try await Task.sleep(for: .milliseconds(10)) }
         XCTAssertEqual(opened.library?.songs.first?.title, "Before")
+        XCTAssertNil(opened.selectedSongID, "Loading a library must not select a chart")
+        XCTAssertNil(opened.selectedSong)
         try after.write(to: source, options: .atomic)
         try await Task.sleep(for: .milliseconds(3250))
         XCTAssertEqual(opened.library?.songs.first?.title, "Before")
@@ -27,6 +29,7 @@ final class LibraryLaunchTests: XCTestCase {
         defer { reopened.shutdown() }
         for _ in 0..<200 where reopened.library == nil { try await Task.sleep(for: .milliseconds(10)) }
         XCTAssertEqual(reopened.library?.songs.first?.title, "After")
+        XCTAssertNil(reopened.selectedSongID, "Relaunch should show the welcome logo")
         XCTAssertEqual(try Data(contentsOf: own.appendingPathComponent("library.json")), after)
         XCTAssertEqual(try Data(contentsOf: source), after)
     }

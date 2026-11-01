@@ -127,6 +127,12 @@ import AppKit
             }
         }
     }
+    func restart() {
+        guard selected != nil, !loading, duration > 0 else { return }
+        position = 0
+        let token = session
+        Task { await playback.seek(session: token, to: 0); await poll() }
+    }
     func stop() {
         let token = session; playing = false; position = 0
         Task { await playback.stop(session: token) }

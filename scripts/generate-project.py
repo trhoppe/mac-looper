@@ -45,7 +45,7 @@ def app(name, platform):
             obj(name+'resources','PBXResourcesBuildPhase',buildActionMask='2147483647',files=[obj(name+'assetbuild','PBXBuildFile',fileRef=asset)],runOnlyForDeploymentPostprocessing='0')]
     settings={'PRODUCT_NAME':'Mac Looper','EXECUTABLE_NAME':'MacLooper','PRODUCT_MODULE_NAME':'MacLooper','GENERATE_INFOPLIST_FILE':'YES','INFOPLIST_KEY_CFBundleDisplayName':'Mac Looper',
               'INFOPLIST_KEY_NSMicrophoneUsageDescription':'Mac Looper listens to your guitar interface to trigger and capture a loop. Live guitar is monitored by your interface.',
-              'CURRENT_PROJECT_VERSION':'5','MARKETING_VERSION':'0.3.0','CODE_SIGN_STYLE':'Automatic','DEVELOPMENT_TEAM':'S37ZVC89JW',
+              'CURRENT_PROJECT_VERSION':'6','MARKETING_VERSION':'0.3.0','CODE_SIGN_STYLE':'Automatic','DEVELOPMENT_TEAM':'S37ZVC89JW',
               'ASSETCATALOG_COMPILER_APPICON_NAME':'AppIconPad' if ipad else 'AppIconMac'}
     if ipad:
         settings.update({'SDKROOT':'iphoneos','SUPPORTED_PLATFORMS':'iphoneos iphonesimulator','IPHONEOS_DEPLOYMENT_TARGET':'18.0','TARGETED_DEVICE_FAMILY':'2','SUPPORTS_MACCATALYST':'NO','PRODUCT_BUNDLE_IDENTIFIER':'com.thoppe.maclooper',

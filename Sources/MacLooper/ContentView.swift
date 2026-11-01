@@ -68,9 +68,10 @@ struct ContentView: View {
             }
         }
         .onAppear { files.setOutput(model.output) }
-        .onChange(of: model.outputUID) { _, _ in files.setOutput(model.output) }
+        .onChange(of: model.outputUID) { _, _ in files.setOutput(model.output); model.routeDidChange() }
         .onChange(of: model.devices) { _, _ in files.setOutput(model.output) }
-        .onChange(of: model.inputUID) { _, _ in model.inputChannel = 0 }
+        .onChange(of: model.inputUID) { _, _ in model.inputChannel = 0; model.routeDidChange() }
+        .onChange(of: model.inputChannel) { _, _ in model.routeDidChange() }
         .onChange(of: files.requestingFolder) { _, requested in if requested { files.requestingFolder = false; beginImport(.audioFolder) } }
         .onChange(of: library.selectedSongID) { _, _ in
             showingSongs = false
@@ -123,11 +124,14 @@ struct ContentView: View {
                             Text((model.input?.inputs ?? 2) > ch + 1 ? "Inputs \(ch + 1)–\(ch + 2)" : "Input \(ch + 1)").tag(ch)
                         }
                     }
-                }.disabled(model.running || model.starting)
+                }.disabled(model.starting || model.hasLoop || model.busy)
                 Text(bufferSummary + " · outputs 1–2 · AM4 live monitoring").font(.caption).foregroundStyle(.secondary)
-                Button(model.starting ? "Connecting…" : model.running ? "Stop Audio" : "Start Audio") {
-                    if model.running { model.stopAudio() } else { Task { await model.startAudio() } }
-                }.disabled(model.starting || model.input == nil || model.output == nil)
+                Text(model.starting ? "Connecting audio…" : model.running ? "Audio connected automatically" : "Waiting for an audio interface")
+                    .font(.caption).foregroundStyle(.secondary)
+                if !model.running && !model.starting {
+                    Button("Retry Connection") { Task { await model.startAudio() } }
+                        .disabled(model.input == nil || model.output == nil)
+                }
                 Divider()
                 Text("Chord Library").font(.subheadline.weight(.semibold))
                 Text(library.status).font(.caption).foregroundStyle(.secondary)

@@ -107,7 +107,7 @@ enum AudioDevices {
                          inputs: input.inputs, outputs: output.outputs, rate: output.rate)
         }
         // Core Audio performs drift compensation between different hardware clocks.
-        // Private aggregate is destroyed on Stop Audio, errors, and app exit. No system default changes.
+        // Private aggregate is destroyed on route changes, errors, and app exit. No system default changes.
         let description: [String: Any] = [
             kAudioAggregateDeviceNameKey: "Mac Looper Session",
             kAudioAggregateDeviceUIDKey: "local.maclooper.route.\(UUID().uuidString)",

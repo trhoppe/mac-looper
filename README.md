@@ -62,7 +62,8 @@ the same folder in Files. For launch-time sync from JustChords, also choose its
 choices the iPad uses its own local Documents/Library folder. No private user JSON
 or backing audio is included in the app bundle or Git repository.
 
-Use **Songs** to choose a playlist or tag, search titles/artists, and select a chart.
+Use **Songs** to choose a playlist, search titles/artists, and select a chart.
+The app opens with no chart selected and a faded logo; choose a song when ready.
 The backing player stays available beside/below it, and the looper stays at the
 bottom. Selecting a song leaves backing-track selection and playback alone. Its BPM
 is adopted only while the loop is empty; an existing loop’s timing remains fixed.
@@ -78,7 +79,7 @@ selection are independent; there are no attachment controls in the chart.
 2. Click the **gear** in the top corner to change input, output, or capture channels.
    The audio buffer is fixed at **32 samples**.
 3. Set BPM (30–240) and **2, 4, or 8 bars**. V1 uses **4/4**.
-4. Click **Start Audio** in the gear popover to enable the input meter. Allow microphone access when macOS asks;
+4. Audio connects automatically when the app opens. Allow microphone access when asked;
    macOS requires this for USB audio input too. There is no software input monitoring.
 5. Adjust the strum threshold with the slider or type a value in the dB field (−72 to 0 dBFS).
    The orange line shows the threshold over the input meter. Put it above idle guitar noise
@@ -86,8 +87,9 @@ selection are independent; there are no attachment controls in the chart.
 6. Click **Arm** (or **R**). The first sample at or above the threshold on either input channel
    starts capture. It records the calculated length and automatically loops it.
 7. **Space** stops/restarts a completed loop. Stopping while waiting or recording cancels the take.
-   **Clear** (Delete) discards the loop and unlocks BPM/length. Stop Audio releases the devices
-   and discards the loop. Closing the app also releases its audio route.
+   **Clear** (Delete) discards the loop and unlocks BPM/length. Closing the app releases its
+   audio route. Changing devices in Settings reconnects automatically while the loop is empty.
+   If the interface is unavailable, reconnect it; **Retry Connection** is available in Settings.
 
 The wider volume slider changes **loop playback only**. Type a percentage beside its speaker icon
 for an exact setting. The AM4 handles live guitar monitoring. Captured loops stay in memory;
@@ -112,6 +114,8 @@ The right rail (or compact player beneath the chart on a narrower iPad) plays ba
 3. Select a file to load it in the bottom-right player. Selecting does **not** autoplay.
 4. Use Play/Pause, Stop, the seek bar, previous/next file, repeat-one, and the file player's own volume.
    Previous/next selects the adjacent file in the complete folder listing without autoplay.
+   While playing, **Left Arrow** restarts the current backing track from zero and continues
+   playback. This also works with an iPad hardware keyboard.
 
 File playback uses the selected output (normally **AM4 Proxy**), even with loop audio stopped.
 It has no input connection and is never mixed into loop capture. Output changes pause the file;
@@ -159,7 +163,7 @@ live graph reconnect when switching file formats.
   queue; controls and telemetry use lock-free atomics. The UI reads atomic waveform peaks,
   never concurrently reads/writes the audio buffers. UI polling is only for display/health checks.
 - Disconnects, sample-rate changes, input-render errors, and stalled callbacks stop audio and
-  report a recoverable error. Reconnect and Start Audio again; old loops are discarded.
+  report a recoverable error. Reconnect the interface or use Retry Connection in Settings; old loops are discarded.
 
 ## Tests and diagnostics
 

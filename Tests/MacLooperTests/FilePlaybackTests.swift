@@ -36,6 +36,19 @@ final class FilePlaybackTests: XCTestCase {
         XCTAssertFalse(stopped.playing)
         await player.unload()
     }
+    @MainActor func testRestartRewindsWithoutChangingSelectionOrAutoplaying() async throws {
+        let model = AudioFilePlayerModel(restoreFolder: false)
+        defer { model.shutdown() }
+        model.selectFile(audio)
+        for _ in 0..<200 where model.loading { try await Task.sleep(for: .milliseconds(10)) }
+        XCTAssertNil(model.error)
+        model.seek(0.05)
+        model.restart()
+        try await Task.sleep(for: .milliseconds(30))
+        XCTAssertEqual(model.position, 0, accuracy: 0.001)
+        XCTAssertEqual(model.selected?.url, audio)
+        XCTAssertFalse(model.playing)
+    }
     func testStaleSessionCannotSeekOrStopNewSelection() async throws {
         let player = FilePlayback(), old = UUID(), current = UUID()
         _ = try await player.load(audio, session: old, volume: 0, repeating: false)

@@ -1,10 +1,35 @@
 # Mac Looper app icon
 
-Source: `/Users/thoppe/Git/mac-looper/Assets/AppIcon.png` (1024 × 1024, transparency preserved).
-Edited with the built-in image generation tool to remove the waveform and retain the cyan-blue loop arrows.
-`./scripts/build-icon.sh` produces all standard macOS icon sizes and `build/AppIcon.icns`.
-`./scripts/build-app.sh` bundles the icon in `build/Mac Looper.app` and sets `CFBundleIconFile`.
+Generated/edited with the built-in image generation tool using the user's AM4 icon
+as style inspiration. Final direction: circular clockwise loop, crisp arrowhead
+edges, cyan blue on dark navy, clean flat finish with no glow or bevel.
 
-## Final edit prompt
+Masters:
 
-Use case: precise-object-edit. Edit target: the attached existing app icon. Remove only the entire cyan audio waveform / equalizer bars and dots from the center of the loop symbol. Fill that area seamlessly with the same dark midnight navy tile background and subtle lighting. Keep the two cyan-blue circular loop arrows EXACTLY as they are: same shape, position, size, arrowheads, bevel, glow, materials, color, shadows and highlights. Preserve the rounded-square tile, its edges, framing, and transparent pixels outside the tile. The finished Mac Looper icon must consist only of the cyan loop arrows on the dark rounded-square tile, with a completely empty clean dark center. No waveform, no dots, no bars, no text, no additional objects. Preserve existing transparency.
+- `Assets/AppIcon.png`: macOS tile with transparent exterior; also welcome artwork.
+- `Assets/AppIcon-iPad.png`: full-bleed opaque navy square. iPadOS applies the mask.
+
+`./scripts/build-icon.sh` creates native catalog sizes, universal welcome artwork,
+and the macOS `.icns`. `scripts/build-icon-assets.swift` verifies the iPad master
+is opaque and emits iPad PNGs without an alpha channel to avoid a white border.
+The packaged SwiftPM Mac app also receives `LooperArtwork.png` in Resources.
+
+## Final Mac prompt (built-in edit)
+
+Precise-object-edit, final Mac Looper icon. Keep the exact circular two-arrow shape,
+sharp arrowhead corners, placement and scale. Remove all glowing shade, bloom, halo,
+drop shadows, glossy shine, bevel lighting and inflated/plastic effects from both
+the cyan arrows and dark tile. Flat clean cyan arrows, approximately #37C9ED, with
+crisp sharply defined edges, no white outlines, no gradients inside arrows, no
+luminous aura. Quiet near-flat dark navy/charcoal rounded-square tile inspired by
+the supplied AM4 icon. True transparent exterior outside the macOS tile. The circle
+stays circular and the center stays empty. No knobs, text, waveform or decorations.
+
+## Final iPad prompt (built-in edit)
+
+Create the iPadOS full-bleed version of the approved flat Mac Looper icon. Keep the
+same circular cyan arrows, sharp edges, shape, scale, colors and placement. Change
+only the background: extend the navy material to all image edges and corners.
+Remove the outer rounded-square silhouette, exterior transparency and inset padding;
+the canvas is a full opaque navy square so iPadOS can apply its corner mask. No glow,
+shade, halo, shine, bevel, shadow, white border, margin, text, knobs or new objects.
