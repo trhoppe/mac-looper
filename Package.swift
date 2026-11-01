@@ -12,6 +12,7 @@ let package = Package(
         .executableTarget(name: "MacLooper", dependencies: ["LooperCore"], linkerSettings: [
             .linkedFramework("SwiftUI"), .linkedFramework("AVFoundation")
         ]),
-        .testTarget(name: "LooperCoreTests", dependencies: ["LooperCore"])
+        .testTarget(name: "LooperCoreTests", dependencies: ["LooperCore"]),
+        .testTarget(name: "MacLooperTests", dependencies: ["MacLooper"])
     ]
 )

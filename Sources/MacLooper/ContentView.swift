@@ -3,6 +3,8 @@ import LooperCore
 
 struct ContentView: View {
     @ObservedObject var model: LooperModel
+    @ObservedObject var files: AudioFilePlayerModel
+    @State private var showingSettings = false
     private let accent = Color(red: 0.259, green: 0.788, blue: 0.961)
     private var recording: Bool { model.state == TL_RECORDING }
     private var boundedBPM: Binding<Double> {
@@ -12,6 +14,25 @@ struct ContentView: View {
         Binding(get: { model.thresholdDB }, set: { if $0.isFinite { model.thresholdDB = min(0, max(-72, $0)) } })
     }
     var body: some View {
+        HStack(spacing: 0) {
+            looper
+            Divider()
+            AudioFileRail(model: files, accent: accent)
+        }
+        .frame(minWidth: 1061, minHeight: 650)
+        .background(Color(red: 0.065, green: 0.075, blue: 0.085))
+        .tint(accent)
+        .onAppear { files.setOutput(model.output) }
+        .onChange(of: model.outputUID) { _, _ in files.setOutput(model.output) }
+        .onChange(of: model.devices) { _, _ in files.setOutput(model.output) }
+        .onChange(of: model.inputUID) { _, _ in model.inputChannel = 0 }
+    }
+    private var volumePercent: Binding<Double> {
+        Binding(get: { (model.volume * 100).rounded() }, set: {
+            if $0.isFinite { model.volume = min(100, max(0, $0)) / 100 }
+        })
+    }
+    private var looper: some View {
         VStack(alignment: .leading, spacing: 22) {
             HStack {
                 VStack(alignment: .leading, spacing: 3) {
@@ -20,10 +41,12 @@ struct ContentView: View {
                 }
                 Spacer()
                 Circle().fill(model.running ? accent : Color.secondary).frame(width: 7, height: 7)
-                Text(model.running ? "\(Int(model.sampleRate / 1000)) kHz" : "Audio off")
+                Text(model.running ? "\(Int(model.sampleRate / 1000)) kHz · 32 samples" : "Audio off · 32 samples")
                     .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                Button { showingSettings.toggle() } label: { Image(systemName: "gearshape").font(.title3) }
+                    .buttonStyle(.plain).padding(.leading, 8).accessibilityLabel("Audio settings")
+                    .popover(isPresented: $showingSettings, arrowEdge: .top) { settings }
             }
-            routing
             HStack(alignment: .top, spacing: 32) {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("TEMPO").font(.caption.weight(.medium)).foregroundStyle(.secondary)
@@ -63,24 +86,31 @@ struct ContentView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(18).background(.white.opacity(0.035), in: RoundedRectangle(cornerRadius: 14))
-            HStack(spacing: 12) {
+            HStack(spacing: 10) {
                 Button { Task { await model.arm() } } label: {
-                    Label("Arm", systemImage: "record.circle").frame(width: 100, height: 30)
+                    Label("Arm", systemImage: "record.circle").frame(width: 80, height: 28)
                 }.buttonStyle(.borderedProminent).tint(accent).foregroundStyle(.black)
                     .disabled(!model.canEditTiming || model.input == nil || model.output == nil)
                     .help("Wait for your first strum, then record the selected number of bars. R")
                 Button { model.playStop() } label: {
                     Label(model.state == TL_PLAYING || model.busy ? "Stop" : "Play",
                           systemImage: model.state == TL_PLAYING || model.busy ? "stop.fill" : "play.fill")
-                        .frame(width: 94, height: 30)
+                        .frame(width: 70, height: 28)
                 }.disabled(!model.hasLoop && !model.busy).help("Space. Stop during recording cancels the take.")
                 Button { model.clear() } label: {
-                    Label("Clear", systemImage: "trash").frame(width: 75, height: 30)
+                    Label("Clear", systemImage: "trash").frame(width: 65, height: 28)
                 }.disabled(!model.running || model.state == TL_EMPTY).help("Delete the loop and unlock tempo and length. Delete")
-                Spacer()
-                Image(systemName: "speaker.wave.2").foregroundStyle(.secondary)
-                Slider(value: $model.volume, in: 0...1).frame(width: 100).accessibilityLabel("Loop playback volume")
-            }.buttonStyle(.bordered).controlSize(.large)
+                Spacer(minLength: 10)
+                HStack(spacing: 5) {
+                    Image(systemName: "speaker.wave.2").foregroundStyle(.secondary)
+                    TextField("Volume", value: volumePercent, format: .number.precision(.fractionLength(0)))
+                        .textFieldStyle(.roundedBorder).multilineTextAlignment(.trailing).frame(width: 43)
+                        .accessibilityLabel("Loop volume percentage")
+                    Text("%").font(.caption).foregroundStyle(.secondary)
+                    Slider(value: $model.volume, in: 0...1).frame(minWidth: 140, idealWidth: 165, maxWidth: 200)
+                        .accessibilityLabel("Loop playback volume")
+                }
+            }.buttonStyle(.bordered).controlSize(.regular)
             if let error = model.error {
                 HStack(alignment: .top) {
                     Image(systemName: "exclamationmark.circle").foregroundStyle(.orange)
@@ -90,19 +120,24 @@ struct ContentView: View {
                 }.padding(12).background(.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
             }
             HStack {
-                Text("Live guitar stays on the AM4. Only the loop plays here.")
+                Text("Live guitar stays on the AM4.")
                 Spacer()
                 Text("R  Arm   ·   Space  Play/Stop").font(.caption)
             }.font(.caption).foregroundStyle(.tertiary)
         }
-        .padding(28).frame(width: 720)
+        .padding(28).frame(minWidth: 720, maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(Color(red: 0.065, green: 0.075, blue: 0.085))
         .tint(accent)
-        .onChange(of: model.inputUID) { _, _ in model.inputChannel = 0 }
     }
-    private var routing: some View {
-        VStack(spacing: 10) {
-            HStack(spacing: 18) {
+    private var settings: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack {
+                Text("Audio Settings").font(.headline)
+                Spacer()
+                Button { showingSettings = false } label: { Image(systemName: "xmark") }
+                    .buttonStyle(.plain).accessibilityLabel("Close audio settings")
+            }
+            VStack(alignment: .leading, spacing: 14) {
                 Picker("Input", selection: $model.inputUID) {
                     if model.input == nil { Text("Choose input…").tag(model.inputUID) }
                     ForEach(model.inputs) { Text($0.name).tag($0.uid) }
@@ -111,21 +146,24 @@ struct ContentView: View {
                     if model.output == nil { Text("Choose output…").tag(model.outputUID) }
                     ForEach(model.outputs) { Text($0.name).tag($0.uid) }
                 }
-            }.disabled(model.running || model.starting)
-            HStack {
                 Picker("Capture", selection: $model.inputChannel) {
                     ForEach(Array(stride(from: 0, to: max(1, model.input?.inputs ?? 2), by: 2)), id: \.self) { ch in
                         Text((model.input?.inputs ?? 2) > ch + 1 ? "Inputs \(ch + 1)–\(ch + 2)" : "Input \(ch + 1)").tag(ch)
                     }
-                }.frame(width: 200).disabled(model.running || model.starting)
-                Text("Playback: outputs 1–2").font(.caption).foregroundStyle(.secondary)
+                }
+            }.disabled(model.running || model.starting)
+            Divider()
+            Text("Buffer: 32 samples · Playback: outputs 1–2").font(.caption).foregroundStyle(.secondary)
+            Text("Stop audio to change devices. The file player uses the selected output.").font(.caption).foregroundStyle(.secondary)
+            HStack {
+                Text("The AM4 handles live monitoring.").font(.caption).foregroundStyle(.tertiary)
                 Spacer()
                 Button(model.starting ? "Connecting…" : model.running ? "Stop Audio" : "Start Audio") {
                     if model.running { model.stopAudio() } else { Task { await model.startAudio() } }
                 }.disabled(model.starting || model.input == nil || model.output == nil)
-                    .help("Start Audio enables the input meter. Stop Audio clears the loop and releases the devices.")
+                    .help("Start Audio enables the input meter. Stop Audio clears the loop and releases its devices.")
             }
-        }.font(.callout).padding(14).background(.white.opacity(0.035), in: RoundedRectangle(cornerRadius: 10))
+        }.padding(20).frame(width: 410).tint(accent)
     }
     private var threshold: some View {
         VStack(alignment: .leading, spacing: 10) {

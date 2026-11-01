@@ -108,7 +108,7 @@ final class LooperCoreTests: XCTestCase {
         let reference = a.render(input).0
         var chunked: [Float] = []
         var p = 0
-        let quanta = [1, 127, 256, 63, 511, 1024, 17]
+        let quanta = [32, 1, 127, 256, 63, 511, 1024, 17]
         var n = 0
         while p < total {
             let end = min(total, p + quanta[n % quanta.count])
@@ -194,4 +194,22 @@ final class LooperCoreTests: XCTestCase {
         XCTAssertEqual(dsp.snapshot.length, 16)
         XCTAssertTrue(out.allSatisfy(\.isFinite))
     }
+    func testThirtyTwoSampleQuantaKeepExactThresholdCaptureAndLoopLength() {
+        let frames = tl_loop_frames(48000, 240, 2, 4)
+        var input = [Float](repeating: 0.01, count: Int(frames) + 64)
+        for i in 95..<input.count { input[i] = 0.4 }
+        let whole = DSP(), small = DSP()
+        whole.arm(frames); small.arm(frames)
+        let reference = whole.render(input).0
+        var output: [Float] = []
+        for start in stride(from: 0, to: input.count, by: 32) {
+            output += small.render(Array(input[start..<min(input.count, start + 32)])).0
+        }
+        XCTAssertEqual(reference, output)
+        XCTAssertEqual(small.snapshot.length, frames)
+        XCTAssertEqual(small.snapshot.recorded, frames)
+        XCTAssertEqual(small.snapshot.state, Int32(TL_PLAYING))
+        XCTAssertEqual(small.snapshot.position, 209)
+    }
+
 }

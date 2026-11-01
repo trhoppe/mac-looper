@@ -12,6 +12,7 @@ struct TLHardware {
     uint32_t maxFrames, inputs, outputs, il, ir, ol, or;
     _Atomic int error;
     _Atomic uint64_t callbacks;
+    _Atomic uint32_t callbackFrames;
 };
 static OSStatus render(void *context, AudioUnitRenderActionFlags *flags, const AudioTimeStamp *time,
                        UInt32 bus, UInt32 frames, AudioBufferList *output) {
@@ -20,6 +21,11 @@ static OSStatus render(void *context, AudioUnitRenderActionFlags *flags, const A
     if (!output) return kAudio_ParamError;
     for (UInt32 i = 0; i < output->mNumberBuffers; i++) {
         if (output->mBuffers[i].mData) memset(output->mBuffers[i].mData, 0, output->mBuffers[i].mDataByteSize);
+    }
+    atomic_store_explicit(&h->callbackFrames, frames, memory_order_relaxed);
+    if (frames != TL_BUFFER_FRAMES) {
+        atomic_store_explicit(&h->error, TL_BUFFER_SIZE_ERROR, memory_order_relaxed);
+        return noErr;
     }
     if (frames > h->maxFrames) {
         atomic_store_explicit(&h->error, kAudioUnitErr_TooManyFramesToProcess, memory_order_relaxed);
@@ -53,7 +59,7 @@ TLHardware *tl_hardware_create(TLCore *core, AudioDeviceID device, double rate,
         il >= inputs || ir >= inputs || ol >= outputs || or >= outputs) goto fail;
     h = calloc(1, sizeof(*h));
     if (!h) { err = memFullErr; goto fail; }
-    atomic_init(&h->error, 0); atomic_init(&h->callbacks, 0);
+    atomic_init(&h->error, 0); atomic_init(&h->callbacks, 0); atomic_init(&h->callbackFrames, 0);
     h->core = core; h->inputs = inputs; h->outputs = outputs;
     h->il = il; h->ir = ir; h->ol = ol; h->or = or;
     AudioComponentDescription desc = {kAudioUnitType_Output, kAudioUnitSubType_HALOutput,
@@ -75,11 +81,17 @@ TLHardware *tl_hardware_create(TLCore *core, AudioDeviceID device, double rate,
     if ((err = AudioUnitSetProperty(h->unit, kAudioUnitProperty_StreamFormat, kAudioUnitScope_Input, 0, &format, sizeof(format)))) goto fail;
     h->maxFrames = 8192;
     if ((err = AudioUnitSetProperty(h->unit, kAudioUnitProperty_MaximumFramesPerSlice, kAudioUnitScope_Global, 0, &h->maxFrames, sizeof(h->maxFrames)))) goto fail;
-    // Preallocate AND touch every page before the realtime thread starts.
+    // Reserve capacity for the audio unit independently of the actual 32-frame I/O quantum.
     h->input = calloc(1, sizeof(AudioBufferList) + (inputs - 1) * sizeof(AudioBuffer));
     h->inputStorage = calloc((size_t)inputs * h->maxFrames, sizeof(float));
     h->outputLeft = calloc(h->maxFrames, sizeof(float)); h->outputRight = calloc(h->maxFrames, sizeof(float));
     if (!h->input || !h->inputStorage || !h->outputLeft || !h->outputRight) { err = memFullErr; goto fail; }
+    volatile float *pages[] = {h->inputStorage, h->outputLeft, h->outputRight};
+    size_t counts[] = {(size_t)inputs * h->maxFrames, h->maxFrames, h->maxFrames};
+    for (int b = 0; b < 3; b++) {
+        for (size_t i = 0; i < counts[b]; i += 1024) pages[b][i] = 0;
+        pages[b][counts[b] - 1] = 0;
+    }
     h->input->mNumberBuffers = inputs;
     for (uint32_t i = 0; i < inputs; i++) {
         h->input->mBuffers[i] = (AudioBuffer){1, h->maxFrames * 4, h->inputStorage + i * h->maxFrames};
@@ -106,3 +118,5 @@ void tl_hardware_destroy(TLHardware *h) {
 }
 OSStatus tl_hardware_error(TLHardware *h) { return h ? atomic_load_explicit(&h->error, memory_order_relaxed) : 0; }
 uint64_t tl_hardware_callbacks(TLHardware *h) { return h ? atomic_load_explicit(&h->callbacks, memory_order_relaxed) : 0; }
+
+uint32_t tl_hardware_callback_frames(TLHardware *h) { return h ? atomic_load_explicit(&h->callbackFrames, memory_order_relaxed) : 0; }

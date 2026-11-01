@@ -68,6 +68,24 @@ enum AudioDevices {
             .map(device).filter { !$0.uid.hasPrefix("local.maclooper.route.") && !$0.uid.isEmpty }
             .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
+    static let bufferFrames: UInt32 = 32
+    static func require32Frames(_ id: AudioObjectID, name: String) throws {
+        var a = address(kAudioDevicePropertyBufferFrameSizeRange)
+        var range = AudioValueRange()
+        var size = UInt32(MemoryLayout<AudioValueRange>.size)
+        try check(AudioObjectGetPropertyData(id, &a, 0, nil, &size, &range), "Read \(name) buffer limits")
+        guard range.mMinimum <= Double(bufferFrames), range.mMaximum >= Double(bufferFrames) else {
+            throw AudioFailure(message: "\(name) does not support a 32-sample buffer (range \(Int(range.mMinimum))–\(Int(range.mMaximum))).")
+        }
+        a.mSelector = kAudioDevicePropertyBufferFrameSize
+        var frames = bufferFrames
+        if number(id, kAudioDevicePropertyBufferFrameSize, fallback: UInt32(0)) != frames {
+            try check(AudioObjectSetPropertyData(id, &a, 0, nil, UInt32(MemoryLayout<UInt32>.size), &frames), "Set \(name) to 32 samples")
+        }
+        guard number(id, kAudioDevicePropertyBufferFrameSize, fallback: UInt32(0)) == bufferFrames else {
+            throw AudioFailure(message: "\(name) did not accept 32 samples. Audio was not started.")
+        }
+    }
     static func alive(_ id: AudioObjectID) -> Bool {
         number(id, kAudioDevicePropertyDeviceIsAlive, fallback: UInt32(0)) != 0
     }
@@ -86,6 +104,8 @@ enum AudioDevices {
         guard input.rate >= 8000, input.rate <= 192000, abs(input.rate - output.rate) < 0.1 else {
             throw AudioFailure(message: "Set both devices to the same sample rate in Audio MIDI Setup, then try again. AM4 uses 48 kHz.")
         }
+        try require32Frames(input.id, name: input.name)
+        if input.id != output.id { try require32Frames(output.id, name: output.name) }
         if input.id == output.id {
             return Route(device: input.id, aggregate: nil, inputOffset: 0, outputOffset: 0,
                          inputs: input.inputs, outputs: output.outputs, rate: output.rate)
@@ -118,6 +138,7 @@ enum AudioDevices {
                     if current.inputs >= inputOffset + input.inputs,
                        current.outputs >= outputOffset + output.outputs,
                        abs(current.rate - output.rate) < 0.1 {
+                        try require32Frames(aggregate, name: "Mac Looper audio route")
                         return Route(device: aggregate, aggregate: aggregate, inputOffset: inputOffset,
                                      outputOffset: outputOffset, inputs: current.inputs, outputs: current.outputs, rate: current.rate)
                     }

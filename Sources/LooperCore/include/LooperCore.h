@@ -6,6 +6,7 @@
 
 typedef struct TLCore TLCore;
 typedef struct TLHardware TLHardware;
+enum { TL_BUFFER_FRAMES = 32, TL_BUFFER_SIZE_ERROR = -60001 };
 enum { TL_EMPTY = 0, TL_ARMED, TL_RECORDING, TL_PLAYING, TL_STOPPED };
 enum { TL_CMD_ARM = 1, TL_CMD_CLEAR, TL_CMD_PLAY_STOP };
 typedef struct {
@@ -41,4 +42,5 @@ OSStatus tl_hardware_start(TLHardware *hardware);
 void tl_hardware_destroy(TLHardware *hardware);
 OSStatus tl_hardware_error(TLHardware *hardware);
 uint64_t tl_hardware_callbacks(TLHardware *hardware);
+uint32_t tl_hardware_callback_frames(TLHardware *hardware);
 #endif

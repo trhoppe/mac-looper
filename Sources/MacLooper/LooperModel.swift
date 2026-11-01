@@ -41,6 +41,8 @@ import LooperCore
             Task { @MainActor in self?.poll() }
         }
     }
+    var audioCallbackCount: UInt64 { tl_hardware_callbacks(hardware) }
+    var audioCallbackFrames: UInt32 { tl_hardware_callback_frames(hardware) }
     var inputs: [AudioDevice] { devices.filter { $0.inputs > 0 } }
     var outputs: [AudioDevice] { devices.filter { $0.outputs > 0 } }
     var input: AudioDevice? { inputs.first { $0.uid == inputUID } }
@@ -164,7 +166,11 @@ import LooperCore
         lastCallbacks = callbacks
         if tl_hardware_error(hardware) != 0 || stalledTicks > 90 {
             let code = tl_hardware_error(hardware)
-            stopAudio(); error = "Audio stopped responding (Core Audio \(code)). Check your devices and start audio again."
+            let frames = audioCallbackFrames
+            stopAudio()
+            error = code == TL_BUFFER_SIZE_ERROR
+                ? "The audio driver delivered \(frames) samples instead of 32. Audio was stopped."
+                : "Audio stopped responding (Core Audio \(code)). Check your devices and start audio again."
             return
         }
         let s = tl_snapshot(core)
