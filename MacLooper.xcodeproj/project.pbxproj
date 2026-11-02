@@ -65,6 +65,12 @@
 			"path" = "Sources/MacLooper/ChordChartView.swift";
 			"sourceTree" = "SOURCE_ROOT";
 		};
+		"9B62DE784FBA37E11323F308" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/MacLooper/ChordProTextEditor.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
 		"7F3B570D2D70C19D0E9CD6AB" = {
 			"isa" = "PBXFileReference";
 			"lastKnownFileType" = "sourcecode.swift";
@@ -131,10 +137,22 @@
 			"path" = "Sources/MacLooper/PopDrummerModel.swift";
 			"sourceTree" = "SOURCE_ROOT";
 		};
+		"C715C22B94B3452DEA9E0D74" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/MacLooper/ResizableSplit.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
 		"C9AA4E6B4121A9502C001522" = {
 			"isa" = "PBXFileReference";
 			"lastKnownFileType" = "sourcecode.swift";
 			"path" = "Sources/MacLooper/SongBrowserView.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"518A63B69F4BFF4288FCDA10" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/MacLooper/SongEditorView.swift";
 			"sourceTree" = "SOURCE_ROOT";
 		};
 		"E8964440F829DFE735343C21" = {
@@ -233,6 +251,10 @@
 			"isa" = "PBXBuildFile";
 			"fileRef" = "6A1BD18AC78FACDEF8AEE07F";
 		};
+		"2BBAEB87AE2D336A759C6C6B" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "9B62DE784FBA37E11323F308";
+		};
 		"EFB627AF251D4EFDA5AE15A7" = {
 			"isa" = "PBXBuildFile";
 			"fileRef" = "7F3B570D2D70C19D0E9CD6AB";
@@ -277,9 +299,17 @@
 			"isa" = "PBXBuildFile";
 			"fileRef" = "183F606E5344C95BDC450A54";
 		};
+		"5C25A58EF9926AD3F20104E2" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "C715C22B94B3452DEA9E0D74";
+		};
 		"2645E32922A1F66C47CEC260" = {
 			"isa" = "PBXBuildFile";
 			"fileRef" = "C9AA4E6B4121A9502C001522";
+		};
+		"7A2B1F3095574280BA8F83FF" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "518A63B69F4BFF4288FCDA10";
 		};
 		"A8939EAA709FD15E5DA641D5" = {
 			"isa" = "PBXBuildFile";
@@ -303,6 +333,7 @@
 				"FD83501EAA6EE9A8360FFD0C",
 				"774D441B64155B46D11C80B9",
 				"E38D387ABD8F74DEFC889331",
+				"2BBAEB87AE2D336A759C6C6B",
 				"EFB627AF251D4EFDA5AE15A7",
 				"897B0C0F2E8A3A69DD194650",
 				"69D6FA21622F3D83F0E2BA46",
@@ -314,7 +345,9 @@
 				"2D1F663B78A05CD4557BA704",
 				"1F222D8300114981C375476C",
 				"9D117CEB0DF4702CD504E814",
+				"5C25A58EF9926AD3F20104E2",
 				"2645E32922A1F66C47CEC260",
+				"7A2B1F3095574280BA8F83FF",
 				"A8939EAA709FD15E5DA641D5",
 				"ED56573AA6FC94B715D611A4",
 			);
@@ -512,6 +545,10 @@
 			"isa" = "PBXBuildFile";
 			"fileRef" = "6A1BD18AC78FACDEF8AEE07F";
 		};
+		"8976DDAC4AD592D69BB58770" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "9B62DE784FBA37E11323F308";
+		};
 		"F583BF9727266127F098504F" = {
 			"isa" = "PBXBuildFile";
 			"fileRef" = "7F3B570D2D70C19D0E9CD6AB";
@@ -556,9 +593,17 @@
 			"isa" = "PBXBuildFile";
 			"fileRef" = "183F606E5344C95BDC450A54";
 		};
+		"E4360BCAB646D950F7C01D52" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "C715C22B94B3452DEA9E0D74";
+		};
 		"0073B19CA3AE054BD541F82B" = {
 			"isa" = "PBXBuildFile";
 			"fileRef" = "C9AA4E6B4121A9502C001522";
+		};
+		"51C6E6886416E0959649D289" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "518A63B69F4BFF4288FCDA10";
 		};
 		"92A6F96C952D4EF79F042674" = {
 			"isa" = "PBXBuildFile";
@@ -582,6 +627,7 @@
 				"DD78964ACF5B85CCD8FB9C16",
 				"000035ED34357047421299A6",
 				"9E4AEE76A7EF625FB1725E32",
+				"8976DDAC4AD592D69BB58770",
 				"F583BF9727266127F098504F",
 				"EF7FB9F13FDB89C6350D21EA",
 				"85E886765A82BFCA57B14FDC",
@@ -593,7 +639,9 @@
 				"AD0E7A142B22344DC87C8647",
 				"44B1D5AC46EC46B353D849FF",
 				"D4125D7A77E56526B72A0D7E",
+				"E4360BCAB646D950F7C01D52",
 				"0073B19CA3AE054BD541F82B",
+				"51C6E6886416E0959649D289",
 				"92A6F96C952D4EF79F042674",
 				"E3DA4EE7AE8C70B521A8C16B",
 			);
@@ -745,6 +793,18 @@
 			"isa" = "PBXFileReference";
 			"lastKnownFileType" = "sourcecode.swift";
 			"path" = "Tests/JamCoreTests/LibraryTests.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"38D79D59695E819998814DD8" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Tests/JamCoreTests/PaneSizingTests.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"6A31C74932361497236C8D78" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Tests/JamCoreTests/SongEditingTests.swift";
 			"sourceTree" = "SOURCE_ROOT";
 		};
 		"0B6437D49B48DE2E7852026C" = {
@@ -902,6 +962,14 @@
 			"isa" = "PBXBuildFile";
 			"fileRef" = "11413520F336346DAB475C75";
 		};
+		"F360EF57F6160E666602A5B6" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "38D79D59695E819998814DD8";
+		};
+		"F505A2D05C6C29AF86506DA4" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "6A31C74932361497236C8D78";
+		};
 		"25473D0922CE804F4F6155C7" = {
 			"isa" = "PBXBuildFile";
 			"fileRef" = "0B6437D49B48DE2E7852026C";
@@ -933,6 +1001,8 @@
 				"B09FF33B431CCEB39406D91B",
 				"E4F063198B09E6529FDC75B8",
 				"9B086B244A27E009D7B0ED59",
+				"F360EF57F6160E666602A5B6",
+				"F505A2D05C6C29AF86506DA4",
 				"25473D0922CE804F4F6155C7",
 				"CE8AEA15688D2ECECFA78723",
 				"C5E9A158AFD24525AD359F12",
@@ -987,6 +1057,7 @@
 				"119CA3B65B4C59F4FF8D3BB1",
 				"E2CD89D17D1D022B5CF4E6C5",
 				"6A1BD18AC78FACDEF8AEE07F",
+				"9B62DE784FBA37E11323F308",
 				"7F3B570D2D70C19D0E9CD6AB",
 				"B192EE9C1340E0205954380B",
 				"7A0AE83ADC974DDB551E736D",
@@ -998,7 +1069,9 @@
 				"798871092DAD7073641FF444",
 				"1763C05D4FB09C7459AD520D",
 				"183F606E5344C95BDC450A54",
+				"C715C22B94B3452DEA9E0D74",
 				"C9AA4E6B4121A9502C001522",
+				"518A63B69F4BFF4288FCDA10",
 				"E8964440F829DFE735343C21",
 				"2F3B8D1F8EE28FDCCBC7E161",
 			);
@@ -1011,6 +1084,8 @@
 				"7BC37BC6E9B6CE96E7E2103C",
 				"4DB826298CC87F844A97B12D",
 				"11413520F336346DAB475C75",
+				"38D79D59695E819998814DD8",
+				"6A31C74932361497236C8D78",
 				"0B6437D49B48DE2E7852026C",
 				"806CC50366E7895835D4DBA2",
 				"724C495D24C6DDA1C0C6D092",

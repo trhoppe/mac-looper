@@ -3,6 +3,7 @@ import LooperCore
 
 struct LooperPanel: View {
     @ObservedObject var model: LooperModel
+    var waveformHeight: Double = 38
     private let accent = Color(red: 0.259, green: 0.788, blue: 0.961)
     private var bpm: Binding<Double> { Binding(get: { model.bpm }, set: { if $0.isFinite { model.bpm = min(240, max(30, $0)) } }) }
     private var bars: Binding<Double> { Binding(get: { Double(model.bars) }, set: { if $0.isFinite { model.bars = Int(min(8, max(1, $0.rounded()))) } }) }
@@ -57,7 +58,7 @@ struct LooperPanel: View {
                     var p = Path(); p.move(to: CGPoint(x: x, y: 0)); p.addLine(to: CGPoint(x: x, y: size.height))
                     context.stroke(p, with: .color(.white.opacity(0.8)), lineWidth: 1)
                 }
-            }.frame(height: 38).accessibilityLabel("Loop waveform")
+            }.frame(height: waveformHeight).accessibilityLabel("Loop waveform")
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: 12) { transport; volume.frame(maxWidth: 300); Spacer(minLength: 0) }
                 VStack(alignment: .leading, spacing: 8) { transport; volume.frame(maxWidth: 300) }

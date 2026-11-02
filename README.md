@@ -39,43 +39,62 @@ input rather than silently using the iPad microphone. The app requests and verif
 that actual buffer and shows the render size in Audio Settings.
 There is no buffer selector. The Mac retains its strict 32-sample requirement.
 
-## Chord charts and iCloud library
+## Chord charts, editing and iCloud library
 
-Mac Jams reads JustChords’ `library.json`, including songs, playlist/folder order,
-tags, saved key/transpose and capo settings. The native read-only ChordPro viewer
-shows chords over lyrics, section headings, comments and tablature. Text size is
-adjustable from 12–36 points using **A− / A+**. Line, section and wrapped-row
-spacing scale with the font size and update immediately on the current song.
-The text-column icon beside A− / A+ switches between one column and paired
-left-to-right rows, and remembers the choice across launches. Two columns are
-used when the available width fits readable text at that size; narrower space
-falls back to one. Consecutive lyric/chord lines read across each row, then down
-to the next. Bold light-gray section headings and tablature span the full chart
-width. Tab blocks stay together. Chart content uses a monospaced font, and unmarked guitar-tab rows are
-grouped so their columns stay aligned. Adjacent chord-only fragments have visible
-spacing without rewriting the source JSON. Chart editing remains a future stage.
+Mac Jams owns its `library.json`. **JustChords syncing is disabled**, including the
+old launch-time import. Existing source bookmarks are ignored and removed; the
+original JustChords library is never written. The existing own library remains
+in **iCloud Drive → Mac Looper → library.json**, preserving access and data through
+the app rename. On iPad, choose that same folder under **Settings → Choose library
+folder…**. An iPad without a shared-folder choice uses its local Documents/Library.
 
-On this Mac, defaults are:
+The own library loads at launch and when returning to the foreground, except
+while editing. Each save coordinates access to the current iCloud file, reads its
+latest version and patches only changed fields on the selected library song.
+Other songs, playlists, tags, IDs, unknown data and settings are retained. A
+concurrent change to the same edited field keeps your draft open and reports a
+conflict instead of overwriting it. A missing own file does not fall back to
+importing JustChords again. Choose the existing own folder in Settings.
 
-- **Source:** iCloud Drive → JustChords → `library.json` (read-only).
-- **Own library:** iCloud Drive → **Mac Looper** → `library.json`.
+With a chart selected, click **Edit** below the font controls. The editor fills
+**the entire app workspace**, with no dimmed border, on Mac and iPad. Edit:
 
-At launch, the app checks the source once. It does not poll while open or sync when
-returning to the foreground. Choosing a new source or library folder in Settings
-loads that explicit choice immediately. A complete valid source replaces the own copy atomically. A failed
-or incomplete update keeps the last good library and reports the problem. The JSON
-copy retains the **exact source bytes**, including unknown fields, IDs, trash and
-JustChords settings. Viewing never rewrites the JustChords file. This preserves the
-format for a future return to JustChords; no two-way editing is implemented yet.
+- Song name and artist.
+- Song key (for example C, F# or Am), BPM and time signature.
+- Song length in minutes:seconds, using the existing `duration` JSON field.
+- Raw ChordPro: type `[C]` before a word to place its chord above that word in
+  reading mode. Type tabs as plain text; spaces and line breaks are preserved.
 
-The existing **Mac Looper** library folder and app identifiers are retained during
-the Mac Jams rename, preserving access to existing data and permissions.
+The monospaced native editor highlights chord brackets in cyan and headings in
+gray. Smart quotes/dashes, spelling corrections and automatic replacements are
+disabled for source text. Native undo works. The app's single-key looper/backing
+shortcuts are disabled while editing so letters, spaces, arrows and Delete edit
+text without operating the jam controls. Playing audio continues independently.
 
-On iPad, open Settings in Mac Jams, choose **Choose library folder…**, and select
-the same folder in Files. For launch-time sync from JustChords, also choose its
-`library.json` as the source. These choices persist across launches. Without those
-choices the iPad uses its own local Documents/Library folder. No private user JSON
-or backing audio is included in the app bundle or Git repository.
+**Save** (Command-S on Mac) commits changes and immediately refreshes the chart,
+song list and editable looper BPM. **Cancel** leaves the stored song unchanged;
+a changed draft asks before discarding. Before each changed save, the complete
+previous file is kept in **Library Backups** beside `library.json`. Drafts stay in
+memory until Save; there is no automatic draft recovery. No-op saves do not
+rewrite the JSON or create a backup.
+
+The storage structure remains compatible with the imported JustChords format.
+Viewing retains exact file bytes. Explicit saves reformat the JSON while retaining
+unrelated values, unknown fields, trash and playlist membership/settings. The
+editor changes the library song; playlist-specific overrides remain intact.
+Changing Song key updates key metadata and clears an old display transpose;
+it does not rewrite the chord symbols in the source. Song time signature and
+length are metadata; live loop timing still uses 4/4.
+
+The read view shows chords over lyrics, bold light-gray section headings, comments
+and tablature. **A− / A+** controls adjust text from 12–36 points; spacing changes
+immediately with the font size. The text-column icon switches one/paired-column
+preference and remembers it. When space allows, paired lines read left-to-right
+across each row, then down; headings and tabs span the full chart. Narrow space
+falls back to one column. Raw tab rows stay grouped and monospaced. Adjacent
+chord-only fragments have visible spacing without changing source content.
+
+Private user JSON and backing audio are never included in the app bundle or Git.
 
 Use **Songs** to choose a playlist and select a chart. Click its magnifying glass
 to reveal title/artist search. The adjacent sort dropdown offers **Song name**
@@ -97,6 +116,27 @@ is adopted only while the loop is empty; an existing loop’s timing remains fix
 
 Select backing audio manually in the right rail. Chart browsing and backing-track
 selection are independent; there are no attachment controls in the chart.
+
+## Resizable panels
+
+Drag the small grip on a border to resize:
+
+- Songs sidebar width and audio-files panel width.
+- File-list/player height split inside the audio-files panel.
+- Chart/jam-controls height split.
+- Looper/Drummer widths, or their heights when stacked on a narrower screen.
+- Compact backing-player height beneath the chart on a narrow screen.
+
+Sizes are remembered on each device. Minimum sizes keep neighboring controls
+usable; smaller windows temporarily clamp the layout without replacing the saved
+wide-window sizes. The compact player and jam panels scroll when space is tight.
+The looper waveform grows as its panel becomes taller. Hiding a panel still leaves
+its playback running and lets the remaining panels expand.
+
+Double-click a grip to reset that split, or use its **Reset size** context menu.
+Mac grips show the resize cursor and a cyan hover highlight; iPad grips have a
+larger touch target. Songs remains a popover in the compact layout.
+
 
 ## Jam
 

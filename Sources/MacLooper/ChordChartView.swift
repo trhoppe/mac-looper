@@ -5,16 +5,17 @@ import JamCore
 // to equality and to every layout cache, rather than waiting for a song change.
 struct ChordChartView: View {
     let song: LibrarySong?
+    let edit: () -> Void
     @AppStorage("chartFontSize") private var fontSize = 21.0
     @AppStorage("chartTwoColumns") private var twoColumns = true
     private let document: ChordProDocument?
-    init(song: LibrarySong?) {
-        self.song = song
+    init(song: LibrarySong?, edit: @escaping () -> Void = {}) {
+        self.song = song; self.edit = edit
         document = song.map { ChordProDocument(source: $0.chordPro, transpose: $0.transposition, flats: $0.displayKey?.contains("b") == true) }
     }
     var body: some View {
         ChartPresentation(song: song, document: document, fontSize: fontSize, twoColumns: twoColumns,
-                          changeFont: { fontSize = $0 }, toggleColumns: { twoColumns.toggle() }).equatable()
+                          changeFont: { fontSize = $0 }, toggleColumns: { twoColumns.toggle() }, edit: edit).equatable()
     }
 }
 
@@ -25,6 +26,7 @@ private struct ChartPresentation: View, Equatable {
     let twoColumns: Bool
     let changeFont: (Double) -> Void
     let toggleColumns: () -> Void
+    let edit: () -> Void
     private let accent = Color(red: 0.259, green: 0.788, blue: 0.961)
     static func == (lhs: Self, rhs: Self) -> Bool { lhs.song == rhs.song && lhs.fontSize == rhs.fontSize && lhs.twoColumns == rhs.twoColumns }
 
@@ -38,25 +40,30 @@ private struct ChartPresentation: View, Equatable {
                             if !song.artist.isEmpty { Text(song.artist).foregroundStyle(.secondary) }
                         }
                         Spacer(minLength: 12)
-                        HStack(spacing: 6) {
-                            Button(action: toggleColumns) {
-                                ChartColumnsIcon(count: twoColumns ? 1 : 2).frame(minWidth: 28)
-                            }.accessibilityLabel(twoColumns ? "Use one chart column" : "Use two chart columns")
-                                .accessibilityValue(twoColumns ? "Two columns" : "One column")
-                                .help(twoColumns ? "Switch to one column" : "Switch to two columns when space allows")
-                            Button { changeFont(max(12, fontSize - 1)) } label: { Text("A−").font(.system(size: 16, weight: .medium)).frame(minWidth: 28) }
-                                .disabled(fontSize <= 12).accessibilityLabel("Smaller chart text").help("Smaller chart text and tighter lines")
-                            Button { changeFont(min(36, fontSize + 1)) } label: { Text("A+").font(.system(size: 16, weight: .medium)).frame(minWidth: 28) }
-                                .disabled(fontSize >= 36).accessibilityLabel("Larger chart text").help("Larger chart text and wider lines")
+                        VStack(alignment: .trailing, spacing: 8) {
+                            HStack(spacing: 6) {
+                                Button(action: toggleColumns) {
+                                    ChartColumnsIcon(count: twoColumns ? 1 : 2).frame(minWidth: 28)
+                                }.accessibilityLabel(twoColumns ? "Use one chart column" : "Use two chart columns")
+                                    .accessibilityValue(twoColumns ? "Two columns" : "One column")
+                                    .help(twoColumns ? "Switch to one column" : "Switch to two columns when space allows")
+                                Button { changeFont(max(12, fontSize - 1)) } label: { Text("A−").font(.system(size: 16, weight: .medium)).frame(minWidth: 28) }
+                                    .disabled(fontSize <= 12).accessibilityLabel("Smaller chart text").help("Smaller chart text and tighter lines")
+                                Button { changeFont(min(36, fontSize + 1)) } label: { Text("A+").font(.system(size: 16, weight: .medium)).frame(minWidth: 28) }
+                                    .disabled(fontSize >= 36).accessibilityLabel("Larger chart text").help("Larger chart text and wider lines")
 
-                        }.buttonStyle(.bordered)
+                            }.buttonStyle(.bordered)
+                            Button(action: edit) { Label("Edit", systemImage: "square.and.pencil") }
+                                .buttonStyle(.bordered).accessibilityLabel("Edit song")
+                        }
 
                     }
                     HStack(spacing: 14) {
                         if let key = song.displayKey { Text("Key \(key)") }
                         if let capo = song.capo, capo != "0" { Text("Capo \(capo)") }
                         if let tempo = song.tempo { Text("\(Int(tempo)) BPM") }
-                        if let meter = song.fields["timeSignature"]?.text { Text(meter) }
+                        if let meter = song.timeSignature { Text(meter) }
+                        if let duration = song.duration, !duration.isEmpty { Text(duration) }
                     }.font(.caption).foregroundStyle(.secondary)
 
                 }.padding(18)
@@ -119,9 +126,10 @@ private struct ChartPresentation: View, Equatable {
                 }
             } else {
                 GeometryReader { geo in
-                    VStack(spacing: 22) {
+                    let artworkSize = max(0, min(320, geo.size.width * 0.55, geo.size.height - 110))
+                    VStack(spacing: min(22, max(8, geo.size.height * 0.03))) {
                         WelcomeArtwork()
-                            .frame(width: min(320, geo.size.width * 0.55), height: min(320, geo.size.height * 0.55))
+                            .frame(width: artworkSize, height: artworkSize)
                             .opacity(0.14).accessibilityHidden(true)
                         Text("Choose a song").font(.title3).foregroundStyle(.secondary)
                         Text("Select a song from your library to open its chart.")

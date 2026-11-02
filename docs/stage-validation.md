@@ -1,10 +1,9 @@
 # Stages 1–3 validation
 
 Implementation scope: shared Mac/iPad SwiftUI workspace and portable library model;
-shared loop/backing audio graph with native platform routing; native read-only
-ChordPro viewer and lossless JustChords library mirror. Pop Drummer AUv3 hosting
-and the jamming controls are now included. Chart editing,
-overdub, saved loop sessions and a second guitar track remain later work.
+shared loop/backing audio graph with native platform routing; native ChordPro
+viewing/editing and an own compatible JSON library. Pop Drummer AUv3 hosting
+and the jamming controls are included. Overdub, saved loop sessions and a second guitar track remain later work.
 
 ## Current build
 
@@ -15,7 +14,7 @@ overdub, saved loop sessions and a second guitar track remain later work.
   3 playlists, 6 tags; exact-byte copy verified. JustChords source was not changed.
 - Source/library data and backing audio are not bundled or committed.
 
-## Verification (November 1, 2026)
+## Historical viewer verification (November 1, 2026)
 
 - Mac regression tests: **54 passed, 0 failures** (`build/mac-jams-tests.log`).
 - Physical iPad: **38 passed, 0 failures** (`build/mac-jams-ipad-tests.log`).
@@ -43,11 +42,10 @@ jam and AM4 routing on the physical iPad still require connecting the AM4 to it.
 
 ## iPad iCloud setup
 
-The installed app already has the 38-song library for immediate testing. To keep
-using the same iCloud copy across devices, choose **Choose library folder…** in
-Settings and select the folder in Files. Also choose JustChords’ `library.json` as
-the source for launch-time sync on that iPad. Files grants the app access through
-those choices; Mac absolute paths are not reused on iPad.
+To use the same editable iCloud library across devices, choose **Choose library
+folder…** in Settings and select the own **Mac Looper** folder in Files. JustChords
+source selection and syncing have been removed. Files grants access through this
+folder choice; Mac absolute paths are not reused on iPad.
 
 ## First jam check
 
@@ -186,3 +184,66 @@ repair, profiling evidence and the limits of those measurements.
   single sort dropdown, restored welcome logo, immediate column switching in
   both directions and one-column persistence after a normal quit/relaunch.
   The final signed iPad package was installed and launched normally.
+
+## Native ChordPro editing (November 2, 2026)
+
+This supersedes the historical JustChords launch-sync checks above. The own
+`library.json` is now authoritative; a legacy source bookmark is removed and is
+never imported, even when the own file is missing. The original JustChords file
+stays protected. Own-library loading on foreground entry skips an open draft.
+
+- Edit is below the chart font controls. The editor fills 100% of the current
+  app workspace on both platforms, with compact metadata fields and native
+  monospaced source editing. The larger overlay was visually checked on Mac.
+- Song name, artist, base key, BPM, time signature and existing `duration` are
+  editable. Raw `[CHORD]` markup and tabs are saved without text substitutions.
+  Chords highlight cyan; headings/directives gray. The current 4/4 looper core
+  remains unchanged; edited song BPM reaches an empty/editable loop as before.
+- Saves read the coordinated latest file and patch only explicitly changed song
+  fields. Unknown data, large unknown integers, numeric IDs, other songs and
+  playlist membership/settings are covered by tests. Apple's reference-date
+  timestamp format and string metadata types are retained.
+- Each changed save makes an exact previous-file backup under Library Backups,
+  then atomically replaces the library. Unrelated remote edits merge; edited-field
+  conflicts keep the draft open. Invalid, missing and no-op cases do not overwrite
+  the current file. Concurrent writes to different songs preserve both changes.
+- A separate app copy and disposable JSON fixture exercised all six metadata
+  fields, chord/lyric/tab typing, newline/space/arrow/delete handling, native undo,
+  Save, reopen, Cancel and confirmed discard. The saved fixture was inspected for
+  exact source text, unknown-field retention and byte-identical backup.
+- **78 Mac tests** passed (`build/editor-tests.log`). Physical iPad validation
+  results are in `build/editor-ipad-tests.log`; final device installation uses the
+  native signed target. No private song edits were used for automated testing.
+- Drafts are in memory until Save; saved-loop sessions, automatic draft recovery
+  and general new-song/playlist management remain outside this editing phase.
+
+## Resizable panels and full-window editing (November 2, 2026)
+
+- Seven remembered split dimensions are implemented: Songs width, audio rail
+  width, file-player height, footer height, drummer width, stacked drummer height
+  and compact-player height. Drag preview is local state; preferences commit
+  only when the drag ends. Audio graph/routing ownership is unchanged.
+- Manual Mac mouse drags checked all five wide-layout borders, plus the compact
+  player and stacked Looper/Drummer dividers. Examples included Songs 240 → 300,
+  audio rail 340 → 400, player/footer 230 → 300, drummer 340 → 400, compact player
+  230 → 270 and stacked drummer 150 → 210 points.
+- Songs clamped correctly at its 220-point minimum. Double-click reset worked.
+  Layout values survived a normal quit/relaunch and repeated hide/show changes.
+  Player-only and expanded remaining-panel combinations were checked.
+- Narrow and short windows were checked manually. Welcome spacing and compact
+  minimum heights were adjusted after initial clipping was found. The revised
+  welcome message and full compact-player volume controls fit in the checked
+  window. Returning to a wide window restored saved sizes instead of keeping
+  temporary constrained dimensions. Test dimensions and original visibility
+  were restored afterward.
+- The editor now fills the app workspace with no dimmed border or rounded inset.
+  A production chart was opened for a visual check, then cancelled unchanged;
+  Save remained disabled throughout that check.
+- Mac regression suite: **82 tests**, no failures (`build/resizable-tests.log`).
+  Final packaged Mac build succeeds (`build/resizable-mac-build.log`). Physical
+  iPad suite: **64 tests**, no failures (`build/resizable-ipad-tests.log`); the
+  installed signed app was launched normally. Actual touch drags remain a user
+  check; manual drag verification was on Mac with the shared SwiftUI layout.
+- The AM4 input was not enumerated during this UI pass (AM4 Proxy was present),
+  so live guitar/drum routing was not re-tested after the laptop shutdown. The
+  app correctly reports the missing input without switching to its microphone.

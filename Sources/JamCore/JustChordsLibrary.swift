@@ -38,6 +38,8 @@ public struct LibrarySong: Identifiable, Equatable, Sendable {
     public var chordPro: String { fields["rawData"]?.text ?? "" }
     public var tags: [String] { fields["tags"]?.array.compactMap(\.text) ?? [] }
     public var tempo: Double? { fields["tempo"]?.text.flatMap(Double.init) }
+    public var duration: String? { fields["duration"]?.text }
+    public var timeSignature: String? { fields["timeSignature"]?.text }
     public var capo: String? { fields["capo"]?.text }
     public var originalKey: String? { fields["keyChord"]?.object["key"]?.text }
     public var displayKey: String? {
@@ -82,8 +84,8 @@ public struct LibraryTag: Identifiable, Equatable, Sendable {
 }
 
 public struct JustChordsLibrary: Sendable {
-    // These exact bytes are the storage format. Viewing never re-encodes, normalizes,
-    // edits or discards unknown fields, trash, annotations, IDs, or playlist settings.
+    // Viewing retains exact bytes. Explicit edits patch only the selected song's
+    // changed fields, retaining unknown data, trash, IDs and playlist settings.
     public let originalData: Data
     public let root: [String: JSONValue]
     public let songs: [LibrarySong]

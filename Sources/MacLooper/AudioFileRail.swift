@@ -5,6 +5,7 @@ struct AudioFileRail: View {
     let accent: Color
     var compact = false
     var expanded = false
+    @AppStorage("filePlayerHeight") private var playerHeight = 230.0
     @State private var showingBrowser = false
     @State private var searching = false
     @FocusState private var searchFocused: Bool
@@ -31,81 +32,88 @@ struct AudioFileRail: View {
         }.onAppear { searching = !model.query.isEmpty }
     }
     private var fullRail: some View {
-        VStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack {
-                    Text("Audio Files").font(.title3.weight(.semibold))
-                    Spacer()
-                    Button {
-                        searching.toggle(); searchFocused = searching
-                        if !searching { model.query = "" }
-                    } label: { Image(systemName: "magnifyingglass") }.buttonStyle(.plain).accessibilityLabel("Search audio files")
-                    Button { model.chooseFolder() } label: { Image(systemName: "folder.badge.plus") }
-                        .buttonStyle(.bordered).help("Open a folder and include all of its subfolders")
-                        .accessibilityLabel("Open audio folder")
-                }
-                if let folder = model.folder {
-                    HStack(spacing: 6) {
-                        Image(systemName: "folder")
-                        Text(folder.lastPathComponent).lineLimit(1).truncationMode(.middle)
-                        Spacer(minLength: 0)
-                        Text("\(model.trackCount)").monospacedDigit()
-                    }.font(.caption).foregroundStyle(.secondary).help(folder.path)
-                    if searching {
-                        TextField("Search files or folders", text: $model.query)
-                            .textFieldStyle(.roundedBorder).focused($searchFocused).accessibilityLabel("Search audio files")
+        ResizableSplit(axis: .vertical, side: .trailing, size: $playerHeight, defaultSize: 230,
+                       minimumLeading: 160, minimumTrailing: 210, label: "Resize file list and player") {
+            VStack(spacing: 0) {
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack {
+                        Text("Audio Files").font(.title3.weight(.semibold))
+                        Spacer()
+                        Button {
+                            searching.toggle(); searchFocused = searching
+                            if !searching { model.query = "" }
+                        } label: { Image(systemName: "magnifyingglass") }.buttonStyle(.plain).accessibilityLabel("Search audio files")
+                        Button { model.chooseFolder() } label: { Image(systemName: "folder.badge.plus") }
+                            .buttonStyle(.bordered).help("Open a folder and include all of its subfolders")
+                            .accessibilityLabel("Open audio folder")
                     }
-                }
-            }.padding(18)
-            Divider()
-            ZStack {
-                if model.scanning {
-                    VStack(spacing: 12) { ProgressView().controlSize(.small); Text("Finding audio files…").font(.callout).foregroundStyle(.secondary) }
-                } else if model.groups.isEmpty {
-                    VStack(spacing: 12) {
-                        Image(systemName: "folder.badge.music").font(.system(size: 32)).foregroundStyle(accent.opacity(0.7))
-                        Text(model.folder == nil ? "Your backing tracks, in one place" : "No audio files found").font(.callout)
-                        Text(model.folder == nil ? "Open a folder to browse its audio files and subfolders." : "Choose another folder to browse your audio files.")
-                            .font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
-                        Button("Open Folder…") { model.chooseFolder() }.buttonStyle(.bordered)
-                    }.padding(24)
-                } else if model.visibleGroups.isEmpty {
-                    Text("No matches").foregroundStyle(.secondary)
-                } else {
-                    List(selection: selection) {
-                        ForEach(model.visibleGroups) { group in
-                            Section {
-                                ForEach(group.tracks) { track in
-                                    HStack(spacing: 9) {
-                                        Image(systemName: model.selected?.id == track.id && model.playing ? "speaker.wave.2.fill" : "music.note")
-                                            .font(.caption).foregroundStyle(model.selected?.id == track.id ? accent : .secondary)
-                                            .frame(width: 16)
-                                        Text(track.title).font(.callout).lineLimit(1).truncationMode(.middle)
-                                        Spacer(minLength: 4)
-                                    }.padding(.vertical, 5).hoverHighlight().tag(track.id).help(track.url.path)
-                                }
-                            } header: {
-                                HStack {
-                                    Text(group.title).lineLimit(2)
-                                    Spacer(minLength: 4)
-                                    Text("\(group.tracks.count)").monospacedDigit()
-                                }.font(.caption.weight(.medium)).textCase(nil)
-                            }
+                    if let folder = model.folder {
+                        HStack(spacing: 6) {
+                            Image(systemName: "folder")
+                            Text(folder.lastPathComponent).lineLimit(1).truncationMode(.middle)
+                            Spacer(minLength: 0)
+                            Text("\(model.trackCount)").monospacedDigit()
+                        }.font(.caption).foregroundStyle(.secondary).help(folder.path)
+                        if searching {
+                            TextField("Search files or folders", text: $model.query)
+                                .textFieldStyle(.roundedBorder).focused($searchFocused).accessibilityLabel("Search audio files")
                         }
-                    }.listStyle(.sidebar).scrollContentBackground(.hidden)
+                    }
+                }.padding(18)
+                Divider()
+                ZStack {
+                    if model.scanning {
+                        VStack(spacing: 12) { ProgressView().controlSize(.small); Text("Finding audio files…").font(.callout).foregroundStyle(.secondary) }
+                    } else if model.groups.isEmpty {
+                        VStack(spacing: 12) {
+                            Image(systemName: "folder.badge.music").font(.system(size: 32)).foregroundStyle(accent.opacity(0.7))
+                            Text(model.folder == nil ? "Your backing tracks, in one place" : "No audio files found").font(.callout)
+                            Text(model.folder == nil ? "Open a folder to browse its audio files and subfolders." : "Choose another folder to browse your audio files.")
+                                .font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                            Button("Open Folder…") { model.chooseFolder() }.buttonStyle(.bordered)
+                        }.padding(24)
+                    } else if model.visibleGroups.isEmpty {
+                        Text("No matches").foregroundStyle(.secondary)
+                    } else {
+                        List(selection: selection) {
+                            ForEach(model.visibleGroups) { group in
+                                Section {
+                                    ForEach(group.tracks) { track in
+                                        HStack(spacing: 9) {
+                                            Image(systemName: model.selected?.id == track.id && model.playing ? "speaker.wave.2.fill" : "music.note")
+                                                .font(.caption).foregroundStyle(model.selected?.id == track.id ? accent : .secondary)
+                                                .frame(width: 16)
+                                            Text(track.title).font(.callout).lineLimit(1).truncationMode(.middle)
+                                            Spacer(minLength: 4)
+                                        }.padding(.vertical, 5).hoverHighlight().tag(track.id).help(track.url.path)
+                                    }
+                                } header: {
+                                    HStack {
+                                        Text(group.title).lineLimit(2)
+                                        Spacer(minLength: 4)
+                                        Text("\(group.tracks.count)").monospacedDigit()
+                                    }.font(.caption.weight(.medium)).textCase(nil)
+                                }
+                            }
+                        }.listStyle(.sidebar).scrollContentBackground(.hidden)
+                    }
+                }.frame(maxWidth: .infinity, maxHeight: .infinity)
+                if let notice = model.scanNotice { Text(notice).font(.caption).foregroundStyle(.secondary).padding(.horizontal, 16).padding(.bottom, 8) }
+                if let error = model.error {
+                    HStack(alignment: .top, spacing: 8) {
+                        Image(systemName: "exclamationmark.circle").foregroundStyle(.orange)
+                        Text(error).font(.caption).textSelection(.enabled)
+                        Spacer(minLength: 0)
+                        Button { model.error = nil } label: { Image(systemName: "xmark") }.buttonStyle(.plain)
+                    }.padding(12).background(.orange.opacity(0.08))
                 }
-            }.frame(maxWidth: .infinity, maxHeight: .infinity)
-            if let notice = model.scanNotice { Text(notice).font(.caption).foregroundStyle(.secondary).padding(.horizontal, 16).padding(.bottom, 8) }
-            if let error = model.error {
-                HStack(alignment: .top, spacing: 8) {
-                    Image(systemName: "exclamationmark.circle").foregroundStyle(.orange)
-                    Text(error).font(.caption).textSelection(.enabled)
-                    Spacer(minLength: 0)
-                    Button { model.error = nil } label: { Image(systemName: "xmark") }.buttonStyle(.plain)
-                }.padding(12).background(.orange.opacity(0.08))
             }
-            Divider()
-            player.padding(18).background(.white.opacity(0.025))
+        } trailing: {
+            GeometryReader { geo in
+                ScrollView {
+                    player.padding(18).frame(maxWidth: .infinity, minHeight: geo.size.height)
+                }.background(.white.opacity(0.025))
+            }
         }
         .frame(width: expanded ? nil : 340)
         .frame(maxWidth: expanded ? .infinity : nil)

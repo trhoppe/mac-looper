@@ -4,7 +4,6 @@ struct AudioSettingsView: View {
     @ObservedObject var model: LooperModel
     @ObservedObject var library: SongLibraryModel
     let dismiss: () -> Void
-    let chooseSource: () -> Void
     let chooseFolder: () -> Void
     private let accent = Color(red: 0.259, green: 0.788, blue: 0.961)
     private var bufferSummary: String {
@@ -48,11 +47,9 @@ struct AudioSettingsView: View {
                 Divider()
                 Text("Chord Library").font(.subheadline.weight(.semibold))
                 Text(library.status).font(.caption).foregroundStyle(.secondary)
-                if let source = library.sourceURL { Text("Source: \(source.lastPathComponent)").font(.caption).lineLimit(1) }
                 Text("Library folder: \(library.folderURL.lastPathComponent)").font(.caption).lineLimit(2)
-                Button("Choose JustChords library…") { chooseSource() }
                 Button("Choose library folder…") { chooseFolder() }
-                Text("The source library stays read-only. Mac Jams keeps an exact-format copy in its own folder and syncs from JustChords only at app launch.")
+                Text("Mac Jams edits library.json in this folder. JustChords syncing is off. Each save keeps the previous JSON in Library Backups.")
                     .font(.caption).foregroundStyle(.secondary)
                 if let error = library.error { Text(error).font(.caption).foregroundStyle(.orange) }
             }.padding(20)

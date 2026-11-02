@@ -138,7 +138,7 @@ import JamCore
                         exit(success ? 0 : 1)
                     }
                     // Hosted unit tests exercise DSP without opening physical I/O.
-                    if NSClassFromString("XCTestCase") == nil {
+                    if NSClassFromString("XCTestCase") == nil && !CommandLine.arguments.contains("--editor-check-folder") {
                         await model.startAutomatically()
                         if CommandLine.arguments.contains("--open-drums") { await AudioEngineHost.shared.drums.openEditor() }
                     }
@@ -156,11 +156,16 @@ import JamCore
 @MainActor private final class JamSession: ObservableObject {
     let model = LooperModel()
     let files = AudioFilePlayerModel()
-    let library = SongLibraryModel()
+    let library: SongLibraryModel
     let commands: JamCommandAvailability
     let readiness: AppReadinessModel
     init() {
-        commands = JamCommandAvailability(model: model, files: files)
+        if let index = CommandLine.arguments.firstIndex(of: "--editor-check-folder"), CommandLine.arguments.count > index + 1 {
+            // UI validation uses an isolated fixture and defaults, never user songs.
+            library = SongLibraryModel(defaults: UserDefaults(suiteName: "MacJamsEditor-" + UUID().uuidString)!,
+                                       folderOverride: URL(fileURLWithPath: CommandLine.arguments[index + 1], isDirectory: true))
+        } else { library = SongLibraryModel() }
+        commands = JamCommandAvailability(model: model, files: files, library: library)
         readiness = AppReadinessModel(audio: model, drums: AudioEngineHost.shared.drums, files: files, library: library)
     }
 }
@@ -170,7 +175,9 @@ import JamCore
     @Published var canPlay = false
     @Published var canClear = false
     @Published var canRestart = false
-    init(model: LooperModel, files: AudioFilePlayerModel) {
+    @Published var editing = false
+    init(model: LooperModel, files: AudioFilePlayerModel, library: SongLibraryModel) {
+        library.$editing.removeDuplicates().assign(to: &$editing)
         Publishers.CombineLatest(model.$state, model.$starting)
             .map { $0 == TL_EMPTY && !$1 }.removeDuplicates().assign(to: &$canArm)
         model.$state.map { $0 != TL_EMPTY }.removeDuplicates().assign(to: &$canPlay)
@@ -189,12 +196,12 @@ import JamCore
         CommandGroup(replacing: .newItem) { }
         CommandMenu("Backing Track") {
             Button("Restart Track") { session.files.restart() }
-                .keyboardShortcut(.leftArrow, modifiers: []).disabled(!available.canRestart)
+                .keyboardShortcut(.leftArrow, modifiers: []).disabled(!available.canRestart || available.editing)
         }
         CommandMenu("Loop") {
-            Button("Arm") { Task { await session.model.arm() } }.keyboardShortcut("r", modifiers: []).disabled(!available.canArm)
-            Button("Play / Stop") { session.model.playStop() }.keyboardShortcut(.space, modifiers: []).disabled(!available.canPlay)
-            Button("Clear") { session.model.clear() }.keyboardShortcut(.delete, modifiers: []).disabled(!available.canClear)
+            Button("Arm") { Task { await session.model.arm() } }.keyboardShortcut("r", modifiers: []).disabled(!available.canArm || available.editing)
+            Button("Play / Stop") { session.model.playStop() }.keyboardShortcut(.space, modifiers: []).disabled(!available.canPlay || available.editing)
+            Button("Clear") { session.model.clear() }.keyboardShortcut(.delete, modifiers: []).disabled(!available.canClear || available.editing)
         }
     }
 }
