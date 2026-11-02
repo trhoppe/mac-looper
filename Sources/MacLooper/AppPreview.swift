@@ -10,9 +10,13 @@ import AppKit
             for _ in 0..<100 where files.loading { try await Task.sleep(for: .milliseconds(30)) }
         }
         try await Task.sleep(for: .milliseconds(250))
-        guard let view = NSApplication.shared.windows.first(where: { $0.title == "Mac Looper" })?.contentView else {
+        guard let view = NSApplication.shared.windows.first(where: { $0.title == "Mac Jams" })?.contentView else {
             throw AudioFailure(message: "Preview window unavailable.")
         }
+        NSApplication.shared.activate(ignoringOtherApps: true)
+        view.window?.makeKeyAndOrderFront(nil)
+        try await Task.sleep(for: .milliseconds(350))
+        NSApplication.shared.updateWindows()
         view.layoutSubtreeIfNeeded()
         guard let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { throw AudioFailure(message: "Preview rendering unavailable.") }
         view.cacheDisplay(in: view.bounds, to: bitmap)

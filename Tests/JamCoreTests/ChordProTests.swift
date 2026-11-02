@@ -29,3 +29,23 @@ final class ChordProTests: XCTestCase {
         XCTAssertEqual(words.first?.chord, "C")
     }
 }
+
+extension ChordProTests {
+    func testUnmarkedTabRowsStayTogetherAndKeepTheirColumns() {
+        let rows = ["e|----8-----|", "B|--6---9---|", "G|---------|", "D|---------|", "A|---------|", "E|---------|"]
+        let document = ChordProDocument(source: "Solo:\n" + rows.joined(separator: "\n") + "\n\n[C]Words")
+        let tabs = document.blocks.filter(\.isTablature)
+        XCTAssertEqual(tabs.count, 1)
+        XCTAssertEqual(tabs[0].lines.map(\.text), rows)
+        XCTAssertEqual(document.lines.filter { $0.kind == .tablature }.count, 6)
+    }
+    func testAdjacentVerseChordsReserveVisibleSpacesWithoutChangingLyrics() {
+        let source = "Test words  [Ab5][Db5][Gb5][Db5][Ab5][B]"
+        let fragments = ChordProDocument.fragments(source)
+        let words = ChordProDocument.words(fragments)
+        XCTAssertEqual(words.map(\.lyric).joined(), "Test words  ")
+        let chordOnly = words.filter { !$0.chord.isEmpty && $0.lyric.isEmpty }
+        XCTAssertEqual(chordOnly.count, 6)
+        XCTAssertTrue(chordOnly.allSatisfy { $0.displayColumns > $0.chord.count })
+    }
+}

@@ -42,6 +42,12 @@ final class FilePlaybackTests: XCTestCase {
         model.selectFile(audio)
         for _ in 0..<200 where model.loading { try await Task.sleep(for: .milliseconds(10)) }
         XCTAssertNil(model.error)
+        XCTAssertEqual(model.volume, 1)
+        model.seek(0.05)
+        model.skip(10)
+        XCTAssertEqual(model.position, model.duration, accuracy: 0.001)
+        model.skip(-10)
+        XCTAssertEqual(model.position, 0, accuracy: 0.001)
         model.seek(0.05)
         model.restart()
         try await Task.sleep(for: .milliseconds(30))

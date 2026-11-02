@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<!-- Apple gates discovery of third-party Audio Unit extensions with this host entitlement. -->
+<key>inter-app-audio</key><true/>
+</dict></plist>

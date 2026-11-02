@@ -47,7 +47,7 @@ import JamCore
     var destination: URL { folderURL.appendingPathComponent("library.json") }
     func setSource(_ url: URL) {
         guard url.standardizedFileURL != destination.standardizedFileURL else {
-            error = "This is already Mac Looper’s library. Choose the JustChords source to enable automatic refresh."; return
+            error = "This is already Mac Jams’ library. Choose the JustChords source to enable automatic refresh."; return
         }
         revision += 1; sourceURL = url
         retainAccess(url); saveBookmark(url, key: "librarySource")
@@ -111,7 +111,7 @@ import JamCore
     }
     func linkBacking(_ url: URL, songID: String) {
         retainAccess(url)
-        status = "Copying backing track to Mac Looper…"
+        status = "Copying backing track to Mac Jams…"
         Task {
             do {
                 let copied = try await io.attachBacking(url, songID: songID, in: folderURL)
@@ -120,7 +120,7 @@ import JamCore
                     bookmarkStore[songID] = data
                     if let encoded = try? PropertyListEncoder().encode(bookmarkStore) { defaults.set(encoded, forKey: "backingBookmarks") }
                 }
-                status = "Backing saved with song · available in Mac Looper’s folder"
+                status = "Backing saved with song · available in the library folder"
             } catch { self.error = error.localizedDescription }
         }
     }

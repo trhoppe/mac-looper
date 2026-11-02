@@ -5,6 +5,8 @@ struct AudioFileRail: View {
     let accent: Color
     var compact = false
     @State private var showingBrowser = false
+    @State private var searching = false
+    @FocusState private var searchFocused: Bool
     @State private var scrubbing = false
     @State private var scrubPosition = 0.0
     private var selection: Binding<URL?> {
@@ -25,7 +27,7 @@ struct AudioFileRail: View {
                     player
                 }.padding(12).background(.white.opacity(0.025))
             } else { fullRail }
-        }
+        }.onAppear { searching = !model.query.isEmpty }
     }
     private var fullRail: some View {
         VStack(spacing: 0) {
@@ -33,6 +35,10 @@ struct AudioFileRail: View {
                 HStack {
                     Text("Audio Files").font(.title3.weight(.semibold))
                     Spacer()
+                    Button {
+                        searching.toggle(); searchFocused = searching
+                        if !searching { model.query = "" }
+                    } label: { Image(systemName: "magnifyingglass") }.buttonStyle(.plain).accessibilityLabel("Search audio files")
                     Button { model.chooseFolder() } label: { Image(systemName: "folder.badge.plus") }
                         .buttonStyle(.bordered).help("Open a folder and include all of its subfolders")
                         .accessibilityLabel("Open audio folder")
@@ -44,8 +50,10 @@ struct AudioFileRail: View {
                         Spacer(minLength: 0)
                         Text("\(model.trackCount)").monospacedDigit()
                     }.font(.caption).foregroundStyle(.secondary).help(folder.path)
-                    TextField("Search files or folders", text: $model.query)
-                        .textFieldStyle(.roundedBorder).accessibilityLabel("Search audio files")
+                    if searching {
+                        TextField("Search files or folders", text: $model.query)
+                            .textFieldStyle(.roundedBorder).focused($searchFocused).accessibilityLabel("Search audio files")
+                    }
                 }
             }.padding(18)
             Divider()
@@ -73,8 +81,7 @@ struct AudioFileRail: View {
                                             .frame(width: 16)
                                         Text(track.title).font(.callout).lineLimit(1).truncationMode(.middle)
                                         Spacer(minLength: 4)
-                                        Text(track.url.pathExtension.uppercased()).font(.system(size: 9, weight: .medium)).foregroundStyle(.tertiary)
-                                    }.padding(.vertical, 5).tag(track.id).help(track.url.path)
+                                    }.padding(.vertical, 5).hoverHighlight().tag(track.id).help(track.url.path)
                                 }
                             } header: {
                                 HStack {
@@ -130,14 +137,18 @@ struct AudioFileRail: View {
                     Text(Self.time(model.duration))
                 }.font(.caption.monospacedDigit()).foregroundStyle(.secondary)
             }
-            HStack(spacing: 16) {
+            HStack(spacing: 12) {
                 Button { model.step(-1) } label: { Image(systemName: "backward.end.fill") }
                     .disabled(!model.canStep(-1)).accessibilityLabel("Previous audio file")
+                Button { model.skip(-10) } label: { Image(systemName: "gobackward.10") }
+                    .disabled(model.duration <= 0 || model.loading).accessibilityLabel("Back 10 seconds")
                 Button { model.togglePlay() } label: {
                     Image(systemName: model.playing ? "pause.fill" : "play.fill").font(.title2).frame(width: 28, height: 28)
                 }.disabled(model.duration <= 0 || model.loading).accessibilityLabel(model.playing ? "Pause file" : "Play file")
                 Button { model.stop() } label: { Image(systemName: "stop.fill") }
                     .disabled(model.selected == nil || model.loading).accessibilityLabel("Stop file")
+                Button { model.skip(10) } label: { Image(systemName: "goforward.10") }
+                    .disabled(model.duration <= 0 || model.loading).accessibilityLabel("Forward 10 seconds")
                 Button { model.step(1) } label: { Image(systemName: "forward.end.fill") }
                     .disabled(!model.canStep(1)).accessibilityLabel("Next audio file")
                 Spacer(minLength: 0)

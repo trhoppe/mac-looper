@@ -1,4 +1,6 @@
 import SwiftUI
+import Combine
+import LooperCore
 #if os(macOS)
 import AppKit
 #endif
@@ -19,11 +21,20 @@ import JamCore
     #if os(macOS)
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     #endif
-    @StateObject private var model = LooperModel()
-    @StateObject private var files = AudioFilePlayerModel()
-    @StateObject private var library = SongLibraryModel()
+    // Own models without subscribing the App/Scene to audio meters or file position.
+    @StateObject private var session = JamSession()
+    private var model: LooperModel { session.model }
+    private var files: AudioFilePlayerModel { session.files }
+    private var library: SongLibraryModel { session.library }
     init() {
-        if CommandLine.arguments.contains("--smoke-test") { setbuf(stdout, nil) }
+        if CommandLine.arguments.contains("--smoke-test") || CommandLine.arguments.contains("--drummer-check") { setbuf(stdout, nil) }
+        if let index = CommandLine.arguments.firstIndex(of: "--audio-check"), CommandLine.arguments.count > index + 1 {
+            do {
+                let asset = try PlaybackAsset(URL(fileURLWithPath: CommandLine.arguments[index + 1]))
+                print("PASS: decoded \(asset.duration) seconds at \(Int(asset.file.processingFormat.sampleRate)) Hz / \(asset.file.processingFormat.channelCount) channels")
+                exit(0)
+            } catch { fputs("\(error.localizedDescription)\n", stderr); exit(1) }
+        }
         if let index = CommandLine.arguments.firstIndex(of: "--library-check"), CommandLine.arguments.count > index + 1 {
             do {
                 let data = try Data(contentsOf: URL(fileURLWithPath: CommandLine.arguments[index + 1]))
@@ -43,8 +54,8 @@ import JamCore
         }
     }
     var body: some Scene {
-        WindowGroup("Mac Looper") {
-            ContentView(model: model, files: files, library: library)
+        WindowGroup("Mac Jams") {
+            ContentView(model: model, readiness: session.readiness, files: files, library: library).equatable()
                 .preferredColorScheme(.dark)
                 .task {
                     #if os(macOS)
@@ -55,16 +66,21 @@ import JamCore
                         if let folderIndex = CommandLine.arguments.firstIndex(of: "--audio-folder"), CommandLine.arguments.count > folderIndex + 1 {
                             files.openFolder(URL(fileURLWithPath: CommandLine.arguments[folderIndex + 1]))
                         }
+                        if let songIndex = CommandLine.arguments.firstIndex(of: "--preview-song"), CommandLine.arguments.count > songIndex + 1 {
+                            for _ in 0..<200 where library.library == nil { try? await Task.sleep(for: .milliseconds(20)) }
+                            library.selectedSongID = library.library?.songs.first(where: { $0.title.localizedCaseInsensitiveCompare(CommandLine.arguments[songIndex + 1]) == .orderedSame })?.id
+                        }
                         do {
                             try await AppPreview.write(to: URL(fileURLWithPath: CommandLine.arguments[index + 1]), files: files)
                             files.shutdown(); exit(0)
                         } catch { fputs("\(error.localizedDescription)\n", stderr); files.shutdown(); exit(1) }
                     }
                     #endif
+                    if CommandLine.arguments.contains("--drummer-check") {
+                        do { try await DrummerDiagnostics.run(); exit(0) }
+                        catch { fputs("FAIL: \(error.localizedDescription)\n", stderr); exit(1) }
+                    }
                     if CommandLine.arguments.contains("--smoke-test") {
-                        let savedOutput = UserDefaults.standard.string(forKey: "outputUID")
-                        defer { if let savedOutput { UserDefaults.standard.set(savedOutput, forKey: "outputUID") } }
-                        if CommandLine.arguments.contains("--smoke-direct"), let direct = model.outputs.first(where: \.isAM4) { model.outputUID = direct.uid }
                         print("Smoke: requesting loop audio")
                         await model.startAutomatically()
                         print("Smoke: loop audio returned running=\(model.running) error=\(model.error ?? "none")")
@@ -72,6 +88,21 @@ import JamCore
                         let player = FilePlayback(), token = UUID()
                         var fileExpected = false
                         var restartContinued = true
+                        let drumsExpected = CommandLine.arguments.contains("--smoke-drums")
+                        let drums = AudioEngineHost.shared.drums
+                        var drumVerified = !drumsExpected
+                        if drumsExpected {
+                            drums.volume = 0
+                            await drums.toggle(output: model.output)
+                            let before = drums.transport.transportQueries
+                            try? await Task.sleep(for: .seconds(1))
+                            let firstBeat = drums.transport.beatPosition
+                            drums.tempo = 90
+                            try? await Task.sleep(for: .seconds(1))
+                            let secondBeat = drums.transport.beatPosition
+                            drumVerified = drums.playing && firstBeat > 1 && secondBeat > firstBeat + 1 && secondBeat < firstBeat + 2.5 && drums.transport.renderedFrames == 32 && drums.transport.transportQueries > before + 500
+                            print("Smoke: muted drums follow 120 → 90 BPM: \(drumVerified); plugin error=\(drums.error ?? "none")")
+                        }
                         if let index = CommandLine.arguments.firstIndex(of: "--smoke-file"), CommandLine.arguments.count > index + 1 {
                             fileExpected = true
                             do {
@@ -87,17 +118,30 @@ import JamCore
                                 restartContinued = restarted?.playing == true && (restarted?.position ?? 1) < 0.2
                             } catch { model.error = error.localizedDescription }
                         }
-                        try? await Task.sleep(for: .seconds(3))
+                        let durationIndex = CommandLine.arguments.firstIndex(of: "--smoke-seconds")
+                        let duration = durationIndex.flatMap { CommandLine.arguments.count > $0 + 1 ? Double(CommandLine.arguments[$0 + 1]) : nil } ?? 3
+                        try? await Task.sleep(for: .seconds(duration.isFinite ? min(120, max(3, duration)) : 3))
                         let file = await player.snapshot(session: token)
-                        let success = restartContinued && library.selectedSongID == nil && model.running && model.error == nil && model.audioCallbackCount > 100 && model.audioCallbackFrames == 32
+                        if drumsExpected {
+                            drumVerified = drumVerified && drums.playing && drums.transport.renderedFrames == 32
+                            drums.setPlaying(false); AudioEngineHost.shared.updateDrummerVolume()
+                            let stoppedBeat = drums.transport.beatPosition
+                            try? await Task.sleep(for: .milliseconds(100))
+                            drumVerified = drumVerified && abs(drums.transport.beatPosition - stoppedBeat) < 0.01
+                            print("Smoke: simultaneous backing + muted drums + guitar input, then drum Stop: \(drumVerified)")
+                        }
+                        let success = drumVerified && restartContinued && library.selectedSongID == nil && model.running && model.error == nil && model.audioCallbackCount > 100 && model.audioCallbackFrames == 32
                             && (!fileExpected || (file?.playing == true && (file?.position ?? 0) > 0.1))
-                        print(success ? "PASS: AM4 input → AM4 Proxy output at \(Int(model.sampleRate)) Hz; \(model.audioCallbackFrames) samples; \(model.audioCallbackCount) callbacks; concurrent silent file playback: \(fileExpected); restart kept playback: \(restartContinued); no chart selected; no live monitoring." : "FAIL: \(model.error ?? "Audio stopped or callbacks did not advance")")
+                        print(success ? "PASS: \(model.input?.name ?? "Input") input → \(model.output?.name ?? "Output") output at \(Int(model.sampleRate)) Hz; \(model.audioCallbackFrames) samples; \(model.audioCallbackCount) callbacks; concurrent silent file playback: \(fileExpected); restart kept playback: \(restartContinued); no chart selected; no live monitoring." : "FAIL: \(model.error ?? "Audio stopped or callbacks did not advance")")
                         await player.unload()
-                        model.stopAudio()
+                        model.shutdown()
                         exit(success ? 0 : 1)
                     }
                     // Hosted unit tests exercise DSP without opening physical I/O.
-                    if NSClassFromString("XCTestCase") == nil { await model.startAutomatically() }
+                    if NSClassFromString("XCTestCase") == nil {
+                        await model.startAutomatically()
+                        if CommandLine.arguments.contains("--open-drums") { await AudioEngineHost.shared.drums.openEditor() }
+                    }
 
                 }
         }
@@ -105,18 +149,52 @@ import JamCore
         .defaultSize(width: 1320, height: 860)
         .windowResizability(.contentMinSize)
         #endif
-        .commands {
-            CommandGroup(replacing: .newItem) { }
-            CommandMenu("Backing Track") {
-                Button("Restart Track") { files.restart() }
-                    .keyboardShortcut(.leftArrow, modifiers: [])
-                    .disabled(!files.playing || files.loading)
-            }
-            CommandMenu("Loop") {
-                Button("Arm") { Task { await model.arm() } }.keyboardShortcut("r", modifiers: []).disabled(!model.canEditTiming)
-                Button("Play / Stop") { model.playStop() }.keyboardShortcut(.space, modifiers: []).disabled(!model.hasLoop && !model.busy)
-                Button("Clear") { model.clear() }.keyboardShortcut(.delete, modifiers: []).disabled(model.state == 0)
-            }
+        .commands { JamCommands(session: session) }
+    }
+}
+
+@MainActor private final class JamSession: ObservableObject {
+    let model = LooperModel()
+    let files = AudioFilePlayerModel()
+    let library = SongLibraryModel()
+    let commands: JamCommandAvailability
+    let readiness: AppReadinessModel
+    init() {
+        commands = JamCommandAvailability(model: model, files: files)
+        readiness = AppReadinessModel(audio: model, drums: AudioEngineHost.shared.drums, files: files, library: library)
+    }
+}
+
+@MainActor private final class JamCommandAvailability: ObservableObject {
+    @Published var canArm = false
+    @Published var canPlay = false
+    @Published var canClear = false
+    @Published var canRestart = false
+    init(model: LooperModel, files: AudioFilePlayerModel) {
+        Publishers.CombineLatest(model.$state, model.$starting)
+            .map { $0 == TL_EMPTY && !$1 }.removeDuplicates().assign(to: &$canArm)
+        model.$state.map { $0 != TL_EMPTY }.removeDuplicates().assign(to: &$canPlay)
+        Publishers.CombineLatest(model.$running, model.$state)
+            .map { $0 && $1 != TL_EMPTY }.removeDuplicates().assign(to: &$canClear)
+        Publishers.CombineLatest(files.$playing, files.$loading)
+            .map { $0 && !$1 }.removeDuplicates().assign(to: &$canRestart)
+    }
+}
+
+@MainActor private struct JamCommands: Commands {
+    let session: JamSession
+    @ObservedObject private var available: JamCommandAvailability
+    init(session: JamSession) { self.session = session; available = session.commands }
+    var body: some Commands {
+        CommandGroup(replacing: .newItem) { }
+        CommandMenu("Backing Track") {
+            Button("Restart Track") { session.files.restart() }
+                .keyboardShortcut(.leftArrow, modifiers: []).disabled(!available.canRestart)
+        }
+        CommandMenu("Loop") {
+            Button("Arm") { Task { await session.model.arm() } }.keyboardShortcut("r", modifiers: []).disabled(!available.canArm)
+            Button("Play / Stop") { session.model.playStop() }.keyboardShortcut(.space, modifiers: []).disabled(!available.canPlay)
+            Button("Clear") { session.model.clear() }.keyboardShortcut(.delete, modifiers: []).disabled(!available.canClear)
         }
     }
 }

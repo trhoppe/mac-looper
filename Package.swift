@@ -18,7 +18,7 @@ let package = Package(
         .target(name: "LooperAudioUnit", dependencies: ["LooperCore"], publicHeadersPath: "include", cSettings: [.unsafeFlags(["-fobjc-arc"])],
                 linkerSettings: [.linkedFramework("AVFoundation"), .linkedFramework("AudioToolbox")]),
         .executableTarget(name: "MacLooper", dependencies: ["LooperCore", "LooperAudioUnit", "JamCore"], linkerSettings: [
-            .linkedFramework("SwiftUI"), .linkedFramework("AVFoundation")
+            .linkedFramework("SwiftUI"), .linkedFramework("AVFoundation"), .linkedFramework("CoreAudioKit")
         ]),
         .testTarget(name: "LooperCoreTests", dependencies: ["LooperCore", "LooperAudioUnit"]),
         .testTarget(name: "MacLooperTests", dependencies: ["MacLooper"]),

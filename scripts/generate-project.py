@@ -37,23 +37,23 @@ def package_dependencies(name):
 
 def app(name, platform):
     ipad=platform=='ios'
-    ref=obj(name+'product','PBXFileReference',explicitFileType='wrapper.application',includeInIndex='0',path='Mac Looper.app',sourceTree='BUILT_PRODUCTS_DIR');products.append(ref)
+    ref=obj(name+'product','PBXFileReference',explicitFileType='wrapper.application',includeInIndex='0',path='Mac Jams.app',sourceTree='BUILT_PRODUCTS_DIR');products.append(ref)
     deps,links=package_dependencies(name)
     compile_files=[obj(name+ref,'PBXBuildFile',fileRef=ref) for ref in source_refs]
     phases=[obj(name+'sources','PBXSourcesBuildPhase',buildActionMask='2147483647',files=compile_files,runOnlyForDeploymentPostprocessing='0'),
             obj(name+'frameworks','PBXFrameworksBuildPhase',buildActionMask='2147483647',files=links,runOnlyForDeploymentPostprocessing='0'),
             obj(name+'resources','PBXResourcesBuildPhase',buildActionMask='2147483647',files=[obj(name+'assetbuild','PBXBuildFile',fileRef=asset)],runOnlyForDeploymentPostprocessing='0')]
-    settings={'PRODUCT_NAME':'Mac Looper','EXECUTABLE_NAME':'MacLooper','PRODUCT_MODULE_NAME':'MacLooper','GENERATE_INFOPLIST_FILE':'YES','INFOPLIST_KEY_CFBundleDisplayName':'Mac Looper',
-              'INFOPLIST_KEY_NSMicrophoneUsageDescription':'Mac Looper listens to your guitar interface to trigger and capture a loop. Live guitar is monitored by your interface.',
+    settings={'PRODUCT_NAME':'Mac Jams','EXECUTABLE_NAME':'MacLooper','PRODUCT_MODULE_NAME':'MacLooper','GENERATE_INFOPLIST_FILE':'YES','INFOPLIST_KEY_CFBundleDisplayName':'Mac Jams',
+              'INFOPLIST_KEY_NSMicrophoneUsageDescription':'Mac Jams listens to your guitar interface to trigger and capture a loop. Live guitar is monitored by your interface.',
               'CURRENT_PROJECT_VERSION':'6','MARKETING_VERSION':'0.3.0','CODE_SIGN_STYLE':'Automatic','DEVELOPMENT_TEAM':'S37ZVC89JW',
               'ASSETCATALOG_COMPILER_APPICON_NAME':'AppIconPad' if ipad else 'AppIconMac'}
     if ipad:
         settings.update({'SDKROOT':'iphoneos','SUPPORTED_PLATFORMS':'iphoneos iphonesimulator','IPHONEOS_DEPLOYMENT_TARGET':'18.0','TARGETED_DEVICE_FAMILY':'2','SUPPORTS_MACCATALYST':'NO','PRODUCT_BUNDLE_IDENTIFIER':'com.thoppe.maclooper',
-                         'INFOPLIST_KEY_UIApplicationSceneManifest_Generation':'YES','INFOPLIST_KEY_UILaunchScreen_Generation':'YES','INFOPLIST_KEY_UIFileSharingEnabled':'YES','INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace':'YES',
+                         'CODE_SIGN_ENTITLEMENTS':'MacLooper-iPad.entitlements','INFOPLIST_KEY_UIApplicationSceneManifest_Generation':'YES','INFOPLIST_KEY_UILaunchScreen_Generation':'YES','INFOPLIST_KEY_UIFileSharingEnabled':'YES','INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace':'YES',
                          'INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad':'UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight'})
     else:
         settings.update({'SDKROOT':'macosx','MACOSX_DEPLOYMENT_TARGET':'14.0','SUPPORTED_PLATFORMS':'macosx','PRODUCT_BUNDLE_IDENTIFIER':'local.thoppe.maclooper','ENABLE_APP_SANDBOX':'NO','CODE_SIGN_IDENTITY':'-','LD_RUNPATH_SEARCH_PATHS':'$(inherited) @executable_path/../Frameworks'})
-    return obj(name,'PBXNativeTarget',buildConfigurationList=configs(name,settings),buildPhases=phases,buildRules=[],dependencies=[],name=name,packageProductDependencies=deps,productName='Mac Looper',productReference=ref,productType='com.apple.product-type.application')
+    return obj(name,'PBXNativeTarget',buildConfigurationList=configs(name,settings),buildPhases=phases,buildRules=[],dependencies=[],name=name,packageProductDependencies=deps,productName='Mac Jams',productReference=ref,productType='com.apple.product-type.application')
 mac=app('MacLooper-macOS','mac');ipad=app('MacLooper-iPad','ios')
 # Host-independent DSP/library tests also run inside the iPad test host.
 testrefs=[]
@@ -63,7 +63,7 @@ test_product=obj('testsproduct','PBXFileReference',explicitFileType='wrapper.cfb
 deps,links=package_dependencies('ipadtests')
 proxy=obj('testproxy','PBXContainerItemProxy',containerPortal=project,proxyType='1',remoteGlobalIDString=ipad,remoteInfo='MacLooper-iPad')
 dependency=obj('testdependency','PBXTargetDependency',target=ipad,targetProxy=proxy)
-tests=obj('ipadtests','PBXNativeTarget',buildConfigurationList=configs('ipadtests',{'SDKROOT':'iphoneos','SUPPORTED_PLATFORMS':'iphoneos iphonesimulator','IPHONEOS_DEPLOYMENT_TARGET':'18.0','TARGETED_DEVICE_FAMILY':'2','PRODUCT_NAME':'MacLooper-iPadTests','PRODUCT_BUNDLE_IDENTIFIER':'com.thoppe.maclooper.tests','GENERATE_INFOPLIST_FILE':'YES','DEVELOPMENT_TEAM':'S37ZVC89JW','CODE_SIGN_STYLE':'Automatic','TEST_HOST':'$(BUILT_PRODUCTS_DIR)/Mac Looper.app/MacLooper','BUNDLE_LOADER':'$(TEST_HOST)'}),
+tests=obj('ipadtests','PBXNativeTarget',buildConfigurationList=configs('ipadtests',{'SDKROOT':'iphoneos','SUPPORTED_PLATFORMS':'iphoneos iphonesimulator','IPHONEOS_DEPLOYMENT_TARGET':'18.0','TARGETED_DEVICE_FAMILY':'2','PRODUCT_NAME':'MacLooper-iPadTests','PRODUCT_BUNDLE_IDENTIFIER':'com.thoppe.maclooper.tests','GENERATE_INFOPLIST_FILE':'YES','DEVELOPMENT_TEAM':'S37ZVC89JW','CODE_SIGN_STYLE':'Automatic','TEST_HOST':'$(BUILT_PRODUCTS_DIR)/Mac Jams.app/MacLooper','BUNDLE_LOADER':'$(TEST_HOST)'}),
     buildPhases=[obj('testsources','PBXSourcesBuildPhase',buildActionMask='2147483647',files=[obj('testbuild'+ref,'PBXBuildFile',fileRef=ref) for ref in testrefs],runOnlyForDeploymentPostprocessing='0'),obj('testframeworks','PBXFrameworksBuildPhase',buildActionMask='2147483647',files=links,runOnlyForDeploymentPostprocessing='0')],buildRules=[],dependencies=[dependency],name='MacLooper-iPadTests',packageProductDependencies=deps,productName='MacLooper-iPadTests',productReference=test_product,productType='com.apple.product-type.bundle.unit-test')
 source_group=obj('sourcegroup','PBXGroup',children=source_refs,name='Shared App',sourceTree='<group>')
 test_group=obj('testgroup','PBXGroup',children=testrefs,name='Shared Tests',sourceTree='<group>')
@@ -79,10 +79,10 @@ for target,name in [(mac,'MacLooper-macOS'),(ipad,'MacLooper-iPad')]:
     tests_xml=f'<TestableReference skipped="NO">{ref(tests,"MacLooper-iPadTests","MacLooper-iPadTests.xctest")}</TestableReference>' if target==ipad else ''
     xml=f'''<?xml version="1.0" encoding="UTF-8"?>
 <Scheme LastUpgradeVersion="2720" version="1.7">
-<BuildAction parallelizeBuildables="YES" buildImplicitDependencies="YES"><BuildActionEntries><BuildActionEntry buildForTesting="YES" buildForRunning="YES" buildForProfiling="YES" buildForArchiving="YES" buildForAnalyzing="YES">{ref(target,name,'Mac Looper.app')}</BuildActionEntry></BuildActionEntries></BuildAction>
+<BuildAction parallelizeBuildables="YES" buildImplicitDependencies="YES"><BuildActionEntries><BuildActionEntry buildForTesting="YES" buildForRunning="YES" buildForProfiling="YES" buildForArchiving="YES" buildForAnalyzing="YES">{ref(target,name,'Mac Jams.app')}</BuildActionEntry></BuildActionEntries></BuildAction>
 <TestAction buildConfiguration="Debug" selectedDebuggerIdentifier="Xcode.DebuggerFoundation.Debugger.LLDB" selectedLauncherIdentifier="Xcode.IDEFoundation.Launcher.LLDB" shouldUseLaunchSchemeArgsEnv="YES"><Testables>{tests_xml}</Testables></TestAction>
-<LaunchAction buildConfiguration="Debug" selectedDebuggerIdentifier="Xcode.DebuggerFoundation.Debugger.LLDB" selectedLauncherIdentifier="Xcode.IDEFoundation.Launcher.LLDB" launchStyle="0" useCustomWorkingDirectory="NO" ignoresPersistentStateOnLaunch="NO" debugDocumentVersioning="YES" allowLocationSimulation="YES"><BuildableProductRunnable runnableDebuggingMode="0">{ref(target,name,'Mac Looper.app')}</BuildableProductRunnable></LaunchAction>
-<ProfileAction buildConfiguration="Release" shouldUseLaunchSchemeArgsEnv="YES"><BuildableProductRunnable runnableDebuggingMode="0">{ref(target,name,'Mac Looper.app')}</BuildableProductRunnable></ProfileAction>
+<LaunchAction buildConfiguration="Debug" selectedDebuggerIdentifier="Xcode.DebuggerFoundation.Debugger.LLDB" selectedLauncherIdentifier="Xcode.IDEFoundation.Launcher.LLDB" launchStyle="0" useCustomWorkingDirectory="NO" ignoresPersistentStateOnLaunch="NO" debugDocumentVersioning="YES" allowLocationSimulation="YES"><BuildableProductRunnable runnableDebuggingMode="0">{ref(target,name,'Mac Jams.app')}</BuildableProductRunnable></LaunchAction>
+<ProfileAction buildConfiguration="Release" shouldUseLaunchSchemeArgsEnv="YES"><BuildableProductRunnable runnableDebuggingMode="0">{ref(target,name,'Mac Jams.app')}</BuildableProductRunnable></ProfileAction>
 <AnalyzeAction buildConfiguration="Debug"/><ArchiveAction buildConfiguration="Release" revealArchiveInOrganizer="YES"/>
 </Scheme>'''
     (schemes/(name+'.xcscheme')).write_text(xml)

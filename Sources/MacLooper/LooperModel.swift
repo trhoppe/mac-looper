@@ -10,10 +10,10 @@ import LooperCore
     @Published var inputUID = UserDefaults.standard.string(forKey: "inputUID") ?? ""
     @Published var outputUID = UserDefaults.standard.string(forKey: "outputUID") ?? ""
     @Published var inputChannel = 0
-    @Published var bpm = 120.0
+    @Published var bpm = 120.0 { didSet { host.drums.tempo = bpm } }
     @Published var bars = 4
     @Published var thresholdDB = -30.0 { didSet { if let core { tl_set_threshold(core, Float(pow(10, thresholdDB / 20))) } } }
-    @Published var volume = 0.7 { didSet { if let core { tl_set_volume(core, Float(volume)) } } }
+    @Published var volume = 1.0 { didSet { if let core { tl_set_volume(core, Float(volume)) } } }
     @Published var running = false
     @Published var starting = false
     @Published var error: String?
@@ -37,9 +37,13 @@ import LooperCore
     private var automaticAudio = false
     private var lastAutomaticRoute: String?
     private var routeTask: Task<Void, Never>?
+    private var scanningDevices = false
 
     init() {
         refreshDevices()
+        #if os(macOS)
+        if CommandLine.arguments.contains("--smoke-direct"), let direct = outputs.first(where: \.isAM4) { outputUID = direct.uid }
+        #endif
         timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.poll() }
         }
@@ -78,16 +82,36 @@ import LooperCore
         }
     }
     func refreshDevices() {
-        do {
-            devices = try AudioDevices.list()
-            #if os(macOS)
-            if inputUID.isEmpty { inputUID = inputs.first(where: \.isAM4)?.uid ?? "" }
-            if outputUID.isEmpty { outputUID = outputs.first(where: { $0.name == "AM4 Proxy" })?.uid ?? "" }
-            #else
-            if inputUID.isEmpty || inputUID.hasPrefix("AppleUSBAudio") { inputUID = "ios-default-input" }
-            outputUID = "ios-system-output"
-            #endif
-        } catch { self.error = error.localizedDescription }
+        do { applyDevices(try AudioDevices.list()) }
+        catch { self.error = error.localizedDescription }
+    }
+    private func applyDevices(_ next: [AudioDevice]) {
+        if devices != next { devices = next }
+        #if os(macOS)
+        if inputUID.isEmpty { inputUID = inputs.first(where: \.isAM4)?.uid ?? "" }
+        if outputUID.isEmpty { outputUID = outputs.first(where: { $0.name == "AM4 Proxy" })?.uid ?? "" }
+        #else
+        if inputUID.isEmpty || inputUID.hasPrefix("AppleUSBAudio") { inputUID = "ios-default-input" }
+        if outputUID != "ios-system-output" { outputUID = "ios-system-output" }
+        #endif
+    }
+    private func refreshDevicesWhileRunning() {
+        #if os(macOS)
+        guard !scanningDevices else { return }
+        scanningDevices = true
+        Task { [weak self] in
+            let result = await Task.detached(priority: .utility) { Result { try AudioDevices.list() } }.value
+            guard let self else { return }
+            self.scanningDevices = false
+            switch result {
+            case .success(let next): self.applyDevices(next)
+            case .failure(let error): self.error = error.localizedDescription
+            }
+            self.reconnectIfAvailable()
+        }
+        #else
+        refreshDevices(); reconnectIfAvailable()
+        #endif
     }
     // Startup connects the route, but never arms a loop or starts backing playback.
     func startAutomatically() async {
@@ -128,9 +152,9 @@ import LooperCore
     }
     private static var microphoneHelp: String {
         #if os(macOS)
-        "Allow Mac Looper in System Settings → Privacy & Security → Microphone."
+        "Allow Mac Jams in System Settings → Privacy & Security → Microphone."
         #else
-        "Allow Mac Looper in Settings → Privacy & Security → Microphone."
+        "Allow Mac Jams in Settings → Privacy & Security → Microphone."
         #endif
     }
     func startAudio() async {
@@ -157,7 +181,9 @@ import LooperCore
             sampleRate = host.sampleRate
             guard let core else { throw AudioFailure(message: "The guitar processor did not initialize.") }
             tl_set_threshold(core, Float(pow(10, thresholdDB / 20))); tl_set_volume(core, Float(volume))
-            UserDefaults.standard.set(inputUID, forKey: "inputUID"); UserDefaults.standard.set(outputUID, forKey: "outputUID")
+            if !CommandLine.arguments.contains("--smoke-test") {
+                UserDefaults.standard.set(inputUID, forKey: "inputUID"); UserDefaults.standard.set(outputUID, forKey: "outputUID")
+            }
             running = true; lastCallbacks = 0; stalledTicks = 0
         } catch {
             stopAudio()
@@ -187,12 +213,12 @@ import LooperCore
         if !tl_command(core, Int32(TL_CMD_PLAY_STOP), 0) { error = "Audio controls are busy. Try again." }
     }
     func shutdown() {
-        routeTask?.cancel(); stopTask?.cancel(); timer?.invalidate(); host.shutdown(); running = false
+        automaticAudio = false; routeTask?.cancel(); stopTask?.cancel(); timer?.invalidate(); host.shutdown(); running = false
     }
     private func poll() {
         ticks += 1
         if ticks % 60 == 0 {
-            refreshDevices()
+            refreshDevicesWhileRunning()
             if running, (!host.isRunning || (output.map { !AudioDevices.alive($0.id) } ?? true)) {
                 stopAudio(); error = "The audio device disconnected or its sample rate changed. Reconnect the interface or use Retry Connection in Settings."
             }
@@ -212,11 +238,20 @@ import LooperCore
             return
         }
         let s = tl_snapshot(core)
-        state = s.state; recorded = Int(s.recorded); length = Int(s.length); cycles = s.cycles
-        progress = s.length == 0 ? 0 : Double(s.state == TL_RECORDING ? s.recorded : s.position) / Double(s.length)
+        let stateChanged = state != s.state
+        if stateChanged { state = s.state }
+        if recorded != Int(s.recorded) { recorded = Int(s.recorded) }
+        if length != Int(s.length) { length = Int(s.length) }
+        if cycles != s.cycles { cycles = s.cycles }
+        let nextProgress = s.length == 0 ? 0 : Double(s.state == TL_RECORDING ? s.recorded : s.position) / Double(s.length)
+        if progress != nextProgress { progress = nextProgress }
         let newDB = max(-90, 20 * log10(max(Double(s.peak), 0.00003)))
-        meterDB = max(newDB, meterDB - 2.0)
-        outputDB = max(-90, 20 * log10(max(Double(s.outputPeak), 0.00003)))
-        if ticks % 3 == 0 { waveform = (0..<256).map { tl_waveform(core, UInt32($0)) } }
+        let nextMeter = max(newDB, meterDB - 2.0)
+        if meterDB != nextMeter { meterDB = nextMeter }
+        let nextOutput = max(-90, 20 * log10(max(Double(s.outputPeak), 0.00003)))
+        if outputDB != nextOutput { outputDB = nextOutput }
+        if stateChanged || (state == TL_RECORDING && ticks % 3 == 0) {
+            waveform = state == TL_EMPTY ? [Float](repeating: 0, count: 256) : (0..<256).map { tl_waveform(core, UInt32($0)) }
+        }
     }
 }

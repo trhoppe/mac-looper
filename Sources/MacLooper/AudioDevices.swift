@@ -109,7 +109,7 @@ enum AudioDevices {
         // Core Audio performs drift compensation between different hardware clocks.
         // Private aggregate is destroyed on route changes, errors, and app exit. No system default changes.
         let description: [String: Any] = [
-            kAudioAggregateDeviceNameKey: "Mac Looper Session",
+            kAudioAggregateDeviceNameKey: "Mac Jams Session",
             kAudioAggregateDeviceUIDKey: "local.maclooper.route.\(UUID().uuidString)",
             kAudioAggregateDeviceIsPrivateKey: true,
             kAudioAggregateDeviceIsStackedKey: false,
@@ -134,7 +134,7 @@ enum AudioDevices {
                     if current.inputs >= inputOffset + input.inputs,
                        current.outputs >= outputOffset + output.outputs,
                        abs(current.rate - output.rate) < 0.1 {
-                        try require32Frames(aggregate, name: "Mac Looper audio route")
+                        try require32Frames(aggregate, name: "Mac Jams audio route")
                         return Route(device: aggregate, aggregate: aggregate, inputOffset: inputOffset,
                                      outputOffset: outputOffset, inputs: current.inputs, outputs: current.outputs, rate: current.rate)
                     }

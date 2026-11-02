@@ -11,6 +11,12 @@
 			"path" = "Sources/MacLooper/AppPreview.swift";
 			"sourceTree" = "SOURCE_ROOT";
 		};
+		"54A5EA4CC7574AB10A95CDA3" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/MacLooper/AppReadiness.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
 		"89FE78801A985B500B0289BE" = {
 			"isa" = "PBXFileReference";
 			"lastKnownFileType" = "sourcecode.swift";
@@ -41,6 +47,12 @@
 			"path" = "Sources/MacLooper/AudioLibrary.swift";
 			"sourceTree" = "SOURCE_ROOT";
 		};
+		"119CA3B65B4C59F4FF8D3BB1" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/MacLooper/AudioSettingsView.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
 		"E2CD89D17D1D022B5CF4E6C5" = {
 			"isa" = "PBXFileReference";
 			"lastKnownFileType" = "sourcecode.swift";
@@ -59,10 +71,28 @@
 			"path" = "Sources/MacLooper/ContentView.swift";
 			"sourceTree" = "SOURCE_ROOT";
 		};
+		"B192EE9C1340E0205954380B" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/MacLooper/DrummerDiagnostics.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"7A0AE83ADC974DDB551E736D" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/MacLooper/DrummerPanel.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
 		"37E90C6C2473753C2146C190" = {
 			"isa" = "PBXFileReference";
 			"lastKnownFileType" = "sourcecode.swift";
 			"path" = "Sources/MacLooper/FilePlayback.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"38A9658F93011A3079A4F63F" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/MacLooper/HoverHighlight.swift";
 			"sourceTree" = "SOURCE_ROOT";
 		};
 		"929A2F5E1AA2D2C76959A31D" = {
@@ -95,6 +125,12 @@
 			"path" = "Sources/MacLooper/PlaybackAsset.swift";
 			"sourceTree" = "SOURCE_ROOT";
 		};
+		"183F606E5344C95BDC450A54" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/MacLooper/PopDrummerModel.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
 		"C9AA4E6B4121A9502C001522" = {
 			"isa" = "PBXFileReference";
 			"lastKnownFileType" = "sourcecode.swift";
@@ -121,7 +157,7 @@
 			"isa" = "PBXFileReference";
 			"explicitFileType" = "wrapper.application";
 			"includeInIndex" = "0";
-			"path" = "Mac Looper.app";
+			"path" = "Mac Jams.app";
 			"sourceTree" = "BUILT_PRODUCTS_DIR";
 		};
 		"D25D4279C35D2B798B8A8B4F" = {
@@ -155,6 +191,10 @@
 			"isa" = "PBXBuildFile";
 			"fileRef" = "11C3DDF36D9D67CB58370A54";
 		};
+		"8C9469BC706DDCE0AD7513C9" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "54A5EA4CC7574AB10A95CDA3";
+		};
 		"3CA991873719CEA026855408" = {
 			"isa" = "PBXBuildFile";
 			"fileRef" = "89FE78801A985B500B0289BE";
@@ -175,6 +215,10 @@
 			"isa" = "PBXBuildFile";
 			"fileRef" = "3DBF5D0D5E5691D6836D7649";
 		};
+		"FD83501EAA6EE9A8360FFD0C" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "119CA3B65B4C59F4FF8D3BB1";
+		};
 		"774D441B64155B46D11C80B9" = {
 			"isa" = "PBXBuildFile";
 			"fileRef" = "E2CD89D17D1D022B5CF4E6C5";
@@ -187,9 +231,21 @@
 			"isa" = "PBXBuildFile";
 			"fileRef" = "7F3B570D2D70C19D0E9CD6AB";
 		};
+		"897B0C0F2E8A3A69DD194650" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "B192EE9C1340E0205954380B";
+		};
+		"69D6FA21622F3D83F0E2BA46" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "7A0AE83ADC974DDB551E736D";
+		};
 		"8CFB19579FA975869E9A45FB" = {
 			"isa" = "PBXBuildFile";
 			"fileRef" = "37E90C6C2473753C2146C190";
+		};
+		"4440A85E2CE595A7A2873B58" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "38A9658F93011A3079A4F63F";
 		};
 		"2614A94B4BC4434ABF2DDE22" = {
 			"isa" = "PBXBuildFile";
@@ -211,6 +267,10 @@
 			"isa" = "PBXBuildFile";
 			"fileRef" = "1763C05D4FB09C7459AD520D";
 		};
+		"9D117CEB0DF4702CD504E814" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "183F606E5344C95BDC450A54";
+		};
 		"2645E32922A1F66C47CEC260" = {
 			"isa" = "PBXBuildFile";
 			"fileRef" = "C9AA4E6B4121A9502C001522";
@@ -224,20 +284,26 @@
 			"buildActionMask" = "2147483647";
 			"files" = (
 				"AA865ED4AC983DE909866580",
+				"8C9469BC706DDCE0AD7513C9",
 				"3CA991873719CEA026855408",
 				"136D4F0FB22C09BD298E3089",
 				"3F09B906C982C23BBEED5708",
 				"C264998A8CB017464DD9284D",
 				"74687B90D060A3E4DB79D208",
+				"FD83501EAA6EE9A8360FFD0C",
 				"774D441B64155B46D11C80B9",
 				"E38D387ABD8F74DEFC889331",
 				"EFB627AF251D4EFDA5AE15A7",
+				"897B0C0F2E8A3A69DD194650",
+				"69D6FA21622F3D83F0E2BA46",
 				"8CFB19579FA975869E9A45FB",
+				"4440A85E2CE595A7A2873B58",
 				"2614A94B4BC4434ABF2DDE22",
 				"D5E428B19E85E7CAF6F17B6D",
 				"0962DF64D73C3C7D335DD27E",
 				"2D1F663B78A05CD4557BA704",
 				"1F222D8300114981C375476C",
+				"9D117CEB0DF4702CD504E814",
 				"2645E32922A1F66C47CEC260",
 				"A8939EAA709FD15E5DA641D5",
 			);
@@ -274,12 +340,12 @@
 				"SWIFT_STRICT_CONCURRENCY" = "minimal";
 				"ENABLE_USER_SCRIPT_SANDBOXING" = "YES";
 				"LD_RUNPATH_SEARCH_PATHS" = "$(inherited) @executable_path/../Frameworks";
-				"PRODUCT_NAME" = "Mac Looper";
+				"PRODUCT_NAME" = "Mac Jams";
 				"EXECUTABLE_NAME" = "MacLooper";
 				"PRODUCT_MODULE_NAME" = "MacLooper";
 				"GENERATE_INFOPLIST_FILE" = "YES";
-				"INFOPLIST_KEY_CFBundleDisplayName" = "Mac Looper";
-				"INFOPLIST_KEY_NSMicrophoneUsageDescription" = "Mac Looper listens to your guitar interface to trigger and capture a loop. Live guitar is monitored by your interface.";
+				"INFOPLIST_KEY_CFBundleDisplayName" = "Mac Jams";
+				"INFOPLIST_KEY_NSMicrophoneUsageDescription" = "Mac Jams listens to your guitar interface to trigger and capture a loop. Live guitar is monitored by your interface.";
 				"CURRENT_PROJECT_VERSION" = "6";
 				"MARKETING_VERSION" = "0.3.0";
 				"CODE_SIGN_STYLE" = "Automatic";
@@ -308,12 +374,12 @@
 				"SWIFT_STRICT_CONCURRENCY" = "minimal";
 				"ENABLE_USER_SCRIPT_SANDBOXING" = "YES";
 				"LD_RUNPATH_SEARCH_PATHS" = "$(inherited) @executable_path/../Frameworks";
-				"PRODUCT_NAME" = "Mac Looper";
+				"PRODUCT_NAME" = "Mac Jams";
 				"EXECUTABLE_NAME" = "MacLooper";
 				"PRODUCT_MODULE_NAME" = "MacLooper";
 				"GENERATE_INFOPLIST_FILE" = "YES";
-				"INFOPLIST_KEY_CFBundleDisplayName" = "Mac Looper";
-				"INFOPLIST_KEY_NSMicrophoneUsageDescription" = "Mac Looper listens to your guitar interface to trigger and capture a loop. Live guitar is monitored by your interface.";
+				"INFOPLIST_KEY_CFBundleDisplayName" = "Mac Jams";
+				"INFOPLIST_KEY_NSMicrophoneUsageDescription" = "Mac Jams listens to your guitar interface to trigger and capture a loop. Live guitar is monitored by your interface.";
 				"CURRENT_PROJECT_VERSION" = "6";
 				"MARKETING_VERSION" = "0.3.0";
 				"CODE_SIGN_STYLE" = "Automatic";
@@ -357,7 +423,7 @@
 				"28B15BFCD6A4F660833177B6",
 				"34FCA638CE1984F052CA1CEE",
 			);
-			"productName" = "Mac Looper";
+			"productName" = "Mac Jams";
 			"productReference" = "347C5000B9C2D8FA065C16E9";
 			"productType" = "com.apple.product-type.application";
 		};
@@ -365,7 +431,7 @@
 			"isa" = "PBXFileReference";
 			"explicitFileType" = "wrapper.application";
 			"includeInIndex" = "0";
-			"path" = "Mac Looper.app";
+			"path" = "Mac Jams.app";
 			"sourceTree" = "BUILT_PRODUCTS_DIR";
 		};
 		"201FDA2043418E1DB4D0CFAB" = {
@@ -399,6 +465,10 @@
 			"isa" = "PBXBuildFile";
 			"fileRef" = "11C3DDF36D9D67CB58370A54";
 		};
+		"9AFF1CA28701F46ABDC20F5A" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "54A5EA4CC7574AB10A95CDA3";
+		};
 		"58F99258B794C5056584F530" = {
 			"isa" = "PBXBuildFile";
 			"fileRef" = "89FE78801A985B500B0289BE";
@@ -419,6 +489,10 @@
 			"isa" = "PBXBuildFile";
 			"fileRef" = "3DBF5D0D5E5691D6836D7649";
 		};
+		"DD78964ACF5B85CCD8FB9C16" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "119CA3B65B4C59F4FF8D3BB1";
+		};
 		"000035ED34357047421299A6" = {
 			"isa" = "PBXBuildFile";
 			"fileRef" = "E2CD89D17D1D022B5CF4E6C5";
@@ -431,9 +505,21 @@
 			"isa" = "PBXBuildFile";
 			"fileRef" = "7F3B570D2D70C19D0E9CD6AB";
 		};
+		"EF7FB9F13FDB89C6350D21EA" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "B192EE9C1340E0205954380B";
+		};
+		"85E886765A82BFCA57B14FDC" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "7A0AE83ADC974DDB551E736D";
+		};
 		"083CE74F4811917D01CB3D3F" = {
 			"isa" = "PBXBuildFile";
 			"fileRef" = "37E90C6C2473753C2146C190";
+		};
+		"98881FEE1F73B893DCCC4D35" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "38A9658F93011A3079A4F63F";
 		};
 		"70E2F95249E52F23F143D825" = {
 			"isa" = "PBXBuildFile";
@@ -455,6 +541,10 @@
 			"isa" = "PBXBuildFile";
 			"fileRef" = "1763C05D4FB09C7459AD520D";
 		};
+		"D4125D7A77E56526B72A0D7E" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "183F606E5344C95BDC450A54";
+		};
 		"0073B19CA3AE054BD541F82B" = {
 			"isa" = "PBXBuildFile";
 			"fileRef" = "C9AA4E6B4121A9502C001522";
@@ -468,20 +558,26 @@
 			"buildActionMask" = "2147483647";
 			"files" = (
 				"C0AF370DB8ACF5EE07B35234",
+				"9AFF1CA28701F46ABDC20F5A",
 				"58F99258B794C5056584F530",
 				"E03D8CD5A6679439407EC37B",
 				"65896D6D8EFD03382D97E4B7",
 				"284330BA7C138834CD3D1E50",
 				"E9143E4CBEF07A6E113F0BE7",
+				"DD78964ACF5B85CCD8FB9C16",
 				"000035ED34357047421299A6",
 				"9E4AEE76A7EF625FB1725E32",
 				"F583BF9727266127F098504F",
+				"EF7FB9F13FDB89C6350D21EA",
+				"85E886765A82BFCA57B14FDC",
 				"083CE74F4811917D01CB3D3F",
+				"98881FEE1F73B893DCCC4D35",
 				"70E2F95249E52F23F143D825",
 				"6AB030F49145017D0C180E30",
 				"52E5F72E81016648DC9E8F9C",
 				"AD0E7A142B22344DC87C8647",
 				"44B1D5AC46EC46B353D849FF",
+				"D4125D7A77E56526B72A0D7E",
 				"0073B19CA3AE054BD541F82B",
 				"92A6F96C952D4EF79F042674",
 			);
@@ -518,12 +614,12 @@
 				"SWIFT_STRICT_CONCURRENCY" = "minimal";
 				"ENABLE_USER_SCRIPT_SANDBOXING" = "YES";
 				"LD_RUNPATH_SEARCH_PATHS" = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks";
-				"PRODUCT_NAME" = "Mac Looper";
+				"PRODUCT_NAME" = "Mac Jams";
 				"EXECUTABLE_NAME" = "MacLooper";
 				"PRODUCT_MODULE_NAME" = "MacLooper";
 				"GENERATE_INFOPLIST_FILE" = "YES";
-				"INFOPLIST_KEY_CFBundleDisplayName" = "Mac Looper";
-				"INFOPLIST_KEY_NSMicrophoneUsageDescription" = "Mac Looper listens to your guitar interface to trigger and capture a loop. Live guitar is monitored by your interface.";
+				"INFOPLIST_KEY_CFBundleDisplayName" = "Mac Jams";
+				"INFOPLIST_KEY_NSMicrophoneUsageDescription" = "Mac Jams listens to your guitar interface to trigger and capture a loop. Live guitar is monitored by your interface.";
 				"CURRENT_PROJECT_VERSION" = "6";
 				"MARKETING_VERSION" = "0.3.0";
 				"CODE_SIGN_STYLE" = "Automatic";
@@ -535,6 +631,7 @@
 				"TARGETED_DEVICE_FAMILY" = "2";
 				"SUPPORTS_MACCATALYST" = "NO";
 				"PRODUCT_BUNDLE_IDENTIFIER" = "com.thoppe.maclooper";
+				"CODE_SIGN_ENTITLEMENTS" = "MacLooper-iPad.entitlements";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation" = "YES";
 				"INFOPLIST_KEY_UILaunchScreen_Generation" = "YES";
 				"INFOPLIST_KEY_UIFileSharingEnabled" = "YES";
@@ -557,12 +654,12 @@
 				"SWIFT_STRICT_CONCURRENCY" = "minimal";
 				"ENABLE_USER_SCRIPT_SANDBOXING" = "YES";
 				"LD_RUNPATH_SEARCH_PATHS" = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks";
-				"PRODUCT_NAME" = "Mac Looper";
+				"PRODUCT_NAME" = "Mac Jams";
 				"EXECUTABLE_NAME" = "MacLooper";
 				"PRODUCT_MODULE_NAME" = "MacLooper";
 				"GENERATE_INFOPLIST_FILE" = "YES";
-				"INFOPLIST_KEY_CFBundleDisplayName" = "Mac Looper";
-				"INFOPLIST_KEY_NSMicrophoneUsageDescription" = "Mac Looper listens to your guitar interface to trigger and capture a loop. Live guitar is monitored by your interface.";
+				"INFOPLIST_KEY_CFBundleDisplayName" = "Mac Jams";
+				"INFOPLIST_KEY_NSMicrophoneUsageDescription" = "Mac Jams listens to your guitar interface to trigger and capture a loop. Live guitar is monitored by your interface.";
 				"CURRENT_PROJECT_VERSION" = "6";
 				"MARKETING_VERSION" = "0.3.0";
 				"CODE_SIGN_STYLE" = "Automatic";
@@ -574,6 +671,7 @@
 				"TARGETED_DEVICE_FAMILY" = "2";
 				"SUPPORTS_MACCATALYST" = "NO";
 				"PRODUCT_BUNDLE_IDENTIFIER" = "com.thoppe.maclooper";
+				"CODE_SIGN_ENTITLEMENTS" = "MacLooper-iPad.entitlements";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation" = "YES";
 				"INFOPLIST_KEY_UILaunchScreen_Generation" = "YES";
 				"INFOPLIST_KEY_UIFileSharingEnabled" = "YES";
@@ -611,9 +709,15 @@
 				"3261A8089BF489128FB150E4",
 				"06381130393C9D8DABA352E2",
 			);
-			"productName" = "Mac Looper";
+			"productName" = "Mac Jams";
 			"productReference" = "2D7F403A62505FBF2C0EC577";
 			"productType" = "com.apple.product-type.application";
+		};
+		"7BC37BC6E9B6CE96E7E2103C" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Tests/JamCoreTests/ChartColumnPlanTests.swift";
+			"sourceTree" = "SOURCE_ROOT";
 		};
 		"4DB826298CC87F844A97B12D" = {
 			"isa" = "PBXFileReference";
@@ -627,6 +731,12 @@
 			"path" = "Tests/JamCoreTests/LibraryTests.swift";
 			"sourceTree" = "SOURCE_ROOT";
 		};
+		"806CC50366E7895835D4DBA2" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Tests/LooperCoreTests/DrumGainTests.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
 		"724C495D24C6DDA1C0C6D092" = {
 			"isa" = "PBXFileReference";
 			"lastKnownFileType" = "sourcecode.swift";
@@ -637,6 +747,12 @@
 			"isa" = "PBXFileReference";
 			"lastKnownFileType" = "sourcecode.swift";
 			"path" = "Tests/LooperCoreTests/LooperCoreTests.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"1793AD9BACBA2AA86DBED5AB" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Tests/LooperCoreTests/PluginTransportTests.swift";
 			"sourceTree" = "SOURCE_ROOT";
 		};
 		"A23611D98FDCD3302A78F3CA" = {
@@ -708,7 +824,7 @@
 				"GENERATE_INFOPLIST_FILE" = "YES";
 				"DEVELOPMENT_TEAM" = "S37ZVC89JW";
 				"CODE_SIGN_STYLE" = "Automatic";
-				"TEST_HOST" = "$(BUILT_PRODUCTS_DIR)/Mac Looper.app/MacLooper";
+				"TEST_HOST" = "$(BUILT_PRODUCTS_DIR)/Mac Jams.app/MacLooper";
 				"BUNDLE_LOADER" = "$(TEST_HOST)";
 				"SWIFT_OPTIMIZATION_LEVEL" = "-Onone";
 				"DEBUG_INFORMATION_FORMAT" = "dwarf";
@@ -736,7 +852,7 @@
 				"GENERATE_INFOPLIST_FILE" = "YES";
 				"DEVELOPMENT_TEAM" = "S37ZVC89JW";
 				"CODE_SIGN_STYLE" = "Automatic";
-				"TEST_HOST" = "$(BUILT_PRODUCTS_DIR)/Mac Looper.app/MacLooper";
+				"TEST_HOST" = "$(BUILT_PRODUCTS_DIR)/Mac Jams.app/MacLooper";
 				"BUNDLE_LOADER" = "$(TEST_HOST)";
 				"SWIFT_OPTIMIZATION_LEVEL" = "-O";
 				"DEBUG_INFORMATION_FORMAT" = "dwarf-with-dsym";
@@ -752,6 +868,10 @@
 			"defaultConfigurationIsVisible" = "0";
 			"defaultConfigurationName" = "Release";
 		};
+		"B09FF33B431CCEB39406D91B" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "7BC37BC6E9B6CE96E7E2103C";
+		};
 		"E4F063198B09E6529FDC75B8" = {
 			"isa" = "PBXBuildFile";
 			"fileRef" = "4DB826298CC87F844A97B12D";
@@ -759,6 +879,10 @@
 		"9B086B244A27E009D7B0ED59" = {
 			"isa" = "PBXBuildFile";
 			"fileRef" = "11413520F336346DAB475C75";
+		};
+		"CE8AEA15688D2ECECFA78723" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "806CC50366E7895835D4DBA2";
 		};
 		"C5E9A158AFD24525AD359F12" = {
 			"isa" = "PBXBuildFile";
@@ -768,6 +892,10 @@
 			"isa" = "PBXBuildFile";
 			"fileRef" = "3F5947B615DEDF81783F8BC3";
 		};
+		"75561DED76F4869B709DDE81" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "1793AD9BACBA2AA86DBED5AB";
+		};
 		"3F97769473C2363C4BCA3C87" = {
 			"isa" = "PBXBuildFile";
 			"fileRef" = "A23611D98FDCD3302A78F3CA";
@@ -776,10 +904,13 @@
 			"isa" = "PBXSourcesBuildPhase";
 			"buildActionMask" = "2147483647";
 			"files" = (
+				"B09FF33B431CCEB39406D91B",
 				"E4F063198B09E6529FDC75B8",
 				"9B086B244A27E009D7B0ED59",
+				"CE8AEA15688D2ECECFA78723",
 				"C5E9A158AFD24525AD359F12",
 				"0362FD7C785A8ADFCF7EFA47",
+				"75561DED76F4869B709DDE81",
 				"3F97769473C2363C4BCA3C87",
 			);
 			"runOnlyForDeploymentPostprocessing" = "0";
@@ -820,20 +951,26 @@
 			"isa" = "PBXGroup";
 			"children" = (
 				"11C3DDF36D9D67CB58370A54",
+				"54A5EA4CC7574AB10A95CDA3",
 				"89FE78801A985B500B0289BE",
 				"11BE9BBC37E56BAEAEEC9EAD",
 				"2FDB0B73322A98AFF0989A10",
 				"3DC417EB73F7003742E9B549",
 				"3DBF5D0D5E5691D6836D7649",
+				"119CA3B65B4C59F4FF8D3BB1",
 				"E2CD89D17D1D022B5CF4E6C5",
 				"6A1BD18AC78FACDEF8AEE07F",
 				"7F3B570D2D70C19D0E9CD6AB",
+				"B192EE9C1340E0205954380B",
+				"7A0AE83ADC974DDB551E736D",
 				"37E90C6C2473753C2146C190",
+				"38A9658F93011A3079A4F63F",
 				"929A2F5E1AA2D2C76959A31D",
 				"D5649EC117D750B78D6E05D4",
 				"3D30A083AE83ADD69EFF4337",
 				"798871092DAD7073641FF444",
 				"1763C05D4FB09C7459AD520D",
+				"183F606E5344C95BDC450A54",
 				"C9AA4E6B4121A9502C001522",
 				"E8964440F829DFE735343C21",
 			);
@@ -843,10 +980,13 @@
 		"8B7A6DECC0651D269EA794C7" = {
 			"isa" = "PBXGroup";
 			"children" = (
+				"7BC37BC6E9B6CE96E7E2103C",
 				"4DB826298CC87F844A97B12D",
 				"11413520F336346DAB475C75",
+				"806CC50366E7895835D4DBA2",
 				"724C495D24C6DDA1C0C6D092",
 				"3F5947B615DEDF81783F8BC3",
+				"1793AD9BACBA2AA86DBED5AB",
 				"A23611D98FDCD3302A78F3CA",
 			);
 			"name" = "Shared Tests";

@@ -1,5 +1,6 @@
 import Foundation
 import AVFoundation
+import AudioToolbox
 import CryptoKit
 
 final class PlaybackAsset: @unchecked Sendable {
@@ -15,7 +16,7 @@ final class PlaybackAsset: @unchecked Sendable {
             file = original
         } else {
             let info = try url.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey])
-            let key = "\(url.path)|\(info.fileSize ?? 0)|\(info.contentModificationDate?.timeIntervalSince1970 ?? 0)|48000-stereo-v1"
+            let key = "\(url.path)|\(info.fileSize ?? 0)|\(info.contentModificationDate?.timeIntervalSince1970 ?? 0)|48000-stereo-v2"
             let hash = SHA256.hash(data: Data(key.utf8)).map { String(format: "%02x", $0) }.joined()
             let cache = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0].appendingPathComponent("MacLooper/Audio", isDirectory: true)
             try FileManager.default.createDirectory(at: cache, withIntermediateDirectories: true)
@@ -35,34 +36,31 @@ final class PlaybackAsset: @unchecked Sendable {
     }
     private static func convert(_ source: AVAudioFile, to url: URL) throws {
         let target = AVAudioFormat(standardFormatWithSampleRate: 48000, channels: 2)!
-        guard let converter = AVAudioConverter(from: source.processingFormat, to: target),
-              let input = AVAudioPCMBuffer(pcmFormat: source.processingFormat, frameCapacity: 8192),
-              let output = AVAudioPCMBuffer(pcmFormat: target, frameCapacity: 8192) else { throw AudioFailure(message: "This audio format could not be converted for playback.") }
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: target, frameCapacity: 8192) else {
+            throw AudioFailure(message: "This audio format could not be decoded for playback.")
+        }
+        // MP3 length is only an estimate. ExtAudioFile reports the actual EOF with
+        // zero frames, avoiding AVAudioFile's nil NSError on a final compressed read.
+        var decoder: ExtAudioFileRef?
+        var status = ExtAudioFileOpenURL(source.url as CFURL, &decoder)
+        guard status == noErr, let decoder else { throw AudioFailure(message: "Could not open backing audio (Core Audio \(status)).") }
+        defer { ExtAudioFileDispose(decoder) }
+        status = ExtAudioFileSetProperty(decoder, kExtAudioFileProperty_ClientDataFormat,
+            UInt32(MemoryLayout<AudioStreamBasicDescription>.size), target.streamDescription)
+        guard status == noErr else { throw AudioFailure(message: "Could not convert backing audio (Core Audio \(status)).") }
         let settings: [String: Any] = [AVFormatIDKey: kAudioFormatLinearPCM, AVSampleRateKey: 48000,
             AVNumberOfChannelsKey: 2, AVLinearPCMBitDepthKey: 32, AVLinearPCMIsFloatKey: true,
             AVLinearPCMIsNonInterleaved: false]
         var writer: AVAudioFile? = try AVAudioFile(forWriting: url, settings: settings, commonFormat: .pcmFormatFloat32, interleaved: false)
-        var ended = false, readError: Error?
         while true {
             try Task.checkCancellation()
-            var error: NSError?
-            let status = converter.convert(to: output, error: &error) { count, state in
-                if ended || source.framePosition >= source.length { state.pointee = .endOfStream; return nil }
-                if count == 0 { state.pointee = .noDataNow; return nil }
-                do {
-                    try source.read(into: input, frameCount: min(count, input.frameCapacity, AVAudioFrameCount(min(Int64(UInt32.max), source.length - source.framePosition))))
-                    if input.frameLength == 0 { ended = true; state.pointee = .endOfStream; return nil }
-                    state.pointee = .haveData; return input
-                } catch { readError = error; ended = true; state.pointee = .endOfStream; return nil }
-            }
-            if let readError { throw AudioFailure(message: "Could not read backing audio: \(readError.localizedDescription)") }
-            if let error { throw AudioFailure(message: "Could not convert backing audio: \(error.localizedDescription)") }
-            if output.frameLength > 0 {
-                do { try writer?.write(from: output) }
-                catch { throw AudioFailure(message: "Could not cache decoded audio: \(error.localizedDescription)") }
-            }
-            if status == .endOfStream { break }
-            if status == .error { throw AudioFailure(message: "Could not decode this audio file.") }
+            var frames: UInt32 = buffer.frameCapacity
+            buffer.frameLength = buffer.frameCapacity
+            status = ExtAudioFileRead(decoder, &frames, buffer.mutableAudioBufferList)
+            guard status == noErr else { throw AudioFailure(message: "Could not decode backing audio (Core Audio \(status)).") }
+            if frames == 0 { break }
+            buffer.frameLength = frames
+            try writer?.write(from: buffer)
         }
         writer = nil
     }

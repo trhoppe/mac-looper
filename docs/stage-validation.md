@@ -2,12 +2,13 @@
 
 Implementation scope: shared Mac/iPad SwiftUI workspace and portable library model;
 shared loop/backing audio graph with native platform routing; native read-only
-ChordPro viewer and lossless JustChords library mirror. AUv3 hosting, chart editing,
+ChordPro viewer and lossless JustChords library mirror. Pop Drummer AUv3 hosting
+and the jamming controls are now included. Chart editing,
 overdub, saved loop sessions and a second guitar track remain later work.
 
 ## Current build
 
-- Mac app: `build/Mac Looper.app` (0.3.0).
+- Mac app: `build/Mac Jams.app` (0.3.0).
 - Native Xcode project: `MacLooper.xcodeproj`; shared macOS/iPad schemes.
 - Original working app preserved at `build/baseline-v0.2/Mac Looper.app`.
 - Separate own iCloud Drive folder `Mac Looper` created. Initial library: 38 songs,
@@ -16,8 +17,8 @@ overdub, saved loop sessions and a second guitar track remain later work.
 
 ## Verification (November 1, 2026)
 
-- Mac regression tests: **48 passed, 0 failures** (`build/ux-tests.log`).
-- Physical iPad: **32 passed, 0 failures** (`build/ux-ipad-tests.log`).
+- Mac regression tests: **54 passed, 0 failures** (`build/mac-jams-tests.log`).
+- Physical iPad: **38 passed, 0 failures** (`build/mac-jams-ipad-tests.log`).
 - Signed native iPad app installed and launched normally on Tom’s iPad.
 - Packaged Mac release build succeeded (`build/stage-mac-build.log`).
 - Real library: **38 songs, 3 playlists, 6 tags**, exact JSON bytes retained.
@@ -43,7 +44,7 @@ jam and AM4 routing on the physical iPad still require connecting the AM4 to it.
 ## iPad iCloud setup
 
 The installed app already has the 38-song library for immediate testing. To keep
-using the same iCloud copy across devices, choose **Mac Looper iCloud folder…** in
+using the same iCloud copy across devices, choose **Choose library folder…** in
 Settings and select the folder in Files. Also choose JustChords’ `library.json` as
 the source for launch-time sync on that iPad. Files grants the app access through
 those choices; Mac absolute paths are not reused on iPad.
@@ -62,7 +63,7 @@ those choices; Mac absolute paths are not reused on iPad.
 5. Change/seek/stop backing while the loop plays. Clear; repeat at 4/8 bars.
 6. Test iPad portrait/landscape and automatic recovery after a USB reconnect.
    Retry Connection is available in Settings if a route fails to initialize.
-7. Edit a test chart in JustChords. Confirm Mac Looper keeps its current version
+7. Edit a test chart in JustChords. Confirm Mac Jams keeps its current version
    while open, then loads the update after quitting/relaunching. Verify that
    JustChords’ source is unchanged and the own JSON remains byte-identical.
 
@@ -80,3 +81,81 @@ those choices; Mac absolute paths are not reused on iPad.
   and no alpha channel, verified at 152 and 1024 pixels, avoiding the white border.
 - Mac foreground UI confirmed no selected song/file, restored 28-file backing folder,
   all songs present, no Tags selector, and automatic 48 kHz / 32-sample connection.
+
+## Pop Drummer and jamming controls (November 1, 2026)
+
+- Mac release build succeeds. **54 Mac tests pass**, with no failures
+  (`build/drummer-tests.log`); **38 tests pass on the physical iPad**, with no
+  failures (`build/drummer-ipad-tests.log`).
+- Both platforms discover the current full `aumu/popd/LmBt` AUv3. The iPad signed
+  host includes `inter-app-audio`, required for access to Audio Unit extensions.
+  The instrument runs out of process on Mac; plugin state is stored locally.
+- Real installed Pop Drummer audio rendered at **48 kHz / 32 frames** into memory
+  on Mac and iPad. Both produced nonzero audio at 120 and 90 BPM, exact host beat
+  positions of 6 then 9 (within floating-point precision), **zero output after
+  Stop**, and a custom editor (`build/pop-drummer-final-check.log`,
+  `build/pop-drummer-ipad-final.log`). These checks intentionally exit with code 0.
+- Mac native-driver diagnostic also produced audio using real hardware timestamps
+  at 32 frames through a silent diagnostic sink. The popup editor was checked
+  directly (`build/pop-drummer-native-auto.log`).
+- Combined live **AM4 input → AM4 Proxy output**, backing-file playback/restart,
+  muted drummer Play/Stop and 120 → 90 BPM changes passed at **32 frames** with
+  **9,599 callbacks**, without software guitar monitoring
+  (`build/drummer-combined-smoke.log`). The drummer stays rendered at zero gain;
+  regression tests cover muted pulls, gain ramps and latched transport changes.
+- All three volumes default to 100%. Looper gain is beside Clear; drummer has its
+  own slider and editable percentage. File player gains ±10-second seeking.
+- BPM and bars have numeric entry and +/− buttons (120 BPM / 4 bars defaults,
+  1–8 bars). Song tempos are still adopted only while loop timing is editable.
+- Search icons reveal fields beside Songs and the audio-folder button; file type
+  badges are removed. Stable song IDs and isolated meter subscriptions avoid
+  repeatedly rebuilding the chart/browser. Eager chart layout avoids changing
+  estimated row heights during scrolling.
+- American idiot preview checked against the supplied examples: monospaced lyrics,
+  visible spacing between adjacent verse chords, grouped monospaced raw tabs.
+  Native chart changes do not modify the JustChords JSON.
+- The actual MP3 that previously failed at compressed EOF now decodes fully to
+  **177.672 seconds**, stereo/48 kHz. Synthetic mono/rate-conversion regressions pass.
+- Normal Mac and iPad builds launched after diagnostics. AM4-on-iPad audible jamming
+  and touch-layout refinement remain user checks; the connected AM4 is on the Mac.
+
+## Mac Jams layout and final checks
+
+- App display name and built bundle are **Mac Jams**. Existing bundle identifiers,
+  signing identity, preferences and the `Mac Looper` iCloud folder are preserved.
+- Songs, Looper, Drummer and Player header controls persist panel visibility.
+  Manual Mac checks confirmed full-width chart expansion, either footer panel
+  expanding alone, and the chart filling the workspace with every panel hidden.
+  Drummer continued playing while hidden and stopped after showing it again.
+- Subtle hover backgrounds are applied to header controls and song/audio rows,
+  using local hover state without rebuilding the browsers.
+- A− / A+ controls adjust chart text from 12–36 points, including scaled line,
+  section, tablature and wrapped-row gaps. Both controls were exercised in the
+  packaged Mac app.
+- Global Ready status is beside Settings; 48 kHz / 32-sample details are in
+  Settings only. Mac settings confirmed AM4 input and AM4 Proxy output.
+- Final signed iPad tests passed **38/38**, then the app launched normally on
+  Tom’s iPad. Final Mac regression run passed **54/54**; installed-plugin audio
+  checks passed separately. No test app or diagnostics are left running on iPad.
+- The build script now atomically replaces the executable. A clean Mac launch
+  passed repeated panel, font, volume and Settings interactions.
+
+See [performance validation](performance-validation.md) for the routing/volume
+repair, profiling evidence and the limits of those measurements.
+
+## Immediate typography and automatic columns
+
+- Font size is now an explicit chart presentation input and layout-cache key,
+  fixing delayed redraws until song selection changed. Measured word sizes and
+  column placement are invalidated immediately when typography changes.
+- At sufficient width relative to font size, the chart flows down the left column
+  then down the right. Measured block heights balance the columns, preferring
+  nearby section/stanza boundaries. A heading stays with its first content even
+  across blank lines; an entire tab block remains in one column. Larger fonts or
+  narrower chart space automatically return to a single column.
+- Manual Mac check used the same American idiot chart throughout: A+ immediately
+  enlarged text/spacing and switched to one column; A− immediately restored the
+  smaller two-column layout. The prior font size and panel visibility were restored.
+- Final regression results: **60 Mac tests** (`build/chart-layout-tests.log`) and
+  **44 physical-iPad tests** (`build/chart-layout-ipad-tests.log`), all passing.
+  Both app builds succeeded, with the updated iPad app installed by Xcode.

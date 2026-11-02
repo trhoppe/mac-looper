@@ -5,25 +5,22 @@ struct LooperPanel: View {
     @ObservedObject var model: LooperModel
     private let accent = Color(red: 0.259, green: 0.788, blue: 0.961)
     private var bpm: Binding<Double> { Binding(get: { model.bpm }, set: { if $0.isFinite { model.bpm = min(240, max(30, $0)) } }) }
+    private var bars: Binding<Double> { Binding(get: { Double(model.bars) }, set: { if $0.isFinite { model.bars = Int(min(8, max(1, $0.rounded()))) } }) }
     private var threshold: Binding<Double> { Binding(get: { model.thresholdDB }, set: { if $0.isFinite { model.thresholdDB = min(0, max(-72, $0)) } }) }
     private var percent: Binding<Double> { Binding(get: { (model.volume * 100).rounded() }, set: { if $0.isFinite { model.volume = min(100, max(0, $0)) / 100 } }) }
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
-                Circle().fill(model.state == TL_RECORDING ? .red : model.busy ? .orange : accent).frame(width: 7, height: 7)
-                Text(model.status).font(.callout.weight(.semibold))
-                Text(model.detail).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                Text("Looper").font(.callout.weight(.semibold))
+                if model.busy || model.hasLoop {
+                    Text(model.status).font(.caption.weight(.medium)).foregroundStyle(model.state == TL_RECORDING ? .red : accent)
+                    Text(model.detail).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                }
                 Spacer(minLength: 0)
-                Text("GUITAR LOOP").font(.caption2.weight(.medium)).foregroundStyle(.tertiary)
             }
             HStack(spacing: 14) {
-                HStack(spacing: 6) {
-                    TextField("BPM", value: bpm, format: .number.precision(.fractionLength(0)))
-                        .textFieldStyle(.roundedBorder).frame(width: 57).accessibilityLabel("Loop tempo")
-                    Text("BPM").font(.caption).foregroundStyle(.secondary)
-                }.disabled(!model.canEditTiming)
-                Picker("Bars", selection: $model.bars) { Text("2 bars").tag(2); Text("4 bars").tag(4); Text("8 bars").tag(8) }
-                    .pickerStyle(.segmented).frame(maxWidth: 230).disabled(!model.canEditTiming).labelsHidden()
+                TimingControl(label: "BPM", value: bpm, bounds: 30...240).disabled(!model.canEditTiming)
+                TimingControl(label: "Bars", value: bars, bounds: 1...8).disabled(!model.canEditTiming)
                 Text(String(format: "4/4 · %.2f s", model.seconds)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
                 Spacer(minLength: 0)
             }
@@ -62,8 +59,8 @@ struct LooperPanel: View {
                 }
             }.frame(height: 38).accessibilityLabel("Loop waveform")
             ViewThatFits(in: .horizontal) {
-                HStack(spacing: 12) { transport; Spacer(minLength: 16); volume }
-                VStack(spacing: 8) { HStack { transport; Spacer() }; volume }
+                HStack(spacing: 12) { transport; volume.frame(maxWidth: 300); Spacer(minLength: 0) }
+                VStack(alignment: .leading, spacing: 8) { transport; volume.frame(maxWidth: 300) }
             }
             if let error = model.error {
                 HStack(alignment: .top) {
@@ -94,5 +91,23 @@ struct LooperPanel: View {
             Text("%").font(.caption).foregroundStyle(.secondary)
             Slider(value: $model.volume, in: 0...1).frame(minWidth: 140, idealWidth: 180, maxWidth: 250).accessibilityLabel("Loop playback volume")
         }
+    }
+}
+
+private struct TimingControl: View {
+    let label: String
+    @Binding var value: Double
+    let bounds: ClosedRange<Double>
+    var body: some View {
+        HStack(spacing: 5) {
+            TextField(label, value: $value, format: .number.precision(.fractionLength(0)))
+                .textFieldStyle(.roundedBorder).frame(width: label == "BPM" ? 57 : 38)
+                .accessibilityLabel(label == "BPM" ? "Loop tempo" : "Loop bars")
+            Text(label).font(.caption).foregroundStyle(.secondary)
+            Button { value = max(bounds.lowerBound, value.rounded() - 1) } label: { Image(systemName: "minus").frame(width: 12) }
+                .disabled(value <= bounds.lowerBound).accessibilityLabel("Decrease \(label)")
+            Button { value = min(bounds.upperBound, value.rounded() + 1) } label: { Image(systemName: "plus").frame(width: 12) }
+                .disabled(value >= bounds.upperBound).accessibilityLabel("Increase \(label)")
+        }.buttonStyle(.bordered).controlSize(.small)
     }
 }

@@ -4,6 +4,9 @@ public struct ChordFragment: Equatable, Sendable {
     public let chord: String
     public let lyric: String
     public init(chord: String = "", lyric: String) { self.chord = chord; self.lyric = lyric }
+    public var displayColumns: Int {
+        max(lyric.count, chord.count + (!chord.isEmpty && lyric.trimmingCharacters(in: .whitespaces).isEmpty ? 1 : 0))
+    }
 }
 public struct ChartLine: Identifiable, Equatable, Sendable {
     public enum Kind: Equatable, Sendable { case lyrics, section, comment, tablature, blank }
@@ -12,10 +15,32 @@ public struct ChartLine: Identifiable, Equatable, Sendable {
     public let text: String
     public let fragments: [ChordFragment]
 }
+public struct ChartBlock: Identifiable, Equatable, Sendable {
+    public let lines: [ChartLine]
+    public var id: Int { lines[0].id }
+    public var isTablature: Bool { lines[0].kind == .tablature }
+}
 public struct ChordProDocument: Sendable {
     public let lines: [ChartLine]
     public let metadata: [String: String]
     public let unsupportedDirectives: [String]
+    public var blocks: [ChartBlock] {
+        var result: [ChartBlock] = [], tab: [ChartLine] = []
+        for line in lines {
+            if line.kind == .tablature { tab.append(line); continue }
+            if !tab.isEmpty { result.append(ChartBlock(lines: tab)); tab = [] }
+            result.append(ChartBlock(lines: [line]))
+        }
+        if !tab.isEmpty { result.append(ChartBlock(lines: tab)) }
+        return result
+    }
+    private static func isPlainTab(_ text: String) -> Bool {
+        guard let bar = text.firstIndex(of: "|") else { return false }
+        let label = text[..<bar].trimmingCharacters(in: .whitespaces)
+        guard let root = label.first, "ABCDEFGabcdefg".contains(root), label.count <= 2,
+              label.count == 1 || ["#", "b", "♯", "♭"].contains(label.last!) else { return false }
+        return text[bar...].contains { $0 == "-" || $0 == "x" || $0 == "X" || $0.isNumber }
+    }
     public init(source: String, transpose: Int = 0, flats: Bool = false) {
         var result: [ChartLine] = [], metadata: [String: String] = [:], unsupported = Set<String>()
         var inTab = false
@@ -43,7 +68,7 @@ public struct ChordProDocument: Sendable {
                 default: unsupported.insert(name)
                 }
             } else if trim.isEmpty { add(.blank) }
-            else if inTab { add(.tablature) }
+            else if inTab || Self.isPlainTab(trim) { add(.tablature) }
             else if trim.hasSuffix(":"), trim.count < 70, !trim.contains("[") { add(.section, text: String(trim.dropLast())) }
             else {
                 let fragments = Self.fragments(raw).map { ChordFragment(chord: ChordTransposition.transpose($0.chord, semitones: transpose, flats: flats), lyric: $0.lyric) }

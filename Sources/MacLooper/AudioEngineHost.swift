@@ -10,6 +10,9 @@ import CoreAudio
 @MainActor final class AudioEngineHost {
     static let shared = AudioEngineHost()
     private static var registered = false
+    let drums = PopDrummerModel()
+    private var drumGainNode: AVAudioUnit?
+    private var drumGain: MLDrumGainAudioUnit?
     private var engine: AVAudioEngine?
     private var player: AVAudioPlayerNode?
     private var loopNode: AVAudioUnit?
@@ -30,7 +33,7 @@ import CoreAudio
     private var filePosition = 0.0
     private var filePlaying = false
     private var fileRepeat = false
-    private var fileVolume: Float = 0.7
+    private var fileVolume: Float = 1.0
     private var segmentStart: AVAudioFramePosition = 0
     private var fileGeneration = UUID()
     private var fileScheduled = false
@@ -62,7 +65,7 @@ import CoreAudio
         catch {
             let captureError = error
             filePlaying = resumeBacking
-            if file != nil { try? await rebuild(capture: false) }
+            if file != nil || drums.playing { try? await rebuild(capture: false) }
             throw captureError
         }
     }
@@ -71,17 +74,52 @@ import CoreAudio
             try await waitForConfiguration()
             configuring = true; defer { configuring = false }
             if captureEnabled {
-                if file == nil { shutdownAudio() }
+                if file == nil && !drums.playing { shutdownAudio() }
                 else { try await rebuild(capture: false) }
             }
         } catch { shutdownAudio(); filePlaying = false }
     }
-    func shutdown() { filePlaying = false; shutdownAudio() }
+    func shutdown() {
+        filePlaying = false; drums.setPlaying(false); drums.saveState(); shutdownAudio()
+    }
+    func updateDrummerVolume() { drumGain?.volume = drums.playing ? Float(drums.volume) : 0 }
+    func startDrummer(output: AudioDevice?) async throws {
+        try await waitForConfiguration()
+        guard let output else { throw AudioFailure(message: "Choose an output in Audio Settings before playing drums.") }
+        await drums.prepare()
+        guard let node = drums.node else { throw AudioFailure(message: drums.error ?? "Pop Drummer could not load.") }
+        if engine == nil || node.engine !== engine || self.output?.uid != output.uid {
+            if let core, tl_snapshot(core).state != TL_EMPTY { throw AudioFailure(message: "Clear the guitar loop before connecting Pop Drummer to this audio route.") }
+            let capture = captureEnabled
+            self.output = output; configuring = true
+            defer { configuring = false }
+            try await rebuild(capture: capture)
+        }
+        guard let engine, node.engine === engine else { throw AudioFailure(message: drums.error ?? "The drum audio route could not connect.") }
+        let previousQueries = drums.transport.transportQueries
+        if !engine.isRunning { try MLAudioGraphTools.start(engine) }
+        // Lumbeat waits for its own Play if its first render already sees a
+        // moving host. Let it observe stopped transport before our first Start.
+        for _ in 0..<100 {
+            if drums.transport.transportQueries > previousQueries + 1 { return }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        throw AudioFailure(message: "Pop Drummer’s audio route isn’t rendering. Retry the audio connection in Settings.")
+    }
+    func prepareDrummerEditor() async throws {
+        try await startDrummer(output: output)
+    }
+    private func removeDrummer(from engine: AVAudioEngine) {
+        if let node = drums.node, node.engine === engine { engine.disconnectNodeOutput(node); engine.detach(node) }
+        if let drumGainNode { engine.disconnectNodeOutput(drumGainNode); engine.detach(drumGainNode) }
+        drumGainNode = nil; drumGain = nil
+    }
     private func shutdownAudio() {
         #if os(macOS)
         macDriver?.stop(); macDriver = nil
         #endif
         engine?.stop(); player?.stop()
+        if let engine { removeDrummer(from: engine) }
         loopUnit = nil; loopNode = nil; player = nil; engine = nil; captureEnabled = false; fileScheduled = false
         #if os(macOS)
         if let aggregate { AudioHardwareDestroyAggregateDevice(aggregate) }
@@ -96,6 +134,7 @@ import CoreAudio
         fileGeneration = UUID()
         shutdownAudio()
         guard let output else { throw AudioFailure(message: "Choose an output in Audio Settings.") }
+        await drums.prepare()
         let e = AVAudioEngine(), p = AVAudioPlayerNode()
         self.engine = e; player = p
         var left = inputChannel, right = inputChannel + 1
@@ -173,8 +212,25 @@ import CoreAudio
                 try MLAudioGraphTools.connect(e, source: node, sourceBus: 0, destination: e.mainMixerNode, destinationBus: 0, format: stereo)
             }
             if !e.isInManualRenderingMode { try MLAudioGraphTools.connect(e, source: e.mainMixerNode, sourceBus: 0, destination: e.outputNode, destinationBus: 0, format: stereo) }
+            if let node = drums.node {
+                do {
+                    let gain = try await Self.makeDrummerGain()
+                    drumGainNode = gain; drumGain = gain.auAudioUnit as? MLDrumGainAudioUnit
+                    e.attach(node); e.attach(gain)
+                    drums.transport.configureSampleRate(sampleRate)
+                    try MLAudioGraphTools.connect(e, source: node, sourceBus: 0, destination: gain, destinationBus: 0, format: stereo)
+                    try MLAudioGraphTools.connect(e, source: gain, sourceBus: 0, destination: e.mainMixerNode, destinationBus: 2, format: stereo)
+                    updateDrummerVolume()
+                } catch { removeDrummer(from: e); drums.error = "Pop Drummer couldn’t connect: " + error.localizedDescription }
+            }
             trace("prepare graph")
-            try MLAudioGraphTools.prepare(e)
+            do { try MLAudioGraphTools.prepare(e) }
+            catch {
+                guard drumGainNode != nil else { throw error }
+                removeDrummer(from: e); drums.error = "Pop Drummer couldn’t prepare: " + error.localizedDescription
+                try MLAudioGraphTools.prepare(e)
+            }
+            if drums.node?.engine === e { drums.restoreStateWhenPrepared() }
             trace("start graph")
             if capture || resume { try MLAudioGraphTools.start(e) }
             trace("graph started")
@@ -192,6 +248,21 @@ import CoreAudio
             if file != nil { schedule(from: filePosition, play: resume) }
             p.volume = fileVolume
         } catch { shutdownAudio(); filePlaying = false; throw error }
+    }
+    private static var gainRegistered = false
+    static func makeDrummerGain() async throws -> AVAudioUnit {
+        let d = AudioComponentDescription(componentType: kAudioUnitType_Effect, componentSubType: 0x64676169,
+            componentManufacturer: 0x4D614C70, componentFlags: 0, componentFlagsMask: 0)
+        if !gainRegistered {
+            AUAudioUnit.registerSubclass(MLDrumGainAudioUnit.self, as: d, name: "Mac Looper: Drum gain", version: 1)
+            gainRegistered = true
+        }
+        return try await withCheckedThrowingContinuation { continuation in
+            AVAudioUnit.instantiate(with: d, options: []) { unit, error in
+                if let unit { continuation.resume(returning: unit) }
+                else { continuation.resume(throwing: error ?? AudioFailure(message: "Could not create the drum volume control.")) }
+            }
+        }
     }
     static func captureFormat(rate: Double, channels: UInt32) throws -> AVAudioFormat {
         guard rate.isFinite, rate >= 8000, rate <= 192000, channels > 0, channels <= 128,

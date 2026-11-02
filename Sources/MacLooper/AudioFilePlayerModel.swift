@@ -17,7 +17,7 @@ import AppKit
     @Published var requestingFolder = false
     @Published var error: String?
     @Published private(set) var scanNotice: String?
-    @Published var volume = 0.7 { didSet { configure() } }
+    @Published var volume = 1.0 { didSet { configure() } }
     @Published var repeatTrack = false { didSet { configure() } }
     private var output: AudioDevice?
     private let playback = FilePlayback()
@@ -127,6 +127,10 @@ import AppKit
             }
         }
     }
+    func skip(_ seconds: Double) {
+        guard seconds.isFinite, selected != nil, !loading, duration > 0 else { return }
+        seek(position + seconds)
+    }
     func restart() {
         guard selected != nil, !loading, duration > 0 else { return }
         position = 0
@@ -167,7 +171,9 @@ import AppKit
             return
         }
         guard let snapshot = await playback.snapshot(session: token), token == session else { return }
-        duration = snapshot.duration; position = snapshot.position; playing = snapshot.playing
+        if duration != snapshot.duration { duration = snapshot.duration }
+        if position != snapshot.position { position = snapshot.position }
+        if playing != snapshot.playing { playing = snapshot.playing }
     }
     func shutdown() {
         worker?.cancel(); loadTask?.cancel(); timer?.invalidate()

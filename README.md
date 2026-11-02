@@ -1,20 +1,23 @@
-# Mac Looper
+# Mac Jams
 
 A native Mac and iPad guitar-jamming app. Chord charts and backing playback share
-one SwiftUI workspace, with the guitar looper always visible along the bottom.
+one SwiftUI workspace. Header controls show or hide Songs, Looper, Drummer and
+Player; the chart expands into the available space.
 A shared C render core provides sample-accurate threshold capture. Live guitar
-monitoring stays on the AM4. No DAW, projects, MIDI, or plug-in setup is required.
+monitoring stays on the AM4. No DAW or recording projects are required; optional
+drums use the installed Pop Drummer AUv3 instrument.
 
 ## Run
 
 ```sh
 ./scripts/build-app.sh
-open "build/Mac Looper.app"
+open "build/Mac Jams.app"
 ```
 
 Requires macOS 14 or newer and Xcode or the Swift command line tools to build. The script
 uses `/Applications/Xcode.app` when available without changing the system's developer setting.
-The resulting app runs independently of Xcode. Open `MacLooper.xcodeproj` for native Mac/iPad targets, or `Package.swift` for
+The resulting app runs independently of Xcode. The script replaces the executable
+atomically, avoiding an in-place overwrite of a running app; relaunch to use a new build. Open `MacLooper.xcodeproj` for native Mac/iPad targets, or `Package.swift` for
 shared-code development. Use the packaged Mac app for normal use.
 
 ### iPad
@@ -33,15 +36,22 @@ The iPad uses the connected USB interface and iPadOS audio routing. **AM4 Proxy 
 a Mac driver, not an iPad output choice.** The default capture choice requires a USB
 input rather than silently using the iPad microphone. The app requests and verifies
 32 samples for loop capture. iPadOS can choose a larger quantum; the app accepts
-that actual buffer and shows the render size in the header and Audio Settings.
+that actual buffer and shows the render size in Audio Settings.
 There is no buffer selector. The Mac retains its strict 32-sample requirement.
 
 ## Chord charts and iCloud library
 
-Mac Looper reads JustChords’ `library.json`, including songs, playlist/folder order,
+Mac Jams reads JustChords’ `library.json`, including songs, playlist/folder order,
 tags, saved key/transpose and capo settings. The native read-only ChordPro viewer
 shows chords over lyrics, section headings, comments and tablature. Text size is
-adjustable. Chart editing and AUv3 hosting are future stages.
+adjustable from 12–36 points using **A− / A+**. Line, section and wrapped-row
+spacing scale with the font size and update immediately on the current song.
+When the available width can fit two readable columns at that font size, the
+chart automatically balances them in reading order: down the left, then down
+the right. Narrower space or larger text returns it to one column. Section
+headings stay with their first content, and tab blocks stay together. Chart content uses a monospaced font, and unmarked guitar-tab rows are
+grouped so their columns stay aligned. Adjacent chord-only fragments have visible
+spacing without rewriting the source JSON. Chart editing remains a future stage.
 
 On this Mac, defaults are:
 
@@ -56,16 +66,27 @@ copy retains the **exact source bytes**, including unknown fields, IDs, trash an
 JustChords settings. Viewing never rewrites the JustChords file. This preserves the
 format for a future return to JustChords; no two-way editing is implemented yet.
 
-On iPad, open Settings in Mac Looper, choose **Mac Looper iCloud folder…**, and select
+The existing **Mac Looper** library folder and app identifiers are retained during
+the Mac Jams rename, preserving access to existing data and permissions.
+
+On iPad, open Settings in Mac Jams, choose **Choose library folder…**, and select
 the same folder in Files. For launch-time sync from JustChords, also choose its
 `library.json` as the source. These choices persist across launches. Without those
 choices the iPad uses its own local Documents/Library folder. No private user JSON
 or backing audio is included in the app bundle or Git repository.
 
-Use **Songs** to choose a playlist, search titles/artists, and select a chart.
+Use **Songs** to choose a playlist and select a chart. Click its magnifying glass
+to reveal title/artist search; the file-search icon sits beside the folder button.
 The app opens with no chart selected and a faded logo; choose a song when ready.
-The backing player stays available beside/below it, and the looper stays at the
-bottom. Selecting a song leaves backing-track selection and playback alone. Its BPM
+The **Songs / Looper / Drummer / Player** header buttons toggle their panels.
+Visibility is remembered; hiding a panel keeps its audio playing. The chart widens
+when Player is hidden; Looper or Drummer fills the footer when the other is hidden.
+Hiding both removes the footer, and hiding every panel leaves the chart filling
+the workspace. Header buttons and song/audio rows lighten subtly on hover.
+The **Ready** indicator beside Settings summarizes connection readiness; sample
+rate and buffer details appear only in Settings.
+
+Selecting a song leaves backing-track selection and playback alone. Its BPM
 is adopted only while the loop is empty; an existing loop’s timing remains fixed.
 
 Select backing audio manually in the right rail. Chart browsing and backing-track
@@ -78,7 +99,8 @@ selection are independent; there are no attachment controls in the chart.
    to the built-in microphone or speakers if unavailable. Other devices can be selected.
 2. Click the **gear** in the top corner to change input, output, or capture channels.
    The audio buffer is fixed at **32 samples**.
-3. Set BPM (30–240) and **2, 4, or 8 bars**. V1 uses **4/4**.
+3. Set BPM (30–240) and **1–8 bars** with the numeric fields or +/− buttons.
+   Defaults are **120 BPM / 4 bars**. V1 uses **4/4**.
 4. Audio connects automatically when the app opens. Allow microphone access when asked;
    macOS requires this for USB audio input too. There is no software input monitoring.
 5. Adjust the strum threshold with the slider or type a value in the dB field (−72 to 0 dBFS).
@@ -91,15 +113,45 @@ selection are independent; there are no attachment controls in the chart.
    audio route. Changing devices in Settings reconnects automatically while the loop is empty.
    If the interface is unavailable, reconnect it; **Retry Connection** is available in Settings.
 
-The wider volume slider changes **loop playback only**. Type a percentage beside its speaker icon
+The volume control beside **Clear** changes **loop playback only**.
+Loop, file-player and drummer volume each start at **100%**. Type a percentage beside its speaker icon
 for an exact setting. The AM4 handles live guitar monitoring. Captured loops stay in memory;
 there are no saved sessions. Overdub is deferred to a later version.
 
-Set your separate drum app to the same BPM and output device. Mac Looper captures only
-its selected hardware input channels; it has no system-audio capture or output-to-input
-connection. The external routing/preset must likewise keep drum playback out of the selected
-AM4 USB input channels. There is no transport sync; start the strum where you want the loop
-in relation to the drums. Independent app clocks may drift over a long session.
+## Pop Drummer AUv3
+
+The compact bottom-right panel hosts **Lumbeat → Pop Drummer → Stereo**, the full
+AUv3 instrument. The older compatibility component and MIDI-only plugin are not
+selected. Install Pop Drummer on each device and open its standalone app once
+before using the plugin, as described in [Lumbeat’s AUv3 setup guidance](https://lumbeat.com/lumbeat-faq/).
+
+- **Play/Stop** controls the plugin independently of backing playback and threshold
+  capture. It follows the looper’s BPM and a sample-based 4/4 host transport.
+- **Open…** shows the plugin’s full editor in a separate Mac window or an iPad sheet.
+  Choose rhythms, kits and Jam settings there. Plugin settings are saved locally
+  when the editor closes and when the app shuts down; drums never autoplay on launch.
+- Its own volume slider and editable percentage balance drums against the backing
+  player and guitar loop. A 3 ms gain ramp avoids clicks. The instrument continues
+  to render at zero gain so it can see transport changes and restart reliably.
+- Saved plugin state is restored only after the instrument is connected and its
+  render resources are prepared. Restoring Lumbeat state earlier can start its
+  own system-device audio path, bypassing the host volume and selected output.
+  The host now keeps the instrument on its own mixer and output route.
+- The plugin observes stopped transport before its first Play. Lumbeat deliberately
+  waits for its own Play button when first loaded into an already-moving host.
+  If you intentionally enable **Lock Play** in the editor, its own Play button is
+  still required; the host does not overwrite plugin preferences.
+
+Drums and backing audio are mixed **after** guitar capture. Neither is routed into
+the loop. Your AM4 preset must likewise keep USB playback out of the selected
+hardware capture channels. The looper remains threshold-triggered: play your first
+strum where you want the phrase to sit against the drums; it is not quantized to
+the drummer’s next bar. Both use the same audio engine and sample rate.
+
+Plugin discovery/loading failures are reported in the drum panel while guitar and
+backing playback remain available. On iPad, the signed app includes Apple’s
+`inter-app-audio` host entitlement, which also grants access to Audio Unit extensions;
+this integration uses AUv3, not legacy Inter-App Audio routing.
 
 ## Audio-file player
 
@@ -113,7 +165,8 @@ The right rail (or compact player beneath the chart on a narrower iPad) plays ba
    security-scoped access is retained on both platforms. Playback does not start automatically.
 3. Select a file to load it in the bottom-right player. Selecting does **not** autoplay.
 4. Use Play/Pause, Stop, the seek bar, previous/next file, repeat-one, and the file player's own volume.
-   Previous/next selects the adjacent file in the complete folder listing without autoplay.
+   **Back 10 seconds / Forward 10 seconds** seek within the current file, clamp to
+   its ends, and preserve Play/Pause. Previous/next selects the adjacent file in the complete folder listing without autoplay.
    While playing, **Left Arrow** restarts the current backing track from zero and continues
    playback. This also works with an iPad hardware keyboard.
 
@@ -127,10 +180,12 @@ Common audio formats are discovered by file extension and macOS audio types. Nat
 handles playback; a listed format that needs an unavailable codec reports an error when selected.
 Scanning and file decoding run off the UI and looper’s realtime thread. Playback
 shares one AVAudioEngine mixer with guitar-loop playback. Guitar capture is
-upstream of this mixer, so neither backing audio nor future instrument buses enter
+upstream of this mixer, so neither backing audio nor the drummer bus enters
 the loop. Mono or non-48 kHz backing files are decoded in bounded buffers into an
 OS-purgeable local stereo/48 kHz cache, preserving the original file and avoiding a
-live graph reconnect when switching file formats.
+live graph reconnect when switching file formats. Conversion uses bounded
+ExtAudioFile reads through the actual compressed-file EOF, avoiding estimated MP3
+length failures. File-type badges are omitted from the browser.
 
 ## Timing and audio path
 
@@ -169,8 +224,9 @@ live graph reconnect when switching file formats.
 
 ```sh
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test
-"build/Mac Looper.app/Contents/MacOS/MacLooper" --devices
-"build/Mac Looper.app/Contents/MacOS/MacLooper" --smoke-test
+"build/Mac Jams.app/Contents/MacOS/MacLooper" --devices
+"build/Mac Jams.app/Contents/MacOS/MacLooper" --smoke-test
+"build/Mac Jams.app/Contents/MacOS/MacLooper" --drummer-check
 ```
 
 The regression suite covers exact threshold capture, pre-roll, loop duration and
@@ -185,10 +241,18 @@ The smoke diagnostic opens the selected Mac devices for three seconds without
 arming a loop and checks actual callbacks. It needs microphone permission and
 working hardware. Add `--smoke-file /path/to/audio.wav` to check simultaneous file
 playback at zero volume. `--smoke-direct` temporarily tests direct AM4 output and
-restores the saved output preference afterward. `--library-check /path/library.json`
+does not change the saved output preference. `--library-check /path/library.json`
 validates all songs and exact JSON preservation without printing chart contents.
-Hardware checks can fail independently of the deterministic tests; see
-[stage validation](docs/stage-validation.md) for this build’s actual results.
+`--drummer-check` renders the installed AUv3 into memory at 32 frames, verifies
+120 → 90 BPM, zero/quarter/full host gain, silent Stop and the custom editor.
+On Mac it also rejects a newly loaded plugin opening its own hardware output.
+Use `--plugin-state /path/state.plist` for isolated saved-state checks. Add
+`--smoke-seconds 35` for a longer hardware run. `--smoke-drums` adds muted drum
+playback/tempo/stop verification to the AM4 hardware check. These diagnostics exit
+when finished; launch without flags for normal use. The plugin’s proprietary DSP
+is outside the app’s own allocation guarantees. Hardware checks can fail independently of the deterministic tests; see
+[stage validation](docs/stage-validation.md) and
+[performance validation](docs/performance-validation.md) for this build’s actual results.
 
 Implementation: `Sources/JamCore` owns portable library/ChordPro logic;
 `Sources/LooperCore` owns sample-accurate C DSP and the Mac AUHAL adapter;
