@@ -159,3 +159,30 @@ repair, profiling evidence and the limits of those measurements.
 - Final regression results: **60 Mac tests** (`build/chart-layout-tests.log`) and
   **44 physical-iPad tests** (`build/chart-layout-ipad-tests.log`), all passing.
   Both app builds succeeded, with the updated iPad app installed by Xcode.
+
+## UI refinements (November 2, 2026)
+
+- Section headings use bold light gray; chords remain cyan. Backing-player output
+  text is removed, with device selection retained in Settings.
+- Paired charts now read left-to-right across consecutive lyric/chord lines,
+  then continue on the next row. Section headings, separators and tab blocks span
+  the full chart width; odd lines before a spanning block remain on the left.
+- A text-column icon beside A− / A+ switches one/two-column preference immediately
+  and stores it locally. Two-column presentation falls back to one on narrow space.
+- Song/artist sorting is a standard single dropdown, with a remembered choice.
+  Shared tests cover natural-number ordering, artist case/diacritic comparisons,
+  missing artists, title/artist search and playlist/settings preservation.
+- Song rows have reduced insets; their List fills the sidebar width, putting the
+  scrollbar at its border. Header controls retain margins aligned with song text.
+- Chords is independently toggleable between Songs and Looper. Selecting a song
+  reveals it, including repeat selection of the current song. Manual Mac checks
+  exercised this and clean Player-only and Looper/Drummer-only arrangements.
+- Mac welcome artwork now explicitly loads its packaged PNG; Xcode targets retain
+  asset-catalog lookup. The previously missing faded Mac logo was visually verified.
+- **65 Mac tests** passed (`build/ui-refinements-tests.log`); **48 physical-iPad
+  tests** passed (`build/ui-refinements-ipad-tests.log`), with no failures. Both
+  app packages compile; private library/audio data remain untouched.
+- Final Mac visual checks confirmed the aligned, single-line Songs header, native
+  single sort dropdown, restored welcome logo, immediate column switching in
+  both directions and one-column persistence after a normal quit/relaunch.
+  The final signed iPad package was installed and launched normally.

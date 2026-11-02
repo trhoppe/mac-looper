@@ -6,14 +6,15 @@ import JamCore
 struct ChordChartView: View {
     let song: LibrarySong?
     @AppStorage("chartFontSize") private var fontSize = 21.0
+    @AppStorage("chartTwoColumns") private var twoColumns = true
     private let document: ChordProDocument?
     init(song: LibrarySong?) {
         self.song = song
         document = song.map { ChordProDocument(source: $0.chordPro, transpose: $0.transposition, flats: $0.displayKey?.contains("b") == true) }
     }
     var body: some View {
-        ChartPresentation(song: song, document: document, fontSize: fontSize,
-                          changeFont: { fontSize = $0 }).equatable()
+        ChartPresentation(song: song, document: document, fontSize: fontSize, twoColumns: twoColumns,
+                          changeFont: { fontSize = $0 }, toggleColumns: { twoColumns.toggle() }).equatable()
     }
 }
 
@@ -21,9 +22,11 @@ private struct ChartPresentation: View, Equatable {
     let song: LibrarySong?
     let document: ChordProDocument?
     let fontSize: Double
+    let twoColumns: Bool
     let changeFont: (Double) -> Void
+    let toggleColumns: () -> Void
     private let accent = Color(red: 0.259, green: 0.788, blue: 0.961)
-    static func == (lhs: Self, rhs: Self) -> Bool { lhs.song == rhs.song && lhs.fontSize == rhs.fontSize }
+    static func == (lhs: Self, rhs: Self) -> Bool { lhs.song == rhs.song && lhs.fontSize == rhs.fontSize && lhs.twoColumns == rhs.twoColumns }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -36,10 +39,16 @@ private struct ChartPresentation: View, Equatable {
                         }
                         Spacer(minLength: 12)
                         HStack(spacing: 6) {
+                            Button(action: toggleColumns) {
+                                ChartColumnsIcon(count: twoColumns ? 1 : 2).frame(minWidth: 28)
+                            }.accessibilityLabel(twoColumns ? "Use one chart column" : "Use two chart columns")
+                                .accessibilityValue(twoColumns ? "Two columns" : "One column")
+                                .help(twoColumns ? "Switch to one column" : "Switch to two columns when space allows")
                             Button { changeFont(max(12, fontSize - 1)) } label: { Text("A−").font(.system(size: 16, weight: .medium)).frame(minWidth: 28) }
                                 .disabled(fontSize <= 12).accessibilityLabel("Smaller chart text").help("Smaller chart text and tighter lines")
                             Button { changeFont(min(36, fontSize + 1)) } label: { Text("A+").font(.system(size: 16, weight: .medium)).frame(minWidth: 28) }
                                 .disabled(fontSize >= 36).accessibilityLabel("Larger chart text").help("Larger chart text and wider lines")
+
                         }.buttonStyle(.bordered)
 
                     }
@@ -54,14 +63,14 @@ private struct ChartPresentation: View, Equatable {
                 Divider()
                 GeometryReader { geo in
                     ScrollView {
-                        // Measured, eager layout keeps scrolling stable and balances columns.
-                        ChartFlowLayout(fontSize: fontSize) {
+                        // Measured, eager rows preserve stable scrolling and left-to-right reading.
+                        ChartFlowLayout(fontSize: fontSize, twoColumns: twoColumns) {
                             ForEach(document.blocks) { block in
                                 Group {
                                     if block.isTablature {
                                         let columns = block.lines.map { $0.text.count }.max() ?? 1
-                                        // The actual column width, not the entire chart width, fits tabs.
-                                        let width = ChartColumnPlan.columnWidth(availableWidth: max(0, geo.size.width - 40), fontSize: fontSize)
+                                        // Tablature always uses the full chart width, outside paired rows.
+                                        let width = max(1, geo.size.width - 40)
                                         let tabSize = min(fontSize, max(12, width / (Double(max(1, columns)) * 0.61)))
                                         let tabSpacing = tabSize * 0.08
                                         ScrollView(.horizontal) {
@@ -72,7 +81,7 @@ private struct ChartPresentation: View, Equatable {
                                     } else if let line = block.lines.first {
                                         switch line.kind {
                                         case .blank: Color.clear.frame(height: fontSize * 0.55)
-                                        case .section: Text(line.text).font(.system(size: fontSize * 0.88, weight: .semibold, design: .monospaced)).foregroundStyle(accent).padding(.top, fontSize * 0.4)
+                                        case .section: Text(line.text).font(.system(size: fontSize * 0.88, weight: .bold, design: .monospaced)).foregroundStyle(Color(white: 0.78)).padding(.top, fontSize * 0.4)
                                         case .comment: Text(line.text).font(.system(size: fontSize * 0.82, design: .monospaced)).italic().foregroundStyle(.secondary)
                                         case .tablature: EmptyView()
                                         case .lyrics:
@@ -98,11 +107,12 @@ private struct ChartPresentation: View, Equatable {
                                         }
                                     }
                                 }
-                                .layoutValue(key: ChartBreakKey.self, value: block.lines.first?.kind == .section ? .section : block.lines.first?.kind == .blank ? .blank : .normal)
+                                .layoutValue(key: ChartSpanKey.self, value: block.lines.first?.kind != .lyrics)
                             }
                             if !document.unsupportedDirectives.isEmpty {
                                 Text("Additional chart directives are preserved in the library: " + document.unsupportedDirectives.joined(separator: ", "))
                                     .font(.caption).foregroundStyle(.tertiary).padding(.top, 12)
+                                    .layoutValue(key: ChartSpanKey.self, value: true)
                             }
                         }.lineSpacing(fontSize * 0.1).frame(maxWidth: .infinity, alignment: .leading).padding(20)
                     }.id(song.id)
@@ -110,7 +120,7 @@ private struct ChartPresentation: View, Equatable {
             } else {
                 GeometryReader { geo in
                     VStack(spacing: 22) {
-                        Image("LooperArtwork").resizable().scaledToFit()
+                        WelcomeArtwork()
                             .frame(width: min(320, geo.size.width * 0.55), height: min(320, geo.size.height * 0.55))
                             .opacity(0.14).accessibilityHidden(true)
                         Text("Choose a song").font(.title3).foregroundStyle(.secondary)
@@ -166,45 +176,47 @@ private struct ChordLineLayout: Layout {
     }
 }
 
-private struct ChartBreakKey: LayoutValueKey {
-    static let defaultValue = ChartColumnPlan.Break.normal
+private struct ChartSpanKey: LayoutValueKey {
+    static let defaultValue = false
 }
 
-/// Vertical reading order, measured at the final column width. This never uses
-/// lazy row-height estimates or modifies the underlying song/ChordPro content.
+/// Read across paired lines; headings and tablature use the full chart width.
+/// Measurements are cached by width and typography, never by audio telemetry.
 private struct ChartFlowLayout: Layout {
     let fontSize: Double
+    let twoColumns: Bool
+    struct Placement { let point: CGPoint; let size: CGSize }
     struct Cache {
         var width: CGFloat?
         var fontSize: Double = 0
+        var twoColumns = false
         var size = CGSize.zero
-        var placements: [CGPoint] = []
-        var columnWidth: CGFloat = 0
+        var placements: [Placement] = []
     }
     func makeCache(subviews: Subviews) -> Cache { Cache() }
     func updateCache(_ cache: inout Cache, subviews: Subviews) { cache = Cache() }
     private func arrange(width: CGFloat, subviews: Subviews, cache: inout Cache) {
         let width = width.isFinite ? max(1, width) : 600
-        guard cache.width != width || cache.fontSize != fontSize else { return }
+        guard cache.width != width || cache.fontSize != fontSize || cache.twoColumns != twoColumns else { return }
         let spacing = fontSize * 0.2
-        var columnWidth = ChartColumnPlan.columnWidth(availableWidth: width, fontSize: fontSize)
-        var heights = subviews.map { Double($0.sizeThatFits(ProposedViewSize(width: columnWidth, height: nil)).height) }
-        let split = ChartColumnPlan.split(heights: heights, breaks: subviews.map { $0[ChartBreakKey.self] },
-                                          availableWidth: width, fontSize: fontSize)
-        if split == nil, columnWidth != width {
-            columnWidth = width
-            heights = subviews.map { Double($0.sizeThatFits(ProposedViewSize(width: width, height: nil)).height) }
+        let columnWidth = ChartColumnPlan.columnWidth(availableWidth: width, fontSize: fontSize, twoColumns: twoColumns)
+        let spanning = subviews.map { $0[ChartSpanKey.self] }
+        let rows = ChartColumnPlan.rows(spanning: spanning, availableWidth: width, fontSize: fontSize, twoColumns: twoColumns)
+        var placements: [Placement] = [], y: Double = 0
+        placements.reserveCapacity(subviews.count)
+        for row in rows {
+            var height = 0.0
+            for (column, index) in row.enumerated() {
+                let itemWidth = spanning[index] ? width : columnWidth
+                let size = subviews[index].sizeThatFits(ProposedViewSize(width: itemWidth, height: nil))
+                placements.append(Placement(point: CGPoint(x: Double(column) * (columnWidth + ChartColumnPlan.gutter), y: y),
+                                            size: CGSize(width: itemWidth, height: size.height)))
+                height = max(height, size.height)
+            }
+            y += height + spacing
         }
-        var positions: [CGPoint] = [], y: Double = 0, leftHeight: Double = 0
-        positions.reserveCapacity(subviews.count)
-        for index in subviews.indices {
-            if index == split { leftHeight = max(0, y - spacing); y = 0 }
-            positions.append(CGPoint(x: split.map { index >= $0 ? columnWidth + ChartColumnPlan.gutter : 0 } ?? 0, y: y))
-            y += heights[index] + spacing
-        }
-        cache.width = width; cache.fontSize = fontSize
-        cache.size = CGSize(width: width, height: max(leftHeight, max(0, y - spacing)))
-        cache.columnWidth = columnWidth; cache.placements = positions
+        cache.width = width; cache.fontSize = fontSize; cache.twoColumns = twoColumns
+        cache.size = CGSize(width: width, height: max(0, y - spacing)); cache.placements = placements
     }
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout Cache) -> CGSize {
         arrange(width: proposal.width ?? 600, subviews: subviews, cache: &cache)
@@ -212,9 +224,24 @@ private struct ChartFlowLayout: Layout {
     }
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Cache) {
         arrange(width: bounds.width, subviews: subviews, cache: &cache)
-        for (index, position) in cache.placements.enumerated() {
-            subviews[index].place(at: CGPoint(x: bounds.minX + position.x, y: bounds.minY + position.y),
-                                 anchor: .topLeading, proposal: ProposedViewSize(width: cache.columnWidth, height: nil))
+        for (index, item) in cache.placements.enumerated() {
+            subviews[index].place(at: CGPoint(x: bounds.minX + item.point.x, y: bounds.minY + item.point.y),
+                                 anchor: .topLeading, proposal: ProposedViewSize(item.size))
         }
+    }
+}
+
+private struct ChartColumnsIcon: View {
+    let count: Int
+    var body: some View {
+        HStack(alignment: .top, spacing: 4) {
+            ForEach(0..<count, id: \.self) { _ in
+                VStack(alignment: .leading, spacing: 2) {
+                    ForEach(0..<4) { line in
+                        Rectangle().frame(width: (count == 1 ? 22.0 : 9.0) * (line == 3 ? 0.7 : 1), height: 1.5)
+                    }
+                }
+            }
+        }.frame(width: 24, height: 16).accessibilityHidden(true)
     }
 }

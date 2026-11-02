@@ -34,3 +34,18 @@ final class LibraryLaunchTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: source), after)
     }
 }
+
+extension LibraryLaunchTests {
+    @MainActor func testSongSortChoiceSurvivesReopeningWithoutSelectingASong() {
+        let suite = "MacJamsSort-" + UUID().uuidString
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let first = SongLibraryModel(defaults: defaults, loadOnLaunch: false)
+        XCTAssertEqual(first.sortOrder.rawValue, "songName")
+        first.sortOrder = .artistName
+        let reopened = SongLibraryModel(defaults: defaults, loadOnLaunch: false)
+        XCTAssertEqual(reopened.sortOrder.rawValue, "artistName")
+        XCTAssertNil(reopened.selectedSongID)
+        first.shutdown(); reopened.shutdown()
+    }
+}

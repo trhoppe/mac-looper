@@ -7,6 +7,9 @@ import JamCore
     @Published var selectedSongID: String?
     @Published var playlistID: String?
     @Published var query = ""
+    @Published var sortOrder: SongSortOrder {
+        didSet { defaults.set(sortOrder.rawValue, forKey: "songSortOrder") }
+    }
     @Published private(set) var status = "Choose your library in Settings"
     @Published private(set) var error: String?
     @Published private(set) var sourceURL: URL?
@@ -23,6 +26,7 @@ import JamCore
 
     init(defaults: UserDefaults = .standard, loadOnLaunch: Bool = true) {
         self.defaults = defaults
+        sortOrder = SongSortOrder(rawValue: defaults.string(forKey: "songSortOrder") ?? "") ?? .songName
         #if os(macOS)
         let home = FileManager.default.homeDirectoryForCurrentUser
         let own = home.appendingPathComponent("Library/Mobile Documents/com~apple~CloudDocs/Mac Looper", isDirectory: true)
@@ -40,10 +44,9 @@ import JamCore
     }
     var selectedSong: LibrarySong? { songs.first(where: { $0.id == selectedSongID }) ?? library?.songs.first(where: { $0.id == selectedSongID }) }
     var songs: [LibrarySong] {
-        (library?.songs(in: playlistID) ?? []).filter { song in
-            query.isEmpty || song.title.localizedCaseInsensitiveContains(query) || song.artist.localizedCaseInsensitiveContains(query)
-        }
+        sortOrder.apply(to: library?.songs(in: playlistID) ?? [], query: query)
     }
+
     var destination: URL { folderURL.appendingPathComponent("library.json") }
     func setSource(_ url: URL) {
         guard url.standardizedFileURL != destination.standardizedFileURL else {

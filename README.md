@@ -1,7 +1,7 @@
 # Mac Jams
 
 A native Mac and iPad guitar-jamming app. Chord charts and backing playback share
-one SwiftUI workspace. Header controls show or hide Songs, Looper, Drummer and
+one SwiftUI workspace. Header controls show or hide Songs, Chords, Looper, Drummer and
 Player; the chart expands into the available space.
 A shared C render core provides sample-accurate threshold capture. Live guitar
 monitoring stays on the AM4. No DAW or recording projects are required; optional
@@ -46,10 +46,12 @@ tags, saved key/transpose and capo settings. The native read-only ChordPro viewe
 shows chords over lyrics, section headings, comments and tablature. Text size is
 adjustable from 12–36 points using **A− / A+**. Line, section and wrapped-row
 spacing scale with the font size and update immediately on the current song.
-When the available width can fit two readable columns at that font size, the
-chart automatically balances them in reading order: down the left, then down
-the right. Narrower space or larger text returns it to one column. Section
-headings stay with their first content, and tab blocks stay together. Chart content uses a monospaced font, and unmarked guitar-tab rows are
+The text-column icon beside A− / A+ switches between one column and paired
+left-to-right rows, and remembers the choice across launches. Two columns are
+used when the available width fits readable text at that size; narrower space
+falls back to one. Consecutive lyric/chord lines read across each row, then down
+to the next. Bold light-gray section headings and tablature span the full chart
+width. Tab blocks stay together. Chart content uses a monospaced font, and unmarked guitar-tab rows are
 grouped so their columns stay aligned. Adjacent chord-only fragments have visible
 spacing without rewriting the source JSON. Chart editing remains a future stage.
 
@@ -76,15 +78,19 @@ choices the iPad uses its own local Documents/Library folder. No private user JS
 or backing audio is included in the app bundle or Git repository.
 
 Use **Songs** to choose a playlist and select a chart. Click its magnifying glass
-to reveal title/artist search; the file-search icon sits beside the folder button.
+to reveal title/artist search. The adjacent sort dropdown offers **Song name**
+and **Artist name**, remembers the last choice, and works with search and playlist
+filtering. The file-search icon sits beside the folder button.
 The app opens with no chart selected and a faded logo; choose a song when ready.
-The **Songs / Looper / Drummer / Player** header buttons toggle their panels.
+The **Songs / Chords / Looper / Drummer / Player** header buttons toggle their panels.
 Visibility is remembered; hiding a panel keeps its audio playing. The chart widens
 when Player is hidden; Looper or Drummer fills the footer when the other is hidden.
-Hiding both removes the footer, and hiding every panel leaves the chart filling
-the workspace. Header buttons and song/audio rows lighten subtly on hover.
-The **Ready** indicator beside Settings summarizes connection readiness; sample
-rate and buffer details appear only in Settings.
+Hiding both removes the footer. Hide Songs, Player, Looper and Drummer to let
+Chords fill the workspace. Chords can also be hidden for a clean Looper/Drummer
+or Player-only workspace; selecting a song automatically reveals Chords again,
+including reselecting the same song. Header buttons and song/audio rows lighten subtly on hover.
+The **Ready** indicator beside Settings summarizes connection readiness; output
+device, sample rate and buffer details appear in Settings.
 
 Selecting a song leaves backing-track selection and playback alone. Its BPM
 is adopted only while the loop is empty; an existing loop’s timing remains fixed.

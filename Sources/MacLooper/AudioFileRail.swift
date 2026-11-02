@@ -4,6 +4,7 @@ struct AudioFileRail: View {
     @ObservedObject var model: AudioFilePlayerModel
     let accent: Color
     var compact = false
+    var expanded = false
     @State private var showingBrowser = false
     @State private var searching = false
     @FocusState private var searchFocused: Bool
@@ -106,7 +107,8 @@ struct AudioFileRail: View {
             Divider()
             player.padding(18).background(.white.opacity(0.025))
         }
-        .frame(width: 340)
+        .frame(width: expanded ? nil : 340)
+        .frame(maxWidth: expanded ? .infinity : nil)
         .frame(maxHeight: .infinity)
         .background(Color(red: 0.075, green: 0.085, blue: 0.10))
         .tint(accent)
@@ -162,7 +164,6 @@ struct AudioFileRail: View {
                 Slider(value: $model.volume, in: 0...1).accessibilityLabel("File player volume")
                 Text("\(Int((model.volume * 100).rounded()))%").font(.caption.monospacedDigit()).foregroundStyle(.secondary).frame(width: 34, alignment: .trailing)
             }
-            Text("Output: \(model.outputName)").font(.caption2).foregroundStyle(.tertiary).lineLimit(1)
         }
     }
     static func time(_ value: Double) -> String {

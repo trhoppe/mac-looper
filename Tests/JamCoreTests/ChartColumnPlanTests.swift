@@ -8,26 +8,27 @@ final class ChartColumnPlanTests: XCTestCase {
         XCTAssertEqual(ChartColumnPlan.columnWidth(availableWidth: 1100, fontSize: 24), 536)
         XCTAssertEqual(ChartColumnPlan.columnWidth(availableWidth: 400, fontSize: 12), 400)
     }
-    func testBalancedReadingOrderWithUnevenMeasuredBlocks() {
-        let heights = [20.0, 30, 70, 20, 20, 80]
-        let split = ChartColumnPlan.split(heights: heights, breaks: Array(repeating: .normal, count: 6), availableWidth: 1100, fontSize: 18)
-        XCTAssertEqual(split, 3)
-        XCTAssertEqual(Array(heights[..<split!]) + Array(heights[split!...]), heights)
+    func testConsecutiveLinesReadAcrossRowsWithoutLosingOrReorderingContent() {
+        let rows = ChartColumnPlan.rows(spanning: Array(repeating: false, count: 7), availableWidth: 1100, fontSize: 18)
+        XCTAssertEqual(rows, [[0, 1], [2, 3], [4, 5], [6]])
+        XCTAssertEqual(rows.flatMap { $0 }, Array(0..<7))
     }
-    func testHeadingStaysWithItsLyricsEvenWhenHalfway() {
-        XCTAssertEqual(ChartColumnPlan.split(heights: [90, 20, 80], breaks: [.normal, .section, .normal], availableWidth: 1100, fontSize: 18), 1)
+    func testFullWidthTabFlushesOddLineAndStartsFreshPairAfterward() {
+        XCTAssertEqual(ChartColumnPlan.rows(spanning: [false, true, false, false, false], availableWidth: 1100, fontSize: 18), [[0], [1], [2, 3], [4]])
     }
-    func testBlankAfterHeadingCannotOrphanIt() {
-        XCTAssertEqual(ChartColumnPlan.split(heights: [80, 20, 10, 60], breaks: [.normal, .section, .blank, .normal], availableWidth: 1100, fontSize: 18), 1)
+    func testSectionHeadingsAndBlankSeparatorsSpanRows() {
+        XCTAssertEqual(ChartColumnPlan.rows(spanning: [true, false, false, true, true, false], availableWidth: 1100, fontSize: 18), [[0], [1, 2], [3], [4], [5]])
     }
-    func testPreferNearbySectionBoundaryAndAvoidLeadingBlank() {
-        let breaks: [ChartColumnPlan.Break] = [.normal, .normal, .blank, .section, .normal, .normal, .normal]
-        XCTAssertEqual(ChartColumnPlan.split(heights: [40, 40, 8, 20, 40, 40, 40], breaks: breaks, availableWidth: 1100, fontSize: 18), 3)
+    func testNarrowAndEmptyChartsKeepNaturalSingleColumnOrder() {
+        XCTAssertEqual(ChartColumnPlan.rows(spanning: [false, false, true, false], availableWidth: 400, fontSize: 18), [[0], [1], [2], [3]])
+        XCTAssertEqual(ChartColumnPlan.rows(spanning: [], availableWidth: 1100, fontSize: 18), [])
     }
-    func testNarrowEmptyAndHeadingOnlyChartsStaySingleColumn() {
-        XCTAssertNil(ChartColumnPlan.split(heights: [30, 30], breaks: [.normal, .normal], availableWidth: 400, fontSize: 18))
-        XCTAssertNil(ChartColumnPlan.split(heights: [], breaks: [], availableWidth: 1100, fontSize: 18))
-        XCTAssertNil(ChartColumnPlan.split(heights: [30], breaks: [.normal], availableWidth: 1100, fontSize: 18))
-        XCTAssertNil(ChartColumnPlan.split(heights: [20, 30], breaks: [.section, .normal], availableWidth: 1100, fontSize: 18))
+}
+
+extension ChartColumnPlanTests {
+    func testOneColumnChoiceOverridesWideChartAndCanSwitchBack() {
+        XCTAssertEqual(ChartColumnPlan.columnWidth(availableWidth: 1100, fontSize: 14, twoColumns: false), 1100)
+        XCTAssertEqual(ChartColumnPlan.rows(spanning: [false, false, true, false, false], availableWidth: 1100, fontSize: 14, twoColumns: false), [[0], [1], [2], [3], [4]])
+        XCTAssertEqual(ChartColumnPlan.rows(spanning: [false, false, true, false, false], availableWidth: 1100, fontSize: 14, twoColumns: true), [[0, 1], [2], [3, 4]])
     }
 }

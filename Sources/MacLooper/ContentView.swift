@@ -12,6 +12,7 @@ struct ContentView: View, Equatable {
     @State private var showingSettings = false
     @State private var showingSongs = false
     @AppStorage("showSongsSidebar") private var sidebar = true
+    @AppStorage("showChords") private var showingChords = true
     @AppStorage("showLooper") private var showingLooper = true
     @AppStorage("showDrummer") private var showingDrummer = true
     @AppStorage("showPlayer") private var showingPlayer = true
@@ -29,7 +30,8 @@ struct ContentView: View, Equatable {
                 HStack(spacing: 12) {
                     panelButton("Songs", icon: "sidebar.left", visible: geo.size.width >= 1250 ? sidebar : showingSongs) {
                         if geo.size.width >= 1250 { sidebar.toggle() } else { showingSongs.toggle() }
-                    }.popover(isPresented: $showingSongs) { SongBrowserView(library: library).frame(width: 310, height: 520) }
+                    }.popover(isPresented: $showingSongs) { SongBrowserView(library: library, onSelectSong: revealChords).frame(width: 310, height: 520) }
+                    panelButton("Chords", icon: "text.alignleft", visible: showingChords) { showingChords.toggle() }
                     panelButton("Looper", icon: "arrow.triangle.2.circlepath", visible: showingLooper) { showingLooper.toggle() }
                     panelButton("Drummer", icon: "square.grid.2x2", visible: showingDrummer) { showingDrummer.toggle() }
                     panelButton("Player", icon: "music.note.list", visible: showingPlayer) { showingPlayer.toggle() }
@@ -43,26 +45,40 @@ struct ContentView: View, Equatable {
                         }
                 }.padding(.horizontal, 18).padding(.vertical, 14)
                 Divider()
-                HStack(spacing: 0) {
-                    if geo.size.width >= 1250 && sidebar {
-                        SongBrowserView(library: library).frame(width: 218)
-                        Divider()
-                    }
-                    VStack(spacing: 0) {
-                        ChordChartView(song: library.selectedSong)
-                        if showingPlayer && geo.size.width < 1000 {
-                            Divider()
-                            AudioFileRail(model: files, accent: accent, compact: true)
+                let songsVisible = geo.size.width >= 1250 && sidebar
+                let workspaceVisible = songsVisible || showingChords || showingPlayer
+                if workspaceVisible {
+                    HStack(spacing: 0) {
+                        if songsVisible {
+                            SongBrowserView(library: library, onSelectSong: revealChords)
+                                .frame(width: showingChords || showingPlayer ? 240 : nil)
+                                .frame(maxWidth: showingChords || showingPlayer ? nil : .infinity)
+                            if showingChords || showingPlayer { Divider() }
                         }
-                    }
-                    if showingPlayer && geo.size.width >= 1000 {
-                        Divider()
-                        AudioFileRail(model: files, accent: accent)
-                    }
-                }.frame(maxWidth: .infinity, maxHeight: .infinity)
+                        if showingChords {
+                            VStack(spacing: 0) {
+                                ChordChartView(song: library.selectedSong)
+                                if showingPlayer && geo.size.width < 1000 {
+                                    Divider()
+                                    AudioFileRail(model: files, accent: accent, compact: true)
+                                }
+                            }
+                        }
+                        if showingPlayer && (!showingChords || geo.size.width >= 1000) {
+                            if showingChords { Divider() }
+                            AudioFileRail(model: files, accent: accent, expanded: !showingChords)
+                        }
+                    }.frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
                 if showingLooper || showingDrummer {
-                    Divider()
-                    footer(width: geo.size.width).fixedSize(horizontal: false, vertical: true)
+                    if workspaceVisible {
+                        Divider()
+                        footer(width: geo.size.width).fixedSize(horizontal: false, vertical: true)
+                    } else {
+                        footer(width: geo.size.width).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    }
+                } else if !workspaceVisible {
+                    Color.clear.frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
         }
@@ -87,8 +103,8 @@ struct ContentView: View, Equatable {
         .onReceive(model.$inputChannel.removeDuplicates().dropFirst().receive(on: RunLoop.main)) { _ in model.routeDidChange() }
         .onReceive(files.$requestingFolder.filter { $0 }.receive(on: RunLoop.main)) { _ in files.requestingFolder = false; beginImport(.audioFolder) }
         .onChange(of: library.selectedSongID) { _, _ in
-            showingSongs = false
             if let song = library.selectedSong {
+                revealChords()
                 if let tempo = song.tempo, tempo.isFinite, model.canEditTiming { model.bpm = min(240, max(30, tempo)) }
             }
         }
@@ -127,5 +143,6 @@ struct ContentView: View, Equatable {
             DrummerPanel(drums: AudioEngineHost.shared.drums, output: drumOutput, compact: true).frame(maxWidth: .infinity)
         }
     }
+    private func revealChords() { showingChords = true; showingSongs = false }
     private func beginImport(_ kind: ImportKind) { showingSettings = false; importKind = kind; importing = true }
 }
