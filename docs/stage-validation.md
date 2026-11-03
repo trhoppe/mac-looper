@@ -280,3 +280,63 @@ stays protected. Own-library loading on foreground entry skips an open draft.
   on both the physical iPad and simulator (83 tests in each suite, zero failures).
   Signed device update installed and launched successfully after unlocking.
 - No audio engine, buffer, routing or plugin changes are included in this work.
+
+
+## AM4 Remote integration — 2026-11-02
+
+- Imported the original local `am4-remote` project at commit
+  `7126b904c13db5590327154c5931337dcbd8e41c` into `Packages/AM4RemoteKit`.
+  The original checkout remains unchanged. All six protocol source files and
+  four catalog/library resources match the originals byte-for-byte.
+- AM4 Remote covers the whole app with Close at the top right. Opening and Close
+  were checked on Mac: jam controls are inaccessible underneath; window size,
+  panel visibility and sizes restore on Close. Connection polling pauses while
+  hidden, retaining one session and allowing an in-flight command to finish.
+- Audio remains owned by the existing jam session. No Core Audio/AVAudioEngine,
+  routing, monitoring or buffer changes. Single-key jam shortcuts are disabled
+  while Remote is visible. MIDI updates do not publish through the jam screen.
+- Original preset/scene/block editors, model/channel controls, library loading,
+  knobs/faders/numeric entry and read-back checks are retained. The standalone
+  USB volume slider and +5 reset button were removed at the user's request.
+- Mac tests: 100 passed, one optional private-song-library audit skipped. Imported
+  remote tests: 82 passed, including the new presentation/polling-lifetime check.
+  Physical iPad shared tests: 82 passed, one optional audit skipped. Final Mac and
+  signed iPad builds passed; the final iPad app was installed.
+- Standalone Mac resource check passed from outside the repo: 251 amp models,
+  five effect editors, 45 Amp library entries and 85 effect library entries.
+  Swift package resource bundles are copied inside the Mac app before signing.
+  The iPad retains the original local-only simulator helper network allowance.
+- Final Mac UI confirmed Close is present, the USB volume UI is absent and the
+  remote covers the jam controls. No mock connection data was added to production.
+- Hardware verification is pending: the AM4 is not connected during this work.
+  The user will reconnect it after returning home. Next check: USB discovery,
+  preset/scene reads, editor parity on Mac/iPad, a user-approved small parameter
+  edit/read-back, and continued loop/backing/drum playback while switching views.
+  Original Graphic EQ/Enhancer live validation was also still pending in the
+  source project's handoff; do not claim it was completed by these offline tests.
+
+
+### AM4 Remote header cleanup
+
+- Mac remote now uses a plain resizable content split instead of navigation
+  chrome, keeping one clean editor-style header with Close at the top right.
+  Visually verified the extra toolbar/sidebar titlebar strip is gone. iPad keeps
+  its adaptive preset navigation. Both final builds pass.
+- Latest iPad installation could not reach the device's trusted services; its
+  signed build is ready for the next connection. The prior integrated build
+  remains installed. Hardware validation remains pending as above.
+- Paused at the user's request after this cleanup. All changes remain uncommitted;
+  the user will manage the release tag, branch, commit and push.
+
+
+## 2026-11-02 reliability update
+
+See [the complete reliability validation record](reliability-validation-2026-11-02.md)
+for the fixes, local draft recovery, explicit iCloud conflict handling and iPad
+interruption policy. Final software validation: Mac 119 passed/1 optional audit
+skipped; AM4RemoteKit 85 passed; iPad Simulator 118 passed/1 optional audit skipped.
+Native Mac and signed iPad device builds succeeded. On the connected AM4, the
+combined 48 kHz/32-frame audio + MIDI run passed 85,611 callbacks. Amp, Drive, Delay,
+Reverb, Amp GEQ and Enhancer hardware reads passed, with verified restoration of
+temporary editor changes. An inherited Delay bypass-mode parser rejection was
+fixed using an actual captured reply. Permanent preset Save remains unimplemented.

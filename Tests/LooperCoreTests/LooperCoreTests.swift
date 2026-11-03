@@ -213,3 +213,29 @@ final class LooperCoreTests: XCTestCase {
     }
 
 }
+
+extension LooperCoreTests {
+    func testSuspensionDrainsFullCommandQueueAndPreservesCompletedLoop() {
+        let dsp = DSP(); dsp.makeLoop()
+        for _ in 0..<32 { XCTAssertTrue(tl_command(dsp.core, Int32(TL_CMD_PLAY_STOP), 0)) }
+        XCTAssertFalse(tl_command(dsp.core, Int32(TL_CMD_PLAY_STOP), 0))
+        // Rendering is not active in this fixture: suspension owns the core.
+        tl_suspend(dsp.core)
+        XCTAssertEqual(dsp.snapshot.state, Int32(TL_STOPPED))
+        XCTAssertEqual(dsp.snapshot.recorded, 4800)
+        XCTAssertTrue(dsp.silence(512).0.allSatisfy { $0 == 0 })
+        XCTAssertTrue(tl_command(dsp.core, Int32(TL_CMD_PLAY_STOP), 0))
+        XCTAssertTrue(dsp.silence(512).0.contains { $0 > 0 })
+    }
+    func testSuspensionCancelsArmedOrPartialRecordingAndOldPreroll() {
+        for triggered in [false, true] {
+            let dsp = DSP(); dsp.arm()
+            dsp.render([Float](repeating: triggered ? 0.5 : 0, count: 32))
+            tl_suspend(dsp.core)
+            XCTAssertEqual(dsp.snapshot.state, Int32(TL_EMPTY))
+            XCTAssertEqual(dsp.snapshot.recorded, 0)
+            XCTAssertEqual(dsp.snapshot.length, 0)
+            XCTAssertTrue(dsp.silence(512).0.allSatisfy { $0 == 0 })
+        }
+    }
+}

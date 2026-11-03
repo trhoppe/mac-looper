@@ -4,6 +4,7 @@ import AVFoundation
 import CoreAudio
 #endif
 import LooperCore
+import JamCore
 
 @MainActor final class LooperModel: ObservableObject {
     @Published var devices: [AudioDevice] = []
@@ -14,6 +15,8 @@ import LooperCore
     @Published var bars = 4
     @Published var thresholdDB = -30.0 { didSet { if let core { tl_set_threshold(core, Float(pow(10, thresholdDB / 20))) } } }
     @Published var volume = 1.0 { didSet { if let core { tl_set_volume(core, Float(volume)) } } }
+    @Published private(set) var audioPaused = false
+    private var lifecyclePolicy = AudioLifecyclePolicy()
     @Published var running = false
     @Published var starting = false
     @Published var error: String?
@@ -134,7 +137,7 @@ import LooperCore
         return "\(input.uid)|\(input.id)|\(output.uid)|\(output.id)|\(inputChannel)"
     }
     func routeDidChange() {
-        guard automaticAudio else { return }
+        guard automaticAudio, lifecyclePolicy.mayConnect, !audioPaused else { return }
         routeTask?.cancel()
         stopAudio()
         routeTask = Task {
@@ -144,7 +147,7 @@ import LooperCore
         }
     }
     private func reconnectIfAvailable() {
-        guard automaticAudio, !running, !starting else { return }
+        guard automaticAudio, lifecyclePolicy.mayConnect, !audioPaused, !running, !starting else { return }
         guard let route = automaticRouteKey else { lastAutomaticRoute = nil; return }
         guard route != lastAutomaticRoute else { return }
         lastAutomaticRoute = route
@@ -158,7 +161,7 @@ import LooperCore
         #endif
     }
     func startAudio() async {
-        guard !running, !starting else { return }
+        guard lifecyclePolicy.mayConnect, !running, !starting else { return }
         starting = true; error = nil
         generation += 1
         let token = generation
@@ -173,6 +176,11 @@ import LooperCore
                 throw AudioFailure(message: Self.microphoneHelp)
             }
             guard token == generation else { return }
+            if host.suspended, try await host.resumeSuspendedAudio(), host.captureEnabled {
+                guard token == generation else { return }
+                running = true; audioPaused = false; lastCallbacks = 0; stalledTicks = 0
+                return
+            }
             refreshDevices()
             guard let input, let output else { throw AudioFailure(message: "Connect your interface and choose an available input and output in Audio Settings.") }
             if let stopTask { await stopTask.value; self.stopTask = nil }
@@ -184,17 +192,44 @@ import LooperCore
             if !CommandLine.arguments.contains("--smoke-test") {
                 UserDefaults.standard.set(inputUID, forKey: "inputUID"); UserDefaults.standard.set(outputUID, forKey: "outputUID")
             }
-            running = true; lastCallbacks = 0; stalledTicks = 0
+            running = true; audioPaused = false; lastCallbacks = 0; stalledTicks = 0
         } catch {
-            stopAudio()
+            guard token == generation, !Task.isCancelled else { return }
+            if !host.suspended { stopAudio() }
             self.error = error.localizedDescription
         }
+    }
+    func handleAudioLifecycle(_ event: AudioLifecyclePolicy.Event) {
+        switch lifecyclePolicy.handle(event) {
+        case .none: break
+        case .suspend:
+            generation += 1; routeTask?.cancel(); stopTask?.cancel()
+            host.suspendAudio(); running = false; starting = false; audioPaused = true
+            if let core {
+                let snapshot = tl_snapshot(core)
+                state = snapshot.state; length = Int(snapshot.length); recorded = Int(snapshot.recorded)
+            }
+            if state == TL_EMPTY { waveform = [Float](repeating: 0, count: 256) }
+            meterDB = -90; outputDB = -90
+            error = "Audio paused. Playback stays stopped when you return."
+        case .reconnect: Task { await startAudio() }
+        case .reset:
+            generation += 1; routeTask?.cancel(); stopTask?.cancel()
+            host.resetAudioService(); running = false; starting = false; audioPaused = false
+            state = Int32(TL_EMPTY); length = 0; recorded = 0; progress = 0; cycles = 0
+            waveform = [Float](repeating: 0, count: 256)
+            error = "iPad audio services restarted. The guitar loop was cleared. Use Retry Connection; playback stays stopped."
+        }
+    }
+    func retryAudio() async {
+        guard lifecyclePolicy.handle(.retry) == .reconnect else { return }
+        await startAudio()
     }
     func stopAudio() {
         generation += 1
         stopTask?.cancel()
         stopTask = Task { await host.stopLoop() }
-        running = false; starting = false; state = Int32(TL_EMPTY)
+        running = false; starting = false; audioPaused = false; state = Int32(TL_EMPTY)
         progress = 0; recorded = 0; length = 0; meterDB = -90; outputDB = -90; cycles = 0
         waveform = [Float](repeating: 0, count: 256)
     }
@@ -205,10 +240,20 @@ import LooperCore
         else { state = Int32(TL_ARMED); length = Int(plannedFrames) }
     }
     func clear() {
+        if audioPaused {
+            host.shutdown(); audioPaused = false; state = Int32(TL_EMPTY); length = 0; recorded = 0; progress = 0; cycles = 0
+            waveform = [Float](repeating: 0, count: 256)
+            Task { await retryAudio() }
+            return
+        }
         guard let core else { return }
         if !tl_command(core, Int32(TL_CMD_CLEAR), 0) { error = "Audio controls are busy. Try again." }
     }
     func playStop() {
+        if audioPaused {
+            Task { await retryAudio(); if running { playStop() } }
+            return
+        }
         guard let core else { return }
         if !tl_command(core, Int32(TL_CMD_PLAY_STOP), 0) { error = "Audio controls are busy. Try again." }
     }
@@ -216,6 +261,7 @@ import LooperCore
         automaticAudio = false; routeTask?.cancel(); stopTask?.cancel(); timer?.invalidate(); host.shutdown(); running = false
     }
     private func poll() {
+        guard lifecyclePolicy.mayConnect, !audioPaused else { return }
         ticks += 1
         if ticks % 60 == 0 {
             refreshDevicesWhileRunning()

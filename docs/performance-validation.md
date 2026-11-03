@@ -69,3 +69,13 @@ After multiple charts and playback, measured footprint was 166.2 MB, peak
 
 App code does not allocate or block in its realtime render core. Proprietary
 plugin internals and hardware drivers remain outside that guarantee.
+
+## 2026-11-02 reliability pass
+
+See [reliability validation](reliability-validation-2026-11-02.md). This pass
+removes plugin-load waits from basic graph construction and replaces configuration
+polling with explicit ownership. It preserves chart update isolation and changes
+no per-sample loop timing/capture algorithm. The new suspension operation runs
+only after rendering is paused. Older profiles above remain historical results;
+they are not measurements of this build. New physical audio/MIDI results are
+recorded separately, with no claim of a controlled whole-app performance speedup.

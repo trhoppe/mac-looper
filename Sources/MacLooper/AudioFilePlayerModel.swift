@@ -13,6 +13,8 @@ import AppKit
     @Published private(set) var duration = 0.0
     @Published private(set) var position = 0.0
     @Published private(set) var playing = false
+    @Published private(set) var startingPlayback = false
+    private var playRequest = UUID()
     @Published var query = "" { didSet { visibleGroups = AudioLibrary.filter(groups, query: query) } }
     @Published var requestingFolder = false
     @Published var error: String?
@@ -45,6 +47,7 @@ import AppKit
     var outputName: String { output?.name ?? "Choose an output in settings" }
     func setOutput(_ device: AudioDevice?) {
         guard output?.uid != device?.uid else { output = device; return }
+        pauseForInterruption()
         output = device; playing = false
         let token = session
         Task { await playback.pause(session: token) }
@@ -65,6 +68,7 @@ import AppKit
         #endif
     }
     func openFolder(_ url: URL) {
+        pauseForInterruption()
         worker?.cancel(); loadTask?.cancel()
         scanGeneration = UUID(); let generation = scanGeneration
         let previousSession = session
@@ -93,6 +97,7 @@ import AppKit
     }
     func select(_ track: AudioTrack) {
         guard selected?.id != track.id else { return }
+        pauseForInterruption()
         loadTask?.cancel()
         let previousScope = scopedFile
         scopedFile = track.url.startAccessingSecurityScopedResource() ? track.url : nil
@@ -113,17 +118,22 @@ import AppKit
     func togglePlay() {
         guard selected != nil, !loading, duration > 0 else { return }
         let token = session
-        if playing {
-            playing = false
-            Task { await playback.pause(session: token) }
+        if playing || startingPlayback {
+            pauseForInterruption()
         } else {
             guard let output else { error = "Choose an output device in Audio Settings before playing a file."; return }
+            guard let request = AudioEngineHost.shared.requestFilePlay(session: token) else { return }
+            playRequest = request; startingPlayback = true
             Task {
                 do {
-                    try await playback.play(session: token, output: output)
-                    guard session == token else { return }
+                    guard session == token, playRequest == request else { return }
+                    try await playback.play(session: token, output: output, requestedIntent: request)
+                    guard session == token, playRequest == request else { return }
+                    startingPlayback = false
                     await poll()
-                } catch { if session == token { playing = false; self.error = error.localizedDescription } }
+                } catch {
+                    if session == token, playRequest == request { startingPlayback = false; playing = false; self.error = error.localizedDescription }
+                }
             }
         }
     }
@@ -137,7 +147,13 @@ import AppKit
         let token = session
         Task { await playback.seek(session: token, to: 0); await poll() }
     }
+    func pauseForInterruption() {
+        playRequest = UUID(); startingPlayback = false; playing = false
+        // Invalidate pending host Play immediately, before the actor hop.
+        AudioEngineHost.shared.pauseFile(session: session)
+    }
     func stop() {
+        pauseForInterruption()
         let token = session; playing = false; position = 0
         Task { await playback.stop(session: token) }
     }
@@ -176,6 +192,7 @@ import AppKit
         if playing != snapshot.playing { playing = snapshot.playing }
     }
     func shutdown() {
+        pauseForInterruption()
         worker?.cancel(); loadTask?.cancel(); timer?.invalidate()
         let scope = scopedFolder, fileScope = scopedFile; scopedFolder = nil; scopedFile = nil
         let token = session

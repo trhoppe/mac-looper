@@ -42,6 +42,26 @@ typealias PluginEditorController = UIViewController
     private(set) var node: AVAudioUnit?
     let transport = MLPluginTransport()
     private var loadTask: Task<Void, Never>?
+    private var failureCached = false
+    private var loadGeneration = UUID()
+    private var transportIntent = UUID()
+    private var registrationObserver: NSObjectProtocol?
+    private let instrumentLoader: (() async throws -> AVAudioUnit)?
+    init(instrumentLoader: (() async throws -> AVAudioUnit)? = nil) {
+        self.instrumentLoader = instrumentLoader
+        registrationObserver = NotificationCenter.default.addObserver(
+            forName: AVAudioUnitComponentManager.registrationsChangedNotification, object: nil, queue: .main) { [weak self] _ in
+                Task { @MainActor in self?.componentsChanged() }
+            }
+    }
+    deinit {
+        // Detach while AVAudioUnit still owns its underlying unit. In particular,
+        // an AUv2 bridge must not be left with callbacks during wrapper teardown.
+        transport.detach()
+        if let registrationObserver { NotificationCenter.default.removeObserver(registrationObserver) }
+    }
+    func componentsChanged() { failureCached = false }
+    func retry() async { failureCached = false; await prepare() }
     private var pendingState: [String: Any]?
     #if os(macOS)
     private var editorWindow: NSWindow?
@@ -57,10 +77,15 @@ typealias PluginEditorController = UIViewController
     func prepare() async {
         if ready { return }
         if let loadTask { await loadTask.value; return }
+        guard !failureCached else { return }
+        let generation = loadGeneration
         let task = Task { @MainActor in
             self.loading = true; self.error = nil
-            defer { self.loading = false }
+            defer { if generation == loadGeneration { self.loading = false } }
             do {
+                let node: AVAudioUnit
+                if let instrumentLoader { node = try await instrumentLoader() }
+                else {
                 let requested = Self.component
                 let manager = AVAudioUnitComponentManager.shared()
                 var matches = manager.components(matching: requested)
@@ -75,11 +100,13 @@ typealias PluginEditorController = UIViewController
                     }
                 }
                 guard let description = matches.first?.audioComponentDescription else {
-                    throw AudioFailure(message: "Pop Drummer AUv3 isn’t available. Open the Pop Drummer app once, then reopen Mac Jams.")
+                    throw AudioFailure(message: "Pop Drummer AUv3 isn’t available. Open Pop Drummer once, then press Retry here.")
                 }
-                let node = try await Self.instantiate(description)
+                node = try await Self.instantiate(description)
+                }
+                guard generation == loadGeneration, !Task.isCancelled else { return }
                 guard node.auAudioUnit.outputBusses.count > 0 else { throw AudioFailure(message: "Pop Drummer has no audio output.") }
-                if !CommandLine.arguments.contains("--fresh-plugin"), let data = try? Data(contentsOf: self.stateURL),
+                if instrumentLoader == nil, !CommandLine.arguments.contains("--fresh-plugin"), let data = try? Data(contentsOf: self.stateURL),
                    let state = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any] {
                     self.pendingState = state
                 }
@@ -87,11 +114,21 @@ typealias PluginEditorController = UIViewController
                 self.transport.tempo = self.tempo
                 self.transport.attach(to: node.auAudioUnit)
                 self.node = node; self.ready = true
-            } catch { self.error = error.localizedDescription }
+            } catch {
+                if generation == loadGeneration { self.failureCached = true; self.error = error.localizedDescription }
+            }
         }
         loadTask = task
         await task.value
-        loadTask = nil
+        if generation == loadGeneration { loadTask = nil }
+    }
+    func resetAfterAudioServiceReset() {
+        loadGeneration = UUID(); loadTask?.cancel(); loadTask = nil
+        setPlaying(false); transport.detach(); node = nil; ready = false; loading = false
+        failureCached = false; pendingState = nil; editor = nil; showingEditor = false
+        #if os(macOS)
+        editorWindow?.close(); editorWindow = nil
+        #endif
     }
     private static func instantiate(_ description: AudioComponentDescription) async throws -> AVAudioUnit {
         try await withCheckedThrowingContinuation { continuation in
@@ -119,15 +156,20 @@ typealias PluginEditorController = UIViewController
         node.auAudioUnit.fullState = state
         pendingState = nil
     }
-    func setPlaying(_ value: Bool) { transport.isPlaying = value; playing = value }
+    func setPlaying(_ value: Bool) {
+        if !value { transportIntent = UUID() }
+        transport.isPlaying = value; playing = value
+    }
     func toggle(output: AudioDevice?) async {
         if playing { setPlaying(false); AudioEngineHost.shared.updateDrummerVolume(); return }
+        transportIntent = UUID(); let intent = transportIntent
         await prepare()
-        guard ready else { return }
+        guard ready, intent == transportIntent else { return }
         do {
             try await AudioEngineHost.shared.startDrummer(output: output)
+            guard intent == transportIntent else { return }
             error = nil; setPlaying(true); AudioEngineHost.shared.updateDrummerVolume()
-        } catch { self.error = error.localizedDescription }
+        } catch { if intent == transportIntent { self.error = error.localizedDescription } }
     }
     func openEditor() async {
         await prepare()
@@ -161,7 +203,7 @@ typealias PluginEditorController = UIViewController
         #endif
     }
     func saveState() {
-        guard pendingState == nil, node?.auAudioUnit.renderResourcesAllocated == true,
+        guard instrumentLoader == nil, pendingState == nil, node?.auAudioUnit.renderResourcesAllocated == true,
               let state = node?.auAudioUnit.fullState,
               PropertyListSerialization.propertyList(state, isValidFor: .binary) else { return }
         do {

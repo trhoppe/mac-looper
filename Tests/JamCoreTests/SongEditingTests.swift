@@ -230,3 +230,85 @@ extension SongEditingTests {
         XCTAssertEqual(try Data(contentsOf: protected), legacyFixture)
     }
 }
+
+
+extension SongEditingTests {
+    func testNewSongIsBlankUntilEditedAndAddsOnceWithCanonicalMetadata() throws {
+        let original = try library()
+        var draft = SongDraft(newSongID: "new", playlistIDs: ["p"])
+        XCTAssertTrue(draft.title.isEmpty); XCTAssertTrue(draft.chordPro.isEmpty)
+        XCTAssertFalse(draft.hasChanges); XCTAssertNotNil(draft.validationError)
+        draft.title = "New song"; draft.artist = "New artist"; draft.tempo = "125"
+        draft.chordPro += "\n[C]Words [G]here\n{start_of_tab}\ne|--0--|\n{end_of_tab}"
+        let added = try original.applying(draft)
+        let song = try XCTUnwrap(added.songs.first { $0.id == "new" })
+        XCTAssertTrue(song.isChordProNative); XCTAssertEqual(song.artist, "New artist"); XCTAssertEqual(song.tempo, 125)
+        XCTAssertEqual(song.chordPro, draft.chordPro)
+        XCTAssertEqual(added.playlistIDs(containing: song.id), ["p"])
+        XCTAssertEqual(added.songs.count, original.songs.count + 1)
+        XCTAssertEqual(added.songs.prefix(2), original.songs.prefix(2))
+        XCTAssertEqual(try added.applying(draft).originalData, added.originalData, "Retrying Save must not duplicate a song or playlist entry")
+        XCTAssertTrue(String(decoding: added.originalData, as: UTF8.self).contains("9223372036854775807"))
+        var collision = SongDraft(newSongID: "a"); collision.title = "Must not replace"
+        XCTAssertThrowsError(try original.applying(collision))
+    }
+    func testPlaylistOnlyEditPreservesSourceAndNestedOtherEntries() throws {
+        let original = try JustChordsLibrary(data: Data(#"{"songs":[{"id":7,"title":"Song","rawData":"[C]Music"},{"id":"b","rawData":"Keep"}],"playlists":[{"id":"p","title":"Acoustic","future":9223372036854775807,"arrangement":[{"type":"folder","title":"Verse","arrangement":[{"type":"song","id":7,"index":"one","capo":2},{"type":"song","id":"b","index":"other"}]},{"type":"song","id":7,"index":"two"}]},{"id":"q","title":"Electric","arrangement":[]}]}"#.utf8))
+        var draft = SongDraft(song: original.songs[0], playlistIDs: original.playlistIDs(containing: "7"))
+        draft.playlistIDs = ["q"]
+        XCTAssertTrue(draft.hasChanges)
+        let updated = try original.applying(draft)
+        XCTAssertEqual(updated.playlistIDs(containing: "7"), ["q"])
+        XCTAssertEqual(updated.playlists[0].songEntries.map { $0["id"]?.text }, ["b"])
+        XCTAssertEqual(updated.songs, original.songs)
+        XCTAssertEqual(updated.playlists[0].fields["arrangement"]?.array.first?.object["title"], .string("Verse"))
+        let root = try XCTUnwrap(JSONSerialization.jsonObject(with: updated.originalData) as? [String: Any])
+        let playlists = try XCTUnwrap(root["playlists"] as? [[String: Any]])
+        let newEntry = try XCTUnwrap((playlists[1]["arrangement"] as? [[String: Any]])?.first)
+        XCTAssertEqual((newEntry["id"] as? NSNumber)?.intValue, 7)
+        XCTAssertTrue(String(decoding: updated.originalData, as: UTF8.self).contains("9223372036854775807"))
+    }
+    func testPlaylistChangesMergeWithIndependentRemoteMembershipAndSourceEdits() throws {
+        let original = try JustChordsLibrary(data: Data(#"{"songs":[{"id":"a","title":"Song","rawData":"[C]Music"}],"playlists":[{"id":"p","arrangement":[{"type":"song","id":"a","index":"original","capo":2}]},{"id":"q","arrangement":[]},{"id":"r","arrangement":[]}]}"#.utf8))
+        var remote = SongDraft(song: original.songs[0], playlistIDs: ["p"])
+        remote.title = "Remote title"; remote.playlistIDs = ["p", "r"]
+        let latest = try original.applying(remote)
+        var local = SongDraft(song: original.songs[0], playlistIDs: ["p"])
+        local.playlistIDs = ["q"]
+        let merged = try latest.applying(local)
+        XCTAssertEqual(merged.songs[0].title, "Remote title")
+        XCTAssertEqual(merged.playlistIDs(containing: "a"), ["q", "r"])
+        var kept = SongDraft(song: original.songs[0], playlistIDs: ["p"])
+        kept.artist = "Artist"
+        let keptList = try original.applying(kept)
+        XCTAssertEqual(keptList.playlists, original.playlists, "Metadata editing must preserve playlist order, duplicates, and per-song settings")
+        var missing = SongDraft(song: original.songs[0], playlistIDs: ["p"])
+        missing.playlistIDs.insert("deleted")
+        XCTAssertThrowsError(try original.applying(missing))
+    }
+    func testNewSongAndPlaylistDraftRecoveryRemainBackwardsCompatible() throws {
+        let url = URL(fileURLWithPath: "/tmp/own/library.json")
+        var draft = SongDraft(newSongID: "new", playlistIDs: ["p"])
+        draft.title = "Recovered new song"; draft.playlistIDs.insert("q")
+        let recovered = try JSONDecoder().decode(RecoveredSongDraft.self, from: JSONEncoder().encode(RecoveredSongDraft(draft: draft, library: url))).draft
+        XCTAssertTrue(recovered.isNew); XCTAssertEqual(recovered.id, draft.id)
+        XCTAssertEqual(recovered.chordPro, draft.chordPro); XCTAssertEqual(recovered.playlistIDs, ["p", "q"])
+        let legacy = Data(#"{"library":"/tmp/own/library.json","originalFields":{"id":"a","title":"Original","rawData":"[C]Text"},"chordPro":"{title: Recovered}\n[G]Text","updatedAt":0}"#.utf8)
+        let old = try JSONDecoder().decode(RecoveredSongDraft.self, from: legacy).draft
+        XCTAssertFalse(old.isNew); XCTAssertNil(old.originalPlaylistIDs); XCTAssertEqual(old.title, "Recovered")
+    }
+    func testNewSongSaveBacksUpOriginalAndReopensMemberships() async throws {
+        let folder = try directory(); defer { try? FileManager.default.removeItem(at: folder) }
+        let url = folder.appendingPathComponent("library.json"); try fixture.write(to: url)
+        var draft = SongDraft(newSongID: "new", playlistIDs: ["p"])
+        draft.title = "Added safely"; draft.key = "Am"
+        let io = LibraryFiles(); _ = try await io.save(draft, to: url)
+        let reopened = try await io.read(url)
+        XCTAssertEqual(reopened.songs.last?.title, "Added safely")
+        XCTAssertEqual(reopened.playlistIDs(containing: "new"), ["p"])
+        let backups = try FileManager.default.contentsOfDirectory(at: folder.appendingPathComponent("Library Backups"), includingPropertiesForKeys: nil)
+        XCTAssertEqual(backups.count, 1); XCTAssertEqual(try Data(contentsOf: backups[0]), fixture)
+        _ = try await io.save(draft, to: url)
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: folder.appendingPathComponent("Library Backups").path).count, 1)
+    }
+}

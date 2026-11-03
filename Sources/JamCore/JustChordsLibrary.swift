@@ -132,6 +132,9 @@ public struct JustChordsLibrary: Sendable {
         self.playlists = (root["playlists"]?.array ?? []).map { LibraryPlaylist(fields: $0.object) }
         self.tags = (root["tags"]?.array ?? []).map { LibraryTag(fields: $0.object) }
     }
+    public func playlistIDs(containing songID: String) -> Set<String> {
+        Set(playlists.filter { $0.songEntries.contains { $0["id"]?.text == songID } }.map(\.id))
+    }
     public func songs(in playlistID: String?) -> [LibrarySong] {
         guard let id = playlistID, let playlist = playlists.first(where: { $0.id == id }) else {
             return songs.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }

@@ -126,6 +126,22 @@ static void consume_commands(TLCore *c) {
     }
     atomic_store_explicit(&c->commandRead, r, memory_order_release);
 }
+void tl_suspend(TLCore *c) {
+    if (!c) return;
+    consume_commands(c);
+    if (c->state == TL_PLAYING || c->state == TL_STOPPED) {
+        c->state = TL_STOPPED; c->position = 0;
+    } else {
+        c->state = TL_EMPTY; c->length = c->recorded = c->position = 0;
+        c->cycles = 0;
+        for (int b = 0; b < WAVE_BINS; b++) atomic_store(&c->waveform[b], 0);
+    }
+    c->gain = 0; c->lastLeft = c->lastRight = c->tailLeft = c->tailRight = 0;
+    c->tailRemaining = 0; c->historyValid = c->historyPosition = 0;
+    atomic_store(&c->publishedState, c->state); atomic_store(&c->publishedLength, c->length);
+    atomic_store(&c->publishedRecorded, c->recorded); atomic_store(&c->publishedPosition, c->position);
+    atomic_store(&c->publishedCycles, c->cycles); atomic_store(&c->peak, 0); atomic_store(&c->outputPeak, 0);
+}
 void tl_process(TLCore *c, const float *left, const float *right, float *outL, float *outR, uint32_t frames) {
     if (!c || !outL || !outR) return;
     consume_commands(c);

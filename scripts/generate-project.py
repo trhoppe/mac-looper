@@ -19,6 +19,7 @@ for p in sources:
     source_refs.append(obj(str(p.relative_to(ROOT)),'PBXFileReference',lastKnownFileType='sourcecode.swift',path=str(p.relative_to(ROOT)),sourceTree='SOURCE_ROOT'))
 asset=obj('assetcatalog','PBXFileReference',lastKnownFileType='folder.assetcatalog',path='Assets/Shared.xcassets',sourceTree='SOURCE_ROOT');resource_refs.append(asset)
 package=obj('package','XCLocalSwiftPackageReference',relativePath='.')
+remote_package=obj('remote-package','XCLocalSwiftPackageReference',relativePath='Packages/AM4RemoteKit')
 base={'SWIFT_VERSION':'5.0','CLANG_ENABLE_MODULES':'YES','CLANG_ENABLE_OBJC_ARC':'YES','SWIFT_STRICT_CONCURRENCY':'minimal','ENABLE_USER_SCRIPT_SANDBOXING':'YES','LD_RUNPATH_SEARCH_PATHS':'$(inherited) @executable_path/Frameworks @loader_path/Frameworks'}
 def configs(name,settings):
     refs=[]
@@ -30,8 +31,8 @@ def configs(name,settings):
 
 def package_dependencies(name):
     deps=[];build=[]
-    for product in ['JamCore','LooperCore','LooperAudioUnit']:
-        dep=obj(name+product+'dep','XCSwiftPackageProductDependency',package=package,productName=product);deps.append(dep)
+    for product in ['JamCore','LooperCore','LooperAudioUnit','AM4RemoteKit']:
+        dep=obj(name+product+'dep','XCSwiftPackageProductDependency',package=remote_package if product == 'AM4RemoteKit' else package,productName=product);deps.append(dep)
         build.append(obj(name+product+'link','PBXBuildFile',productRef=dep))
     return deps,build
 
@@ -49,7 +50,7 @@ def app(name, platform):
               'ASSETCATALOG_COMPILER_APPICON_NAME':'AppIconPad' if ipad else 'AppIconMac'}
     if ipad:
         settings.update({'SDKROOT':'iphoneos','SUPPORTED_PLATFORMS':'iphoneos iphonesimulator','IPHONEOS_DEPLOYMENT_TARGET':'18.0','TARGETED_DEVICE_FAMILY':'2','SUPPORTS_MACCATALYST':'NO','PRODUCT_BUNDLE_IDENTIFIER':'com.thoppe.maclooper',
-                         'CODE_SIGN_ENTITLEMENTS':'MacLooper-iPad.entitlements','INFOPLIST_KEY_UIApplicationSceneManifest_Generation':'YES','INFOPLIST_KEY_UILaunchScreen_Generation':'YES','INFOPLIST_KEY_UIFileSharingEnabled':'YES','INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace':'YES',
+                         'CODE_SIGN_ENTITLEMENTS':'MacLooper-iPad.entitlements','INFOPLIST_FILE':'MacLooper-iPad-Info.plist','INFOPLIST_KEY_UIApplicationSceneManifest_Generation':'YES','INFOPLIST_KEY_UILaunchScreen_Generation':'YES','INFOPLIST_KEY_UIFileSharingEnabled':'YES','INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace':'YES',
                          'INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad':'UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight'})
     else:
         settings.update({'SDKROOT':'macosx','MACOSX_DEPLOYMENT_TARGET':'14.0','SUPPORTED_PLATFORMS':'macosx','PRODUCT_BUNDLE_IDENTIFIER':'local.thoppe.maclooper','ENABLE_APP_SANDBOX':'NO','CODE_SIGN_IDENTITY':'-','LD_RUNPATH_SEARCH_PATHS':'$(inherited) @executable_path/../Frameworks'})
@@ -57,7 +58,7 @@ def app(name, platform):
 mac=app('MacLooper-macOS','mac');ipad=app('MacLooper-iPad','ios')
 # Host-independent DSP/library tests also run inside the iPad test host.
 testrefs=[]
-for p in sorted((ROOT/'Tests/JamCoreTests').glob('*.swift'))+sorted((ROOT/'Tests/LooperCoreTests').glob('*.swift')):
+for p in sorted((ROOT/'Tests/JamCoreTests').glob('*.swift'))+sorted((ROOT/'Tests/LooperCoreTests').glob('*.swift'))+sorted((ROOT/'Tests/MacLooperTests').glob('*.swift')):
     testrefs.append(obj(str(p.relative_to(ROOT)),'PBXFileReference',lastKnownFileType='sourcecode.swift',path=str(p.relative_to(ROOT)),sourceTree='SOURCE_ROOT'))
 test_product=obj('testsproduct','PBXFileReference',explicitFileType='wrapper.cfbundle',path='MacLooper-iPadTests.xctest',sourceTree='BUILT_PRODUCTS_DIR');products.append(test_product)
 deps,links=package_dependencies('ipadtests')
@@ -70,7 +71,7 @@ test_group=obj('testgroup','PBXGroup',children=testrefs,name='Shared Tests',sour
 resource_group=obj('resourcegroup','PBXGroup',children=resource_refs,name='Resources',sourceTree='<group>')
 product_group=obj('productgroup','PBXGroup',children=products,name='Products',sourceTree='<group>')
 obj('root','PBXGroup',children=[source_group,test_group,resource_group,product_group],sourceTree='<group>')
-obj('project','PBXProject',attributes={'LastUpgradeCheck':'2720','TargetAttributes':{ipad:{'DevelopmentTeam':'S37ZVC89JW'},tests:{'TestTargetID':ipad,'DevelopmentTeam':'S37ZVC89JW'}}},buildConfigurationList=configs('project',{}),compatibilityVersion='Xcode 14.0',developmentRegion='en',hasScannedForEncodings='0',knownRegions=['en','Base'],mainGroup=root,productRefGroup=product_group,projectDirPath='',projectRoot='',packageReferences=[package],targets=[mac,ipad,tests])
+obj('project','PBXProject',attributes={'LastUpgradeCheck':'2720','TargetAttributes':{ipad:{'DevelopmentTeam':'S37ZVC89JW'},tests:{'TestTargetID':ipad,'DevelopmentTeam':'S37ZVC89JW'}}},buildConfigurationList=configs('project',{}),compatibilityVersion='Xcode 14.0',developmentRegion='en',hasScannedForEncodings='0',knownRegions=['en','Base'],mainGroup=root,productRefGroup=product_group,projectDirPath='',projectRoot='',packageReferences=[package,remote_package],targets=[mac,ipad,tests])
 OUT.mkdir(exist_ok=True)
 (OUT/'project.pbxproj').write_text('// !$*UTF8*$!\n'+encode({'archiveVersion':'1','classes':{},'objectVersion':'56','objects':objects,'rootObject':project})+'\n')
 schemes=OUT/'xcshareddata/xcschemes';schemes.mkdir(parents=True,exist_ok=True)

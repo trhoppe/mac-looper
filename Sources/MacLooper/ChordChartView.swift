@@ -45,20 +45,20 @@ private struct ChartPresentation: View, Equatable {
                         }
                         Spacer(minLength: 12)
                         VStack(alignment: .trailing, spacing: 8) {
-                            HStack(spacing: 6) {
+                            HStack(spacing: 8) {
                                 Button(action: toggleColumns) {
-                                    ChartColumnsIcon(count: twoColumns ? 1 : 2).frame(minWidth: 28)
+                                    ChartColumnsIcon(count: twoColumns ? 1 : 2).frame(minWidth: 28, minHeight: 18).padding(.horizontal, 3).padding(.vertical, 2)
                                 }.accessibilityLabel(twoColumns ? "Use one chart column" : "Use two chart columns")
                                     .accessibilityValue(twoColumns ? "Two columns" : "One column")
                                     .help(twoColumns ? "Switch to one column" : "Switch to two columns when space allows")
-                                Button { changeFont(max(12, fontSize - 1)) } label: { Text("A−").font(.system(size: 16, weight: .medium)).frame(minWidth: 28) }
+                                Button { changeFont(max(12, fontSize - 1)) } label: { Text("A−").font(.system(size: 14, weight: .medium)).frame(minWidth: 28, minHeight: 18).padding(.horizontal, 3).padding(.vertical, 2) }
                                     .disabled(fontSize <= 12).accessibilityLabel("Smaller chart text").help("Smaller chart text and tighter lines")
-                                Button { changeFont(min(36, fontSize + 1)) } label: { Text("A+").font(.system(size: 16, weight: .medium)).frame(minWidth: 28) }
+                                Button { changeFont(min(36, fontSize + 1)) } label: { Text("A+").font(.system(size: 14, weight: .medium)).frame(minWidth: 28, minHeight: 18).padding(.horizontal, 3).padding(.vertical, 2) }
                                     .disabled(fontSize >= 36).accessibilityLabel("Larger chart text").help("Larger chart text and wider lines")
 
-                            }.buttonStyle(.bordered)
-                            Button(action: edit) { Label("Edit", systemImage: "square.and.pencil") }
-                                .buttonStyle(.bordered).accessibilityLabel("Edit song")
+                            }.buttonStyle(JamButtonStyle()).controlSize(.large)
+                            Button(action: edit) { Label("Edit", systemImage: "square.and.pencil").frame(minHeight: 18).padding(.horizontal, 3).padding(.vertical, 2) }
+                                .buttonStyle(JamButtonStyle()).controlSize(.large).accessibilityLabel("Edit song")
                         }
 
                     }

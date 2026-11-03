@@ -2,6 +2,10 @@ import Foundation
 
 public struct SongDraft: Identifiable, Equatable, Sendable {
     public let original: LibrarySong
+    public let isNew: Bool
+    public let originalPlaylistIDs: Set<String>?
+    public var playlistIDs: Set<String>
+    private let initialPlaylistIDs: Set<String>
     public var id: String { original.id }
     private let initialSource: String
     private var metadata: ChordProSongSource
@@ -15,12 +19,19 @@ public struct SongDraft: Identifiable, Equatable, Sendable {
     private mutating func set(_ name: String, _ value: String) {
         chordPro = metadata.setting(name, to: value.components(separatedBy: .newlines).joined(separator: " "))
     }
-    public init(song: LibrarySong) {
-        original = song
+    public init(song: LibrarySong, playlistIDs: Set<String>? = nil) {
+        original = song; isNew = false
+        originalPlaylistIDs = playlistIDs; self.playlistIDs = playlistIDs ?? []
+        initialPlaylistIDs = playlistIDs ?? []
         let source = song.isChordProNative ? song.chordPro : ChordProSongSource.seeded(from: song)
         initialSource = source; chordPro = source; metadata = ChordProSongSource(source)
     }
-    public var hasChanges: Bool { chordPro != initialSource }
+    public init(newSongID: String = UUID().uuidString, playlistIDs: Set<String> = []) {
+        original = LibrarySong(fields: ["id": .string(newSongID), "rawData": .string(""), "macJamsChordProVersion": .number(1)])
+        isNew = true; originalPlaylistIDs = []; self.playlistIDs = playlistIDs; initialPlaylistIDs = playlistIDs
+        initialSource = ""; chordPro = ""; metadata = ChordProSongSource("")
+    }
+    public var hasChanges: Bool { chordPro != initialSource || playlistIDs != initialPlaylistIDs }
     public var validationError: String? {
         do { _ = try changes(); return nil } catch { return error.localizedDescription }
     }
@@ -57,6 +68,7 @@ public struct SongDraft: Identifiable, Equatable, Sendable {
         edits["rawData"] = .string(chordPro)
         edits["macJamsChordProVersion"] = .number(1)
         if key != SongDraft(song: original).key, original.fields["transpose"] != nil { edits["transpose"] = .null }
+        if isNew { return edits.filter { $0.value != .null } }
         return edits.filter { field, value in value == .null ? original.fields[field] != nil : original.fields[field] != value }
     }
     /// Legacy JSON is a compatibility mirror of the canonical ChordPro preamble.
@@ -81,12 +93,14 @@ public struct SongDraft: Identifiable, Equatable, Sendable {
 }
 
 public enum SongEditError: LocalizedError {
-    case validation(String), missingSong, conflict, protectedLibrary
+    case validation(String), missingSong, conflict, protectedLibrary, unresolvedCloudConflict, conflictsChanged
     public var errorDescription: String? {
         switch self {
         case .validation(let message): return message
         case .missingSong: return "This song is no longer in the library. Your changes have not been saved."
-        case .conflict: return "This song changed on another device. Your draft is still here. Cancel and reopen Edit to load the latest version before saving."
+        case .conflict: return "This song changed on another device. Your draft is still here. Your recovery copy has been kept. Copy your ChordPro before discarding this draft, then reopen Edit to review the latest version."
+        case .unresolvedCloudConflict: return "iCloud has conflicting library versions. Your draft is safe. Review the versions in Settings before saving."
+        case .conflictsChanged: return "The library changed while you were reviewing it. Refresh the versions and choose again. All copies have been kept."
         case .protectedLibrary: return "Choose the Mac Jams library folder, separate from JustChords. Its original library stays unchanged."
         }
     }

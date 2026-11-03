@@ -25,6 +25,9 @@ void tl_set_volume(TLCore *core, float volume);
 TLSnapshot tl_snapshot(TLCore *core);
 float tl_waveform(TLCore *core, uint32_t bin);
 uint32_t tl_loop_frames(double rate, double bpm, uint32_t bars, uint32_t beats);
+// Control-thread suspension only AFTER rendering is paused and callbacks have
+// stopped. Drains pending commands, preserves completed audio, cancels capture.
+void tl_suspend(TLCore *core);
 // No allocation, locks, UI dispatch, logging, or file access in this function.
 // Input is captured only; it is NEVER passed through to output.
 void tl_process(TLCore *core, const float *left, const float *right,

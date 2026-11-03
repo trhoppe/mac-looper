@@ -17,6 +17,12 @@
 			"path" = "Sources/MacLooper/AppReadiness.swift";
 			"sourceTree" = "SOURCE_ROOT";
 		};
+		"E542ADDA3184A81D595AC915" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/MacLooper/AudioConfigurationGate.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
 		"89FE78801A985B500B0289BE" = {
 			"isa" = "PBXFileReference";
 			"lastKnownFileType" = "sourcecode.swift";
@@ -107,6 +113,18 @@
 			"path" = "Sources/MacLooper/IPadAudioDevices.swift";
 			"sourceTree" = "SOURCE_ROOT";
 		};
+		"2817A93A08B3E06104BE2E20" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/MacLooper/IPadAudioLifecycle.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"B1F36E505DF74661F0D91FE8" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/MacLooper/LibraryConflictView.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
 		"D5649EC117D750B78D6E05D4" = {
 			"isa" = "PBXFileReference";
 			"lastKnownFileType" = "sourcecode.swift";
@@ -149,6 +167,12 @@
 			"path" = "Sources/MacLooper/SongBrowserView.swift";
 			"sourceTree" = "SOURCE_ROOT";
 		};
+		"D5D38DF9CA9AA1610627CFCB" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/MacLooper/SongEditorModel.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
 		"518A63B69F4BFF4288FCDA10" = {
 			"isa" = "PBXFileReference";
 			"lastKnownFileType" = "sourcecode.swift";
@@ -176,6 +200,10 @@
 		"582681C2EAE02B3F3D399C0C" = {
 			"isa" = "XCLocalSwiftPackageReference";
 			"relativePath" = ".";
+		};
+		"4FB48BD27BAF6CE73641699F" = {
+			"isa" = "XCLocalSwiftPackageReference";
+			"relativePath" = "Packages/AM4RemoteKit";
 		};
 		"347C5000B9C2D8FA065C16E9" = {
 			"isa" = "PBXFileReference";
@@ -211,6 +239,15 @@
 			"isa" = "PBXBuildFile";
 			"productRef" = "34FCA638CE1984F052CA1CEE";
 		};
+		"BC673CD61FE16E60FE816EA8" = {
+			"isa" = "XCSwiftPackageProductDependency";
+			"package" = "4FB48BD27BAF6CE73641699F";
+			"productName" = "AM4RemoteKit";
+		};
+		"2307A89F24113CEF89F002A4" = {
+			"isa" = "PBXBuildFile";
+			"productRef" = "BC673CD61FE16E60FE816EA8";
+		};
 		"AA865ED4AC983DE909866580" = {
 			"isa" = "PBXBuildFile";
 			"fileRef" = "11C3DDF36D9D67CB58370A54";
@@ -218,6 +255,10 @@
 		"8C9469BC706DDCE0AD7513C9" = {
 			"isa" = "PBXBuildFile";
 			"fileRef" = "54A5EA4CC7574AB10A95CDA3";
+		};
+		"CD0E9581B17C6007116731E7" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "E542ADDA3184A81D595AC915";
 		};
 		"3CA991873719CEA026855408" = {
 			"isa" = "PBXBuildFile";
@@ -279,6 +320,14 @@
 			"isa" = "PBXBuildFile";
 			"fileRef" = "929A2F5E1AA2D2C76959A31D";
 		};
+		"390B6C565BAF33A0DB40CA1A" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "2817A93A08B3E06104BE2E20";
+		};
+		"FBC9948C6864BB7B3EBA9820" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "B1F36E505DF74661F0D91FE8";
+		};
 		"D5E428B19E85E7CAF6F17B6D" = {
 			"isa" = "PBXBuildFile";
 			"fileRef" = "D5649EC117D750B78D6E05D4";
@@ -307,6 +356,10 @@
 			"isa" = "PBXBuildFile";
 			"fileRef" = "C9AA4E6B4121A9502C001522";
 		};
+		"F6974909D21392C0AE5F7BB2" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "D5D38DF9CA9AA1610627CFCB";
+		};
 		"7A2B1F3095574280BA8F83FF" = {
 			"isa" = "PBXBuildFile";
 			"fileRef" = "518A63B69F4BFF4288FCDA10";
@@ -325,6 +378,7 @@
 			"files" = (
 				"AA865ED4AC983DE909866580",
 				"8C9469BC706DDCE0AD7513C9",
+				"CD0E9581B17C6007116731E7",
 				"3CA991873719CEA026855408",
 				"136D4F0FB22C09BD298E3089",
 				"3F09B906C982C23BBEED5708",
@@ -340,6 +394,8 @@
 				"8CFB19579FA975869E9A45FB",
 				"4440A85E2CE595A7A2873B58",
 				"2614A94B4BC4434ABF2DDE22",
+				"390B6C565BAF33A0DB40CA1A",
+				"FBC9948C6864BB7B3EBA9820",
 				"D5E428B19E85E7CAF6F17B6D",
 				"0962DF64D73C3C7D335DD27E",
 				"2D1F663B78A05CD4557BA704",
@@ -347,6 +403,7 @@
 				"9D117CEB0DF4702CD504E814",
 				"5C25A58EF9926AD3F20104E2",
 				"2645E32922A1F66C47CEC260",
+				"F6974909D21392C0AE5F7BB2",
 				"7A2B1F3095574280BA8F83FF",
 				"A8939EAA709FD15E5DA641D5",
 				"ED56573AA6FC94B715D611A4",
@@ -360,6 +417,7 @@
 				"A369DC9573862AA33CE2C30E",
 				"1F77C1BD194B31E3C007EB75",
 				"36D8BF34E6EAE2F74C237376",
+				"2307A89F24113CEF89F002A4",
 			);
 			"runOnlyForDeploymentPostprocessing" = "0";
 		};
@@ -466,6 +524,7 @@
 				"D25D4279C35D2B798B8A8B4F",
 				"28B15BFCD6A4F660833177B6",
 				"34FCA638CE1984F052CA1CEE",
+				"BC673CD61FE16E60FE816EA8",
 			);
 			"productName" = "Mac Jams";
 			"productReference" = "347C5000B9C2D8FA065C16E9";
@@ -505,6 +564,15 @@
 			"isa" = "PBXBuildFile";
 			"productRef" = "06381130393C9D8DABA352E2";
 		};
+		"B0A018D82C1C8DD029DB8EF0" = {
+			"isa" = "XCSwiftPackageProductDependency";
+			"package" = "4FB48BD27BAF6CE73641699F";
+			"productName" = "AM4RemoteKit";
+		};
+		"748A489AF0B127053AB582FF" = {
+			"isa" = "PBXBuildFile";
+			"productRef" = "B0A018D82C1C8DD029DB8EF0";
+		};
 		"C0AF370DB8ACF5EE07B35234" = {
 			"isa" = "PBXBuildFile";
 			"fileRef" = "11C3DDF36D9D67CB58370A54";
@@ -512,6 +580,10 @@
 		"9AFF1CA28701F46ABDC20F5A" = {
 			"isa" = "PBXBuildFile";
 			"fileRef" = "54A5EA4CC7574AB10A95CDA3";
+		};
+		"B5DCFD7933DABB5EF26CCC8A" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "E542ADDA3184A81D595AC915";
 		};
 		"58F99258B794C5056584F530" = {
 			"isa" = "PBXBuildFile";
@@ -573,6 +645,14 @@
 			"isa" = "PBXBuildFile";
 			"fileRef" = "929A2F5E1AA2D2C76959A31D";
 		};
+		"CD452A9E3539627F3AF0A042" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "2817A93A08B3E06104BE2E20";
+		};
+		"D6A82B1FE1B863BFD48342FE" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "B1F36E505DF74661F0D91FE8";
+		};
 		"6AB030F49145017D0C180E30" = {
 			"isa" = "PBXBuildFile";
 			"fileRef" = "D5649EC117D750B78D6E05D4";
@@ -601,6 +681,10 @@
 			"isa" = "PBXBuildFile";
 			"fileRef" = "C9AA4E6B4121A9502C001522";
 		};
+		"BA47CAD62105E6F0E319AACA" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "D5D38DF9CA9AA1610627CFCB";
+		};
 		"51C6E6886416E0959649D289" = {
 			"isa" = "PBXBuildFile";
 			"fileRef" = "518A63B69F4BFF4288FCDA10";
@@ -619,6 +703,7 @@
 			"files" = (
 				"C0AF370DB8ACF5EE07B35234",
 				"9AFF1CA28701F46ABDC20F5A",
+				"B5DCFD7933DABB5EF26CCC8A",
 				"58F99258B794C5056584F530",
 				"E03D8CD5A6679439407EC37B",
 				"65896D6D8EFD03382D97E4B7",
@@ -634,6 +719,8 @@
 				"083CE74F4811917D01CB3D3F",
 				"98881FEE1F73B893DCCC4D35",
 				"70E2F95249E52F23F143D825",
+				"CD452A9E3539627F3AF0A042",
+				"D6A82B1FE1B863BFD48342FE",
 				"6AB030F49145017D0C180E30",
 				"52E5F72E81016648DC9E8F9C",
 				"AD0E7A142B22344DC87C8647",
@@ -641,6 +728,7 @@
 				"D4125D7A77E56526B72A0D7E",
 				"E4360BCAB646D950F7C01D52",
 				"0073B19CA3AE054BD541F82B",
+				"BA47CAD62105E6F0E319AACA",
 				"51C6E6886416E0959649D289",
 				"92A6F96C952D4EF79F042674",
 				"E3DA4EE7AE8C70B521A8C16B",
@@ -654,6 +742,7 @@
 				"DE3871BDFE00FE33684452B6",
 				"D75F13A104430A494A6DC55E",
 				"E1710DAE914DCC379DA260BB",
+				"748A489AF0B127053AB582FF",
 			);
 			"runOnlyForDeploymentPostprocessing" = "0";
 		};
@@ -696,6 +785,7 @@
 				"SUPPORTS_MACCATALYST" = "NO";
 				"PRODUCT_BUNDLE_IDENTIFIER" = "com.thoppe.maclooper";
 				"CODE_SIGN_ENTITLEMENTS" = "MacLooper-iPad.entitlements";
+				"INFOPLIST_FILE" = "MacLooper-iPad-Info.plist";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation" = "YES";
 				"INFOPLIST_KEY_UILaunchScreen_Generation" = "YES";
 				"INFOPLIST_KEY_UIFileSharingEnabled" = "YES";
@@ -736,6 +826,7 @@
 				"SUPPORTS_MACCATALYST" = "NO";
 				"PRODUCT_BUNDLE_IDENTIFIER" = "com.thoppe.maclooper";
 				"CODE_SIGN_ENTITLEMENTS" = "MacLooper-iPad.entitlements";
+				"INFOPLIST_FILE" = "MacLooper-iPad-Info.plist";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation" = "YES";
 				"INFOPLIST_KEY_UILaunchScreen_Generation" = "YES";
 				"INFOPLIST_KEY_UIFileSharingEnabled" = "YES";
@@ -772,10 +863,17 @@
 				"201FDA2043418E1DB4D0CFAB",
 				"3261A8089BF489128FB150E4",
 				"06381130393C9D8DABA352E2",
+				"B0A018D82C1C8DD029DB8EF0",
 			);
 			"productName" = "Mac Jams";
 			"productReference" = "2D7F403A62505FBF2C0EC577";
 			"productType" = "com.apple.product-type.application";
+		};
+		"63BA6C8219917075814FDD8B" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Tests/JamCoreTests/AudioLifecycleTests.swift";
+			"sourceTree" = "SOURCE_ROOT";
 		};
 		"7BC37BC6E9B6CE96E7E2103C" = {
 			"isa" = "PBXFileReference";
@@ -799,6 +897,12 @@
 			"isa" = "PBXFileReference";
 			"lastKnownFileType" = "sourcecode.swift";
 			"path" = "Tests/JamCoreTests/PaneSizingTests.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"3C0EE6D46D19D6A558500199" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Tests/JamCoreTests/RecoveryAndConflictTests.swift";
 			"sourceTree" = "SOURCE_ROOT";
 		};
 		"6A31C74932361497236C8D78" = {
@@ -843,6 +947,60 @@
 			"path" = "Tests/LooperCoreTests/SharedGraphTests.swift";
 			"sourceTree" = "SOURCE_ROOT";
 		};
+		"BD2431401DF9B98C7C04D682" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Tests/MacLooperTests/AsyncReliabilityTests.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"1860EF153E44B5C5AE158114" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Tests/MacLooperTests/AudioFolderPersistenceTests.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"393B3816312FFFC7BEC7C767" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Tests/MacLooperTests/AudioFormatTests.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"BF3F37A2AF84D047D41BDC33" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Tests/MacLooperTests/AudioLibraryTests.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"FCC9C829A05C5BE228861909" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Tests/MacLooperTests/DrummerLoadingTests.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"4DF41E1C9D4FAF81A19464B5" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Tests/MacLooperTests/FilePlaybackTests.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"46AE08D2E04BFA89D3B31905" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Tests/MacLooperTests/LibraryLaunchTests.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"F4D4F2850F326985465C25F1" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Tests/MacLooperTests/PlaybackAssetTests.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"DA6A9F24424006BF5EF3D091" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Tests/MacLooperTests/SongEditorRecoveryTests.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
 		"AD5D520508EF8024D25C00BA" = {
 			"isa" = "PBXFileReference";
 			"explicitFileType" = "wrapper.cfbundle";
@@ -875,6 +1033,15 @@
 		"64F309353B714873BAF20606" = {
 			"isa" = "PBXBuildFile";
 			"productRef" = "D601B9979E7CF966D0517889";
+		};
+		"FAF6224AE19E951CF7192A9D" = {
+			"isa" = "XCSwiftPackageProductDependency";
+			"package" = "4FB48BD27BAF6CE73641699F";
+			"productName" = "AM4RemoteKit";
+		};
+		"1E95AE014C14DCFEA1D0B2AD" = {
+			"isa" = "PBXBuildFile";
+			"productRef" = "FAF6224AE19E951CF7192A9D";
 		};
 		"3B07A601889A5C98A1E12C74" = {
 			"isa" = "PBXContainerItemProxy";
@@ -950,6 +1117,10 @@
 			"defaultConfigurationIsVisible" = "0";
 			"defaultConfigurationName" = "Release";
 		};
+		"E2B95CF020C2068E96BFB51F" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "63BA6C8219917075814FDD8B";
+		};
 		"B09FF33B431CCEB39406D91B" = {
 			"isa" = "PBXBuildFile";
 			"fileRef" = "7BC37BC6E9B6CE96E7E2103C";
@@ -965,6 +1136,10 @@
 		"F360EF57F6160E666602A5B6" = {
 			"isa" = "PBXBuildFile";
 			"fileRef" = "38D79D59695E819998814DD8";
+		};
+		"C5A5457080A17069080EC078" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "3C0EE6D46D19D6A558500199";
 		};
 		"F505A2D05C6C29AF86506DA4" = {
 			"isa" = "PBXBuildFile";
@@ -994,14 +1169,52 @@
 			"isa" = "PBXBuildFile";
 			"fileRef" = "A23611D98FDCD3302A78F3CA";
 		};
+		"F10BAD74E88E6825EC706E85" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "BD2431401DF9B98C7C04D682";
+		};
+		"F6F5A742576D17257918B663" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "1860EF153E44B5C5AE158114";
+		};
+		"E315C75EA7EEED42A282ECC8" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "393B3816312FFFC7BEC7C767";
+		};
+		"BED5EF93B3DC9796B2BE6AF7" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "BF3F37A2AF84D047D41BDC33";
+		};
+		"FBCDBF3C00EC4B9B137ADC3C" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "FCC9C829A05C5BE228861909";
+		};
+		"F75701ECD75744B362FAD7C2" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "4DF41E1C9D4FAF81A19464B5";
+		};
+		"45D9A8B869B3E842FBDC8AD9" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "46AE08D2E04BFA89D3B31905";
+		};
+		"5D7788ACCD48A7CFC4A51937" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "F4D4F2850F326985465C25F1";
+		};
+		"527AC3C6F5368994DD81A438" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "DA6A9F24424006BF5EF3D091";
+		};
 		"9F3002A5D69B22D357A58AA9" = {
 			"isa" = "PBXSourcesBuildPhase";
 			"buildActionMask" = "2147483647";
 			"files" = (
+				"E2B95CF020C2068E96BFB51F",
 				"B09FF33B431CCEB39406D91B",
 				"E4F063198B09E6529FDC75B8",
 				"9B086B244A27E009D7B0ED59",
 				"F360EF57F6160E666602A5B6",
+				"C5A5457080A17069080EC078",
 				"F505A2D05C6C29AF86506DA4",
 				"25473D0922CE804F4F6155C7",
 				"CE8AEA15688D2ECECFA78723",
@@ -1009,6 +1222,15 @@
 				"0362FD7C785A8ADFCF7EFA47",
 				"75561DED76F4869B709DDE81",
 				"3F97769473C2363C4BCA3C87",
+				"F10BAD74E88E6825EC706E85",
+				"F6F5A742576D17257918B663",
+				"E315C75EA7EEED42A282ECC8",
+				"BED5EF93B3DC9796B2BE6AF7",
+				"FBCDBF3C00EC4B9B137ADC3C",
+				"F75701ECD75744B362FAD7C2",
+				"45D9A8B869B3E842FBDC8AD9",
+				"5D7788ACCD48A7CFC4A51937",
+				"527AC3C6F5368994DD81A438",
 			);
 			"runOnlyForDeploymentPostprocessing" = "0";
 		};
@@ -1019,6 +1241,7 @@
 				"3D20F625C7EF471434E76018",
 				"4CE1AA7A36254C58D37D6EE3",
 				"64F309353B714873BAF20606",
+				"1E95AE014C14DCFEA1D0B2AD",
 			);
 			"runOnlyForDeploymentPostprocessing" = "0";
 		};
@@ -1039,6 +1262,7 @@
 				"4CDFBF35D0586BF0077A9D42",
 				"3FCCD81FE33E706D292E9921",
 				"D601B9979E7CF966D0517889",
+				"FAF6224AE19E951CF7192A9D",
 			);
 			"productName" = "MacLooper-iPadTests";
 			"productReference" = "AD5D520508EF8024D25C00BA";
@@ -1049,6 +1273,7 @@
 			"children" = (
 				"11C3DDF36D9D67CB58370A54",
 				"54A5EA4CC7574AB10A95CDA3",
+				"E542ADDA3184A81D595AC915",
 				"89FE78801A985B500B0289BE",
 				"11BE9BBC37E56BAEAEEC9EAD",
 				"2FDB0B73322A98AFF0989A10",
@@ -1064,6 +1289,8 @@
 				"37E90C6C2473753C2146C190",
 				"38A9658F93011A3079A4F63F",
 				"929A2F5E1AA2D2C76959A31D",
+				"2817A93A08B3E06104BE2E20",
+				"B1F36E505DF74661F0D91FE8",
 				"D5649EC117D750B78D6E05D4",
 				"3D30A083AE83ADD69EFF4337",
 				"798871092DAD7073641FF444",
@@ -1071,6 +1298,7 @@
 				"183F606E5344C95BDC450A54",
 				"C715C22B94B3452DEA9E0D74",
 				"C9AA4E6B4121A9502C001522",
+				"D5D38DF9CA9AA1610627CFCB",
 				"518A63B69F4BFF4288FCDA10",
 				"E8964440F829DFE735343C21",
 				"2F3B8D1F8EE28FDCCBC7E161",
@@ -1081,10 +1309,12 @@
 		"8B7A6DECC0651D269EA794C7" = {
 			"isa" = "PBXGroup";
 			"children" = (
+				"63BA6C8219917075814FDD8B",
 				"7BC37BC6E9B6CE96E7E2103C",
 				"4DB826298CC87F844A97B12D",
 				"11413520F336346DAB475C75",
 				"38D79D59695E819998814DD8",
+				"3C0EE6D46D19D6A558500199",
 				"6A31C74932361497236C8D78",
 				"0B6437D49B48DE2E7852026C",
 				"806CC50366E7895835D4DBA2",
@@ -1092,6 +1322,15 @@
 				"3F5947B615DEDF81783F8BC3",
 				"1793AD9BACBA2AA86DBED5AB",
 				"A23611D98FDCD3302A78F3CA",
+				"BD2431401DF9B98C7C04D682",
+				"1860EF153E44B5C5AE158114",
+				"393B3816312FFFC7BEC7C767",
+				"BF3F37A2AF84D047D41BDC33",
+				"FCC9C829A05C5BE228861909",
+				"4DF41E1C9D4FAF81A19464B5",
+				"46AE08D2E04BFA89D3B31905",
+				"F4D4F2850F326985465C25F1",
+				"DA6A9F24424006BF5EF3D091",
 			);
 			"name" = "Shared Tests";
 			"sourceTree" = "<group>";
@@ -1192,6 +1431,7 @@
 			"projectRoot" = "";
 			"packageReferences" = (
 				"582681C2EAE02B3F3D399C0C",
+				"4FB48BD27BAF6CE73641699F",
 			);
 			"targets" = (
 				"62B4A2F1E0B5C3F1EE0C65C9",

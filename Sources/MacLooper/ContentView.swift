@@ -2,11 +2,13 @@ import SwiftUI
 import UniformTypeIdentifiers
 import JamCore
 import Combine
+import AM4RemoteKit
 
 struct ContentView: View, Equatable {
     let model: LooperModel
     let readiness: AppReadinessModel
     let files: AudioFilePlayerModel
+    @ObservedObject var remote: AM4RemoteSession
     @ObservedObject var library: SongLibraryModel
     @Environment(\.scenePhase) private var phase
     @State private var showingSettings = false
@@ -27,7 +29,7 @@ struct ContentView: View, Equatable {
     @State private var importKind = ImportKind.libraryFolder
     @State private var editingDraft: SongDraft?
     private let accent = Color(red: 0.259, green: 0.788, blue: 0.961)
-    static func == (lhs: Self, rhs: Self) -> Bool { lhs.model === rhs.model && lhs.files === rhs.files && lhs.library === rhs.library }
+    static func == (lhs: Self, rhs: Self) -> Bool { lhs.model === rhs.model && lhs.files === rhs.files && lhs.library === rhs.library && lhs.remote === rhs.remote }
     private enum ImportKind { case libraryFolder, audioFolder }
     private var types: [UTType] { [.folder] }
 
@@ -35,31 +37,42 @@ struct ContentView: View, Equatable {
         GeometryReader { geo in
             VStack(spacing: 0) {
                 HStack(spacing: 12) {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 12) {
                     panelButton("Songs", icon: "sidebar.left", visible: geo.size.width >= 1250 ? sidebar : showingSongs) {
                         if geo.size.width >= 1250 { sidebar.toggle() } else { showingSongs.toggle() }
-                    }.popover(isPresented: $showingSongs) { SongBrowserView(library: library, onSelectSong: revealChords).frame(width: 310, height: 520) }
+                    }.popover(isPresented: $showingSongs) { SongBrowserView(library: library, onSelectSong: revealChords, onAddSong: beginAdding).frame(width: 310, height: 520) }
                     panelButton("Chords", icon: "text.alignleft", visible: showingChords) { showingChords.toggle() }
                     panelButton("Looper", icon: "arrow.triangle.2.circlepath", visible: showingLooper) { showingLooper.toggle() }
                     panelButton("Drummer", icon: "square.grid.2x2", visible: showingDrummer) { showingDrummer.toggle() }
                     panelButton("Player", icon: "music.note.list", visible: showingPlayer) { showingPlayer.toggle() }
-                    Spacer(minLength: 8)
+                    panelButton("AM4 Remote", icon: "slider.horizontal.3", visible: remote.isPresented) { remote.present() }
+                        }
+                    }.frame(height: 32)
                     AppReadinessBadge(model: readiness)
-                    Button { showingSettings.toggle() } label: { Image(systemName: "gearshape").font(.title3) }
-                        .buttonStyle(.plain).accessibilityLabel("Settings")
+                    Button { showingSettings.toggle() } label: { Image(systemName: "gearshape").font(.title3).frame(width: 30, height: 30) }
+                        .buttonStyle(JamPlainButtonStyle()).accessibilityLabel("Settings")
                         .popover(isPresented: $showingSettings, arrowEdge: .top) {
                             AudioSettingsView(model: model, library: library, dismiss: { showingSettings = false },
-                                              chooseFolder: { beginImport(.libraryFolder) })
+                                              chooseFolder: { beginImport(.libraryFolder) }, recoverDraft: { draft in
+                                                  showingSettings = false; library.editing = true; editingDraft = draft
+                                              })
                         }
                 }.padding(.horizontal, 18).padding(.vertical, 14)
                 Divider()
                 panes(width: geo.size.width)
 
             }
-            .allowsHitTesting(editingDraft == nil)
-            .accessibilityHidden(editingDraft != nil)
+            .allowsHitTesting(editingDraft == nil && !remote.isPresented)
+            .accessibilityHidden(editingDraft != nil || remote.isPresented)
             .overlay {
-                if let draft = editingDraft {
-                    SongEditorView(draft: draft, close: endEditing) { draft in try await library.save(draft) }
+                if remote.isPresented {
+                    AM4RemoteScreen(session: remote)
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .accessibilityAddTraits(.isModal)
+                        .allowsHitTesting(true).accessibilityHidden(false)
+                } else if let draft = editingDraft {
+                    SongEditorView(draft: draft, library: library, close: endEditing) { draft in try await library.save(draft) }
                         .frame(width: geo.size.width, height: geo.size.height)
                         .accessibilityAddTraits(.isModal)
                         .allowsHitTesting(true).accessibilityHidden(false)
@@ -92,7 +105,17 @@ struct ContentView: View, Equatable {
             if let tempo, tempo.isFinite, model.canEditTiming { model.bpm = min(240, max(30, tempo)) }
         }
         .onChange(of: phase) { _, value in
-            if value == .active { model.refreshDevices(); Task { await library.refresh() } }
+            if value == .active {
+                model.refreshDevices(); Task { await library.refresh() }
+                #if os(iOS)
+                remote.setApplicationActive(true); model.handleAudioLifecycle(.foreground)
+                #endif
+            }
+            #if os(iOS)
+            if value == .background {
+                remote.setApplicationActive(false); files.pauseForInterruption(); model.handleAudioLifecycle(.background)
+            }
+            #endif
         }
         .onOpenURL { url in
             if url.pathExtension.lowercased() == "json" { library.openLibrary(url) }
@@ -102,9 +125,9 @@ struct ContentView: View, Equatable {
     private func panelButton(_ title: String, icon: String, visible: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Label(title, systemImage: icon).foregroundStyle(visible ? accent : .secondary)
-                .padding(.horizontal, 9).padding(.vertical, 6).hoverHighlight()
+                .padding(.horizontal, 9).padding(.vertical, 6)
         }
-            .buttonStyle(.plain).accessibilityLabel("Show or hide \(title.lowercased())")
+            .buttonStyle(JamPlainButtonStyle()).accessibilityLabel("Show or hide \(title.lowercased())")
             .accessibilityValue(visible ? "Shown" : "Hidden")
     }
     @ViewBuilder private func panes(width: Double) -> some View {
@@ -128,10 +151,10 @@ struct ContentView: View, Equatable {
             ResizableSplit(axis: .horizontal, side: .leading, size: $songsWidth, defaultSize: 240,
                            minimumLeading: 220, minimumTrailing: showingChords && showingPlayer ? 660 : 320,
                            label: "Resize Songs sidebar") {
-                SongBrowserView(library: library, onSelectSong: revealChords)
+                SongBrowserView(library: library, onSelectSong: revealChords, onAddSong: beginAdding)
             } trailing: { chartAndPlayer(windowWidth: width) }
         } else if songsVisible {
-            SongBrowserView(library: library, onSelectSong: revealChords)
+            SongBrowserView(library: library, onSelectSong: revealChords, onAddSong: beginAdding)
         } else { chartAndPlayer(windowWidth: width) }
     }
     private func chartAndPlayer(windowWidth: Double) -> some View {
@@ -189,10 +212,18 @@ struct ContentView: View, Equatable {
             }
         }.background(Color(red: 0.075, green: 0.085, blue: 0.10))
     }
-    private func endEditing() { editingDraft = nil; library.editing = false }
+    private func endEditing() {
+        editingDraft = nil; library.editing = false
+        Task { await library.refresh() }
+    }
     private func beginEditing() {
         guard let id = library.selectedSongID, let song = library.library?.songs.first(where: { $0.id == id }) else { return }
-        library.editing = true; editingDraft = SongDraft(song: song)
+        library.editing = true; editingDraft = SongDraft(song: song, playlistIDs: library.library?.playlistIDs(containing: id))
+    }
+    private func beginAdding() {
+        guard library.library != nil && !library.editing && !library.saving else { return }
+        showingSongs = false; library.editing = true
+        editingDraft = SongDraft(playlistIDs: library.playlistID.map { Set([$0]) } ?? [])
     }
     private func revealChords() { showingChords = true; showingSongs = false }
     private func beginImport(_ kind: ImportKind) { showingSettings = false; importKind = kind; importing = true }
