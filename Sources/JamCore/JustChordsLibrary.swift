@@ -32,29 +32,61 @@ public enum JSONValue: Codable, Equatable, Sendable {
 
 public struct LibrarySong: Identifiable, Equatable, Sendable {
     public let fields: [String: JSONValue]
+    public let chordProMetadata: ChordProSongSource
+    public var isChordProNative: Bool { fields["macJamsChordProVersion"] == .number(1) }
+    private func metadata(_ name: String, legacy: String) -> String? {
+        if let value = chordProMetadata.first(name) { return value.isEmpty ? nil : value }
+        return isChordProNative ? nil : fields[legacy]?.text
+    }
     public var id: String { fields["id"]?.text ?? "" }
-    public var title: String { fields["title"]?.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "Untitled" }
-    public var artist: String { fields["artist"]?.text ?? "" }
+    public var title: String { metadata("title", legacy: "title")?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "Untitled" }
+    public var artist: String {
+        if let artists = chordProMetadata.values["artist"] { return artists.joined(separator: ", ") }
+        return isChordProNative ? "" : fields["artist"]?.text ?? ""
+    }
     public var chordPro: String { fields["rawData"]?.text ?? "" }
     public var tags: [String] { fields["tags"]?.array.compactMap(\.text) ?? [] }
-    public var tempo: Double? { fields["tempo"]?.text.flatMap(Double.init) }
-    public var duration: String? { fields["duration"]?.text }
-    public var timeSignature: String? { fields["timeSignature"]?.text }
-    public var capo: String? { fields["capo"]?.text }
-    public var originalKey: String? { fields["keyChord"]?.object["key"]?.text }
+    public var tempo: Double? { metadata("tempo", legacy: "tempo").flatMap(Double.init) }
+    public var duration: String? { metadata("duration", legacy: "duration") }
+    public var timeSignature: String? { metadata("time", legacy: "timeSignature") }
+    public var capo: String? { metadata("capo", legacy: "capo") }
+    var legacyKey: String? {
+        fields["keyChord"]?.object["key"]?.text.map { $0 + (fields["keyChord"]?.object["minor"]?.boolean == true && !$0.hasSuffix("m") ? "m" : "") }
+    }
+    public var sourceKey: String? {
+        if let key = chordProMetadata.first("key") { return key.isEmpty ? nil : key }
+        return isChordProNative ? nil : legacyKey
+    }
+    public var originalKey: String? {
+        sourceKey.map {
+            let root = $0.hasSuffix("m") ? String($0.dropLast()) : $0
+            return String(root.prefix(1)).uppercased() + root.dropFirst().replacingOccurrences(of: "♯", with: "#").replacingOccurrences(of: "♭", with: "b")
+        }
+    }
     public var displayKey: String? {
         let root = fields["transpose"]?.text ?? originalKey
-        return root.map { $0 + ((fields["keyChord"]?.object["minor"]?.boolean ?? false) && !$0.hasSuffix("m") ? "m" : "") }
+        return root.map { $0 + (sourceKey?.hasSuffix("m") == true && !$0.hasSuffix("m") ? "m" : "") }
     }
     public var transposition: Int {
         guard let base = originalKey, let target = fields["transpose"]?.text,
               let a = ChordTransposition.pitch(base), let b = ChordTransposition.pitch(target) else { return 0 }
         return b - a
     }
-    public init(fields: [String: JSONValue]) { self.fields = fields }
+    public init(fields: [String: JSONValue]) {
+        self.fields = fields; chordProMetadata = ChordProSongSource(fields["rawData"]?.text ?? "")
+    }
     public func applying(_ entry: [String: JSONValue]) -> LibrarySong {
         var merged = fields
         for key in ["capo", "transpose", "tempo", "keyChord"] { if let v = entry[key], v != .null { merged[key] = v } }
+        var source = ChordProSongSource(chordPro)
+        for (field, directive) in [("capo", "capo"), ("tempo", "tempo")] {
+            if let value = entry[field]?.text { source = ChordProSongSource(source.setting(directive, to: value)) }
+        }
+        if let value = entry["keyChord"], value != .null {
+            let key = value.object
+            if let root = key["key"]?.text { source = ChordProSongSource(source.setting("key", to: root + (key["minor"]?.boolean == true ? "m" : ""))) }
+        }
+        merged["rawData"] = .string(source.source)
         return LibrarySong(fields: merged)
     }
 }

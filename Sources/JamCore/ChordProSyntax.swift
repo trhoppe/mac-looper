@@ -16,13 +16,19 @@ public enum ChordProSyntax {
             let range = NSRange(location: 0, length: text.length)
             let full = NSRange(location: offset, length: text.length)
             defer { offset += text.length + 1 }
-            if trim.hasPrefix("{"), trim.hasSuffix("}") {
-                let name = trim.dropFirst().dropLast().split(separator: ":", maxSplits: 1).first?.lowercased() ?? ""
-                if ["sot", "start_of_tab"].contains(name) { inTab = true }
-                if ["eot", "end_of_tab"].contains(name) { inTab = false }
+            let directive = ChordProDirective(line)
+            if inTab {
+                if directive?.isTabEnd == true {
+                    inTab = false; spans.append(Span(range: full, style: .directive))
+                }
+                continue
+            }
+            if trim.hasPrefix("#") { continue }
+            if let directive {
+                if directive.isTabStart { inTab = true }
                 spans.append(Span(range: full, style: .directive)); continue
             }
-            if inTab || tab.firstMatch(in: line, range: range) != nil { continue }
+            if tab.firstMatch(in: line, range: range) != nil { continue }
             if trim.hasSuffix(":"), trim.count < 70, !trim.contains("[") {
                 spans.append(Span(range: full, style: .section)); continue
             }

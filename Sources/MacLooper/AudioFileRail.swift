@@ -123,7 +123,6 @@ struct AudioFileRail: View {
     }
     private var player: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("FILE PLAYER").font(.caption2.weight(.medium)).foregroundStyle(.tertiary)
             HStack(spacing: 10) {
                 Image(systemName: "waveform.path").foregroundStyle(accent).font(.title2)
                 VStack(alignment: .leading, spacing: 3) {
@@ -147,23 +146,22 @@ struct AudioFileRail: View {
                     Text(Self.time(model.duration))
                 }.font(.caption.monospacedDigit()).foregroundStyle(.secondary)
             }
-            HStack(spacing: 12) {
-                Button { model.step(-1) } label: { Image(systemName: "backward.end.fill") }
+            HStack(spacing: 4) {
+                Button { model.step(-1) } label: { playerIcon("backward.end.fill") }
                     .disabled(!model.canStep(-1)).accessibilityLabel("Previous audio file")
-                Button { model.skip(-10) } label: { Image(systemName: "gobackward.10") }
+                Button { model.skip(-10) } label: { playerIcon("gobackward.10") }
                     .disabled(model.duration <= 0 || model.loading).accessibilityLabel("Back 10 seconds")
                 Button { model.togglePlay() } label: {
-                    Image(systemName: model.playing ? "pause.fill" : "play.fill").font(.title2).frame(width: 28, height: 28)
+                    playerIcon(model.playing ? "pause.fill" : "play.fill", primary: true)
                 }.disabled(model.duration <= 0 || model.loading).accessibilityLabel(model.playing ? "Pause file" : "Play file")
-                Button { model.stop() } label: { Image(systemName: "stop.fill") }
+                Button { model.stop() } label: { playerIcon("stop.fill") }
                     .disabled(model.selected == nil || model.loading).accessibilityLabel("Stop file")
-                Button { model.skip(10) } label: { Image(systemName: "goforward.10") }
+                Button { model.skip(10) } label: { playerIcon("goforward.10") }
                     .disabled(model.duration <= 0 || model.loading).accessibilityLabel("Forward 10 seconds")
-                Button { model.step(1) } label: { Image(systemName: "forward.end.fill") }
+                Button { model.step(1) } label: { playerIcon("forward.end.fill") }
                     .disabled(!model.canStep(1)).accessibilityLabel("Next audio file")
-                Spacer(minLength: 0)
                 Button { model.repeatTrack.toggle() } label: {
-                    Image(systemName: "repeat.1").foregroundStyle(model.repeatTrack ? accent : .secondary)
+                    playerIcon("repeat.1").foregroundStyle(model.repeatTrack ? accent : .secondary)
                 }.help(model.repeatTrack ? "Repeat this file: on" : "Repeat this file: off")
                     .accessibilityLabel("Repeat file").accessibilityValue(model.repeatTrack ? "On" : "Off")
             }.buttonStyle(.plain)
@@ -173,6 +171,10 @@ struct AudioFileRail: View {
                 Text("\(Int((model.volume * 100).rounded()))%").font(.caption.monospacedDigit()).foregroundStyle(.secondary).frame(width: 34, alignment: .trailing)
             }
         }
+    }
+    private func playerIcon(_ name: String, primary: Bool = false) -> some View {
+        Image(systemName: name).font(.system(size: primary ? 25 : 20))
+            .frame(minWidth: 32, maxWidth: .infinity, minHeight: 40).contentShape(Rectangle())
     }
     static func time(_ value: Double) -> String {
         let n = value.isFinite ? max(0, Int(value)) : 0

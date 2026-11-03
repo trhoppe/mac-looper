@@ -247,3 +247,36 @@ stays protected. Own-library loading on foreground entry skips an open draft.
 - The AM4 input was not enumerated during this UI pass (AM4 Proxy was present),
   so live guitar/drum routing was not re-tested after the laptop shutdown. The
   app correctly reports the missing input without switching to its microphone.
+
+
+## ChordPro-native song data — 2026-11-02
+
+- Audited the official ChordPro specification and directive pages. Exact supported
+  and unimplemented features are listed in `chordpro-compatibility.md`; the app
+  does not claim complete ChordPro 6 rendering.
+- Song details now live in the ChordPro preamble in `rawData`. JSON fields remain
+  compatibility copies. The editor's fields and source update each other, and
+  source metadata drives song sorting, chart details and initial looper BPM.
+- One-time coordinated migration fills metadata headers, converts legacy plain
+  headings and wraps tabs. An exact `library-before-chordpro-…json` backup is
+  required before atomic replacement; repeated launches do not rewrite it.
+- Tested safe metadata/body merges, same-field conflicts, missing/corrupt and
+  protected libraries, unknown nested data and 64-bit numbers, backup identity,
+  version markers, and idempotence.
+- Dry-run audit covered all 38 own-library songs: metadata, chord/lyric fragments,
+  tab rows, section labels and saved transpositions were preserved. All converted
+  songs remain editable. Live conversion completed for all 38; its backup hash
+  matches the exact pre-conversion snapshot. IDs, playlists, dates, saved
+  transposes and unknown fields were checked after conversion.
+- Mac regression tests: **101 passed**, including the optional private-library
+  audit. Release Mac app packaged successfully.
+- Mac UI check used a disposable synthetic library: title/artist from directives,
+  section labels, chorus recall, annotations, tab literals and comment styles
+  rendered; unsupported diagrams were explicitly reported. Structured BPM 132
+  appeared in source; typing 144 in source updated the field; undo/redo kept both
+  consistent; Save persisted source and compatibility BPM 144. Main Mac app
+  reopened and loaded a converted song normally.
+- iPad validation: **82 passed, one optional private-library audit skipped**
+  on both the physical iPad and simulator (83 tests in each suite, zero failures).
+  Signed device update installed and launched successfully after unlocking.
+- No audio engine, buffer, routing or plugin changes are included in this work.

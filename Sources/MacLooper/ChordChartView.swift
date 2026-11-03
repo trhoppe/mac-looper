@@ -37,7 +37,11 @@ private struct ChartPresentation: View, Equatable {
                     HStack(alignment: .top) {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(song.title).font(.title2.weight(.semibold)).textSelection(.enabled)
-                            if !song.artist.isEmpty { Text(song.artist).foregroundStyle(.secondary) }
+                            let artist = song.artist
+                            if !artist.isEmpty { Text(artist).foregroundStyle(.secondary) }
+                            if let subtitle = document.metadataValues["subtitle"]?.joined(separator: " · "), !subtitle.isEmpty {
+                                Text(subtitle).font(.callout).foregroundStyle(.secondary)
+                            }
                         }
                         Spacer(minLength: 12)
                         VStack(alignment: .trailing, spacing: 8) {
@@ -61,9 +65,11 @@ private struct ChartPresentation: View, Equatable {
                     HStack(spacing: 14) {
                         if let key = song.displayKey { Text("Key \(key)") }
                         if let capo = song.capo, capo != "0" { Text("Capo \(capo)") }
-                        if let tempo = song.tempo { Text("\(Int(tempo)) BPM") }
+                        if let tempo = song.tempo, tempo.isFinite { Text("\(Int(tempo)) BPM") }
                         if let meter = song.timeSignature { Text(meter) }
-                        if let duration = song.duration, !duration.isEmpty { Text(duration) }
+                        if let duration = song.duration, !duration.isEmpty {
+                            Text(ChordProDocument.readableDuration(duration))
+                        }
                     }.font(.caption).foregroundStyle(.secondary)
 
                 }.padding(18)
@@ -89,7 +95,13 @@ private struct ChartPresentation: View, Equatable {
                                         switch line.kind {
                                         case .blank: Color.clear.frame(height: fontSize * 0.55)
                                         case .section: Text(line.text).font(.system(size: fontSize * 0.88, weight: .bold, design: .monospaced)).foregroundStyle(Color(white: 0.78)).padding(.top, fontSize * 0.4)
-                                        case .comment: Text(line.text).font(.system(size: fontSize * 0.82, design: .monospaced)).italic().foregroundStyle(.secondary)
+                                        case .comment:
+                                            Text(line.text).font(.system(size: fontSize * 0.82, design: .monospaced))
+                                                .italic(line.commentStyle == .italic).foregroundStyle(.secondary)
+                                                .padding(line.commentStyle == .box ? 6 : 0)
+                                                .overlay {
+                                                    if line.commentStyle == .box { RoundedRectangle(cornerRadius: 3).stroke(.secondary.opacity(0.5)) }
+                                                }
                                         case .tablature: EmptyView()
                                         case .lyrics:
                                             if line.fragments.allSatisfy({ $0.lyric.trimmingCharacters(in: .whitespaces).isEmpty }) {
@@ -117,8 +129,12 @@ private struct ChartPresentation: View, Equatable {
                                 .layoutValue(key: ChartSpanKey.self, value: block.lines.first?.kind != .lyrics)
                             }
                             if !document.unsupportedDirectives.isEmpty {
-                                Text("Additional chart directives are preserved in the library: " + document.unsupportedDirectives.joined(separator: ", "))
+                                Text("Not rendered: " + document.unsupportedDirectives.joined(separator: ", ") + ". Source is kept for editing.")
                                     .font(.caption).foregroundStyle(.tertiary).padding(.top, 12)
+                                    .layoutValue(key: ChartSpanKey.self, value: true)
+                            }
+                            ForEach(Array(document.warnings.enumerated()), id: \.offset) { _, warning in
+                                Text(warning).font(.caption).foregroundStyle(.secondary)
                                     .layoutValue(key: ChartSpanKey.self, value: true)
                             }
                         }.lineSpacing(fontSize * 0.1).frame(maxWidth: .infinity, alignment: .leading).padding(20)

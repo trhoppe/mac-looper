@@ -82,7 +82,7 @@ import JamCore
         let token = revision, destination = destination
         defer { reading = false; syncing = false }
         do {
-            let next = try await io.read(destination)
+            let next = try await io.prepareChordProLibrary(at: destination)
             guard token == revision else { return }
             if lastBytes != next.originalData { library = next; lastBytes = next.originalData }
             if let tracks = try? await io.backingTracks(in: folderURL) {

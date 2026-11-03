@@ -3,95 +3,80 @@ import Foundation
 public struct SongDraft: Identifiable, Equatable, Sendable {
     public let original: LibrarySong
     public var id: String { original.id }
-    public var title: String
-    public var artist: String
-    public var key: String
-    public var tempo: String
-    public var timeSignature: String
-    public var duration: String
-    public var chordPro: String
-
+    private let initialSource: String
+    private var metadata: ChordProSongSource
+    public var chordPro: String { didSet { metadata = ChordProSongSource(chordPro) } }
+    public var title: String { get { metadata.first("title") ?? "" } set { set("title", newValue) } }
+    public var artist: String { get { metadata.values["artist"]?.joined(separator: ", ") ?? "" } set { set("artist", newValue) } }
+    public var key: String { get { metadata.first("key") ?? "" } set { set("key", newValue) } }
+    public var tempo: String { get { metadata.first("tempo") ?? "" } set { set("tempo", newValue) } }
+    public var timeSignature: String { get { metadata.first("time") ?? "" } set { set("time", newValue) } }
+    public var duration: String { get { metadata.first("duration") ?? "" } set { set("duration", newValue) } }
+    private mutating func set(_ name: String, _ value: String) {
+        chordPro = metadata.setting(name, to: value.components(separatedBy: .newlines).joined(separator: " "))
+    }
     public init(song: LibrarySong) {
         original = song
-        title = song.title; artist = song.artist
-        key = (song.originalKey ?? "") + (song.fields["keyChord"]?.object["minor"]?.boolean == true ? "m" : "")
-        tempo = song.fields["tempo"]?.text ?? ""
-        timeSignature = song.fields["timeSignature"]?.text ?? ""
-        duration = song.fields["duration"]?.text ?? ""
-        chordPro = song.chordPro
+        let source = song.isChordProNative ? song.chordPro : ChordProSongSource.seeded(from: song)
+        initialSource = source; chordPro = source; metadata = ChordProSongSource(source)
     }
-    public var hasChanges: Bool { self != SongDraft(song: original) }
+    public var hasChanges: Bool { chordPro != initialSource }
     public var validationError: String? {
         do { _ = try changes(); return nil } catch { return error.localizedDescription }
     }
-    /// Only explicitly changed fields are patched; unknown fields stay intact.
-    /// A null change removes an optional metadata field.
     public func changes() throws -> [String: JSONValue] {
-        let before = SongDraft(song: original)
-        let title = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !title.isEmpty else { throw SongEditError.validation("Enter a song name.") }
-        var edits: [String: JSONValue] = [:]
-        if self.title != before.title { edits["title"] = .string(title) }
-        if artist != before.artist { edits["artist"] = .string(artist.trimmingCharacters(in: .whitespacesAndNewlines)) }
-        if chordPro != before.chordPro { edits["rawData"] = .string(chordPro) }
-        if key != before.key {
-            let value = key.trimmingCharacters(in: .whitespacesAndNewlines)
-            if value.isEmpty { edits["keyChord"] = .null }
-            else {
-                guard value.range(of: #"^[A-Ga-g](?:#|b|♯|♭)?m?$"#, options: .regularExpression) != nil else {
-                    throw SongEditError.validation("Use a key such as C, F# or Am.")
-                }
-                let minor = value.hasSuffix("m")
-                let root = String((minor ? String(value.dropLast()) : value).prefix(1)).uppercased()
-                    + String((minor ? String(value.dropLast()) : value).dropFirst()).replacingOccurrences(of: "♯", with: "#").replacingOccurrences(of: "♭", with: "b")
-                var fields = original.fields["keyChord"]?.object ?? [:]
-                fields["key"] = .string(root); fields["minor"] = .bool(minor)
-                edits["keyChord"] = .object(fields)
-            }
-            // A changed base key must not remain hidden by an old display transpose.
-            if original.fields["transpose"] != nil { edits["transpose"] = .null }
+        guard !title.trimmingCharacters(in: .whitespaces).isEmpty else { throw SongEditError.validation("Enter a song name or a {title: ...} directive.") }
+        if !key.isEmpty && key.range(of: #"^[A-Ga-g](?:#|b|♯|♭)?m?$"#, options: .regularExpression) == nil {
+            throw SongEditError.validation("Use a key such as C, F# or Am.")
         }
-        if tempo != before.tempo {
-            let value = tempo.trimmingCharacters(in: .whitespacesAndNewlines)
-            if value.isEmpty { edits["tempo"] = .null }
-            else {
-                guard let bpm = Double(value), bpm.isFinite, bpm > 0, bpm <= 999 else {
-                    throw SongEditError.validation("Enter a BPM between 1 and 999, or leave it blank.")
-                }
-                if case .number = original.fields["tempo"] { edits["tempo"] = .number(bpm) }
-                else { edits["tempo"] = .string(value) }
+        if !tempo.isEmpty {
+            guard let bpm = Double(tempo), bpm.isFinite, bpm > 0, bpm <= 999 else {
+                throw SongEditError.validation("Enter a BPM between 1 and 999, or leave it blank.")
             }
         }
-        if timeSignature != before.timeSignature {
-            let value = timeSignature.trimmingCharacters(in: .whitespacesAndNewlines)
-            if value.isEmpty { edits["timeSignature"] = .null }
-            else {
-                let parts = value.split(separator: "/", omittingEmptySubsequences: false)
-                guard parts.count == 2, let beats = Int(parts[0]), (1...32).contains(beats),
-                      let unit = Int(parts[1]), [1, 2, 4, 8, 16, 32, 64].contains(unit) else {
-                    throw SongEditError.validation("Use a time signature such as 4/4, 3/4 or 6/8.")
-                }
-                edits["timeSignature"] = .string("\(beats)/\(unit)")
+        if !timeSignature.isEmpty {
+            let parts = timeSignature.split(separator: "/", omittingEmptySubsequences: false)
+            guard parts.count == 2, let beats = Int(parts[0]), (1...32).contains(beats),
+                  let unit = Int(parts[1]), [1, 2, 4, 8, 16, 32, 64].contains(unit) else {
+                throw SongEditError.validation("Use a time signature such as 4/4, 3/4 or 6/8.")
             }
         }
-        if duration != before.duration {
-            let value = duration.trimmingCharacters(in: .whitespacesAndNewlines)
-            if value.isEmpty { edits["duration"] = .null }
-            else {
-                let parts = value.split(separator: ":", omittingEmptySubsequences: false)
-                let numbers = parts.compactMap { Int($0) }
-                guard (2...3).contains(parts.count), numbers.count == parts.count,
-                      parts.allSatisfy({ !$0.isEmpty && $0.allSatisfy(\.isNumber) }),
-                      numbers.allSatisfy({ $0 >= 0 && $0 <= 9999 }), numbers.last! < 60,
-                      parts.count != 3 || numbers[1] < 60 else {
-                    throw SongEditError.validation("Enter length as minutes:seconds, such as 3:45.")
-                }
-                edits["duration"] = .string(value)
+        if !duration.isEmpty {
+            let parts = duration.split(separator: ":", omittingEmptySubsequences: false)
+            let numbers = parts.compactMap { Int($0) }
+            let seconds = parts.count == 1 && Int(duration).map { $0 >= 0 } == true
+            guard seconds || ((2...3).contains(parts.count) && numbers.count == parts.count &&
+                parts.allSatisfy({ !$0.isEmpty && $0.allSatisfy(\.isNumber) }) &&
+                numbers.allSatisfy({ $0 >= 0 && $0 <= 9999 }) && numbers.last! < 60 &&
+                (parts.count != 3 || numbers[1] < 60)) else {
+                throw SongEditError.validation("Enter length as minutes:seconds (3:45) or seconds (225).")
             }
         }
-        return edits.filter { field, value in
-            value == .null ? original.fields[field] != nil : original.fields[field] != value
+        guard hasChanges else { return [:] }
+        var edits = Self.compatibilityFields(source: metadata, original: original)
+        edits["rawData"] = .string(chordPro)
+        edits["macJamsChordProVersion"] = .number(1)
+        if key != SongDraft(song: original).key, original.fields["transpose"] != nil { edits["transpose"] = .null }
+        return edits.filter { field, value in value == .null ? original.fields[field] != nil : original.fields[field] != value }
+    }
+    /// Legacy JSON is a compatibility mirror of the canonical ChordPro preamble.
+    static func compatibilityFields(source: ChordProSongSource, original: LibrarySong) -> [String: JSONValue] {
+        var result: [String: JSONValue] = [:]
+        for (directive, field) in [("title", "title"), ("artist", "artist"), ("time", "timeSignature"), ("duration", "duration"), ("capo", "capo"), ("tempo", "tempo")] {
+            let value = directive == "artist" ? source.values[directive]?.joined(separator: ", ") : source.first(directive)
+            if let value, !value.isEmpty {
+                if case .number = original.fields[field], let number = Double(value), number.isFinite { result[field] = .number(number) }
+                else { result[field] = .string(value) }
+            } else { result[field] = .null }
         }
+        if let value = source.first("key"), !value.isEmpty {
+            let minor = value.hasSuffix("m"), raw = value.hasSuffix("m") ? String(value.dropLast()) : value
+            let root = String(raw.prefix(1)).uppercased() + raw.dropFirst().replacingOccurrences(of: "♯", with: "#").replacingOccurrences(of: "♭", with: "b")
+            var fields = original.fields["keyChord"]?.object ?? [:]
+            fields["key"] = .string(root); fields["minor"] = .bool(minor)
+            result["keyChord"] = .object(fields)
+        } else { result["keyChord"] = .null }
+        return result
     }
 }
 

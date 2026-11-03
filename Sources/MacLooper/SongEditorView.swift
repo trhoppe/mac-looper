@@ -37,14 +37,14 @@ struct SongEditorView: View {
                         field("Song key", text: $draft.key, prompt: "C, F# or Am")
                         field("BPM", text: $draft.tempo, prompt: "120")
                         field("Time signature", text: $draft.timeSignature, prompt: "4/4")
-                        field("Length (m:ss)", text: $draft.duration, prompt: "3:45")
+                        field("Length", text: $draft.duration, prompt: "3:45")
                     }
             }.padding(.horizontal, 18).padding(.bottom, 14).disabled(saving)
             Divider()
             HStack {
                 Text("ChordPro").font(.subheadline.weight(.semibold))
                 Spacer()
-                Text("Place [C] before a word. Type tabs as plain text.")
+                Text("Details above edit the ChordPro header. Use [C] before a word.")
                     .font(.caption).foregroundStyle(.secondary)
             }.padding(.horizontal, 18).padding(.vertical, 10)
             ChordProTextEditor(text: $draft.chordPro).disabled(saving).frame(maxWidth: .infinity, maxHeight: .infinity)

@@ -3,7 +3,7 @@ import LooperCore
 
 struct LooperPanel: View {
     @ObservedObject var model: LooperModel
-    var waveformHeight: Double = 38
+    var waveformHeight: Double = 56
     private let accent = Color(red: 0.259, green: 0.788, blue: 0.961)
     private var bpm: Binding<Double> { Binding(get: { model.bpm }, set: { if $0.isFinite { model.bpm = min(240, max(30, $0)) } }) }
     private var bars: Binding<Double> { Binding(get: { Double(model.bars) }, set: { if $0.isFinite { model.bars = Int(min(8, max(1, $0.rounded()))) } }) }
@@ -11,19 +11,27 @@ struct LooperPanel: View {
     private var percent: Binding<Double> { Binding(get: { (model.volume * 100).rounded() }, set: { if $0.isFinite { model.volume = min(100, max(0, $0)) / 100 } }) }
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                Text("Looper").font(.callout.weight(.semibold))
-                if model.busy || model.hasLoop {
+            title
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 12) {
+                    timing.fixedSize()
+                    Spacer(minLength: 8)
+                    transport.fixedSize()
+                    volume.frame(width: 260)
+                }
+                VStack(alignment: .leading, spacing: 10) {
+                    timing
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 12) { transport; Spacer(minLength: 8); volume.frame(width: 260) }
+                        VStack(alignment: .trailing, spacing: 8) { transport; volume.frame(maxWidth: 300) }
+                    }
+                }
+            }.padding(.bottom, 6)
+            if model.busy || model.hasLoop {
+                HStack(spacing: 8) {
                     Text(model.status).font(.caption.weight(.medium)).foregroundStyle(model.state == TL_RECORDING ? .red : accent)
                     Text(model.detail).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
-                Spacer(minLength: 0)
-            }
-            HStack(spacing: 14) {
-                TimingControl(label: "BPM", value: bpm, bounds: 30...240).disabled(!model.canEditTiming)
-                TimingControl(label: "Bars", value: bars, bounds: 1...8).disabled(!model.canEditTiming)
-                Text(String(format: "4/4 · %.2f s", model.seconds)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-                Spacer(minLength: 0)
             }
             HStack(spacing: 10) {
                 Text("Threshold").font(.caption).foregroundStyle(.secondary)
@@ -34,7 +42,6 @@ struct LooperPanel: View {
                         Rectangle().fill(.orange).frame(width: 2).offset(x: min(geo.size.width - 2, max(0, geo.size.width * (model.thresholdDB + 72) / 72)))
                     }
                 }.frame(height: 8).accessibilityLabel("Input level \(Int(model.meterDB)) decibels")
-                Slider(value: threshold, in: -72...0).frame(minWidth: 100, maxWidth: 180).accessibilityLabel("Strum threshold")
                 TextField("dB", value: threshold, format: .number.precision(.fractionLength(0)))
                     .textFieldStyle(.roundedBorder).frame(width: 48).multilineTextAlignment(.trailing).accessibilityLabel("Threshold decibels")
                 Text("dB").font(.caption).foregroundStyle(.secondary)
@@ -58,20 +65,26 @@ struct LooperPanel: View {
                     var p = Path(); p.move(to: CGPoint(x: x, y: 0)); p.addLine(to: CGPoint(x: x, y: size.height))
                     context.stroke(p, with: .color(.white.opacity(0.8)), lineWidth: 1)
                 }
-            }.frame(height: waveformHeight).accessibilityLabel("Loop waveform")
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 12) { transport; volume.frame(maxWidth: 300); Spacer(minLength: 0) }
-                VStack(alignment: .leading, spacing: 8) { transport; volume.frame(maxWidth: 300) }
-            }
-            if let error = model.error {
-                HStack(alignment: .top) {
-                    Image(systemName: "exclamationmark.circle").foregroundStyle(.orange)
-                    Text(error).font(.caption).textSelection(.enabled)
-                    Spacer(minLength: 0)
-                    Button { model.error = nil } label: { Image(systemName: "xmark") }.buttonStyle(.plain)
-                }
-            }
-        }.padding(16).background(Color(red: 0.075, green: 0.085, blue: 0.10)).tint(accent)
+            }.frame(height: waveformHeight).padding(.top, 6).accessibilityLabel("Loop waveform")
+        }.padding(.horizontal, 16).padding(.top, 16).padding(.bottom, 4)
+            .background(Color(red: 0.075, green: 0.085, blue: 0.10)).tint(accent)
+    }
+    private var title: some View { Text("Looper").font(.callout.weight(.semibold)).fixedSize() }
+    private var timing: some View {
+        HStack(spacing: 10) {
+            TimingControl(label: "BPM", value: bpm, bounds: 30...240).disabled(!model.canEditTiming)
+            timingDivider
+            TimingControl(label: "Bars", value: bars, bounds: 1...8).disabled(!model.canEditTiming)
+            timingDivider
+            timingSummary
+        }
+    }
+    private var timingDivider: some View {
+        Rectangle().fill(.white.opacity(0.14)).frame(width: 1, height: 24).accessibilityHidden(true)
+    }
+    private var timingSummary: some View {
+        Text(String(format: "4/4 · %.2f s", model.seconds))
+            .font(.system(size: 15, weight: .medium).monospacedDigit()).foregroundStyle(.secondary).fixedSize()
     }
     private var transport: some View {
         HStack(spacing: 8) {
@@ -102,13 +115,14 @@ private struct TimingControl: View {
     var body: some View {
         HStack(spacing: 5) {
             TextField(label, value: $value, format: .number.precision(.fractionLength(0)))
-                .textFieldStyle(.roundedBorder).frame(width: label == "BPM" ? 57 : 38)
+                .font(.system(size: 18, weight: .medium).monospacedDigit())
+                .textFieldStyle(.roundedBorder).frame(width: label == "BPM" ? 64 : 44)
                 .accessibilityLabel(label == "BPM" ? "Loop tempo" : "Loop bars")
-            Text(label).font(.caption).foregroundStyle(.secondary)
-            Button { value = max(bounds.lowerBound, value.rounded() - 1) } label: { Image(systemName: "minus").frame(width: 12) }
+            Text(label).font(.system(size: 14, weight: .medium)).foregroundStyle(.secondary)
+            Button { value = max(bounds.lowerBound, value.rounded() - 1) } label: { Image(systemName: "minus").font(.system(size: 14, weight: .semibold)).frame(width: 12) }
                 .disabled(value <= bounds.lowerBound).accessibilityLabel("Decrease \(label)")
-            Button { value = min(bounds.upperBound, value.rounded() + 1) } label: { Image(systemName: "plus").frame(width: 12) }
+            Button { value = min(bounds.upperBound, value.rounded() + 1) } label: { Image(systemName: "plus").font(.system(size: 14, weight: .semibold)).frame(width: 12) }
                 .disabled(value >= bounds.upperBound).accessibilityLabel("Increase \(label)")
-        }.buttonStyle(.bordered).controlSize(.small)
+        }.buttonStyle(.bordered).controlSize(.regular)
     }
 }

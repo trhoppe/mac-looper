@@ -176,15 +176,17 @@ struct ContentView: View, Equatable {
     private var looperPane: some View {
         GeometryReader { geo in
             ScrollView {
-                LooperPanel(model: model, waveformHeight: max(38, geo.size.height - 190))
+                LooperPanel(model: model, waveformHeight: max(56, geo.size.height - 150))
                     .frame(maxWidth: .infinity, minHeight: geo.size.height, alignment: .topLeading)
             }
         }.background(Color(red: 0.075, green: 0.085, blue: 0.10))
     }
     private var drummerPane: some View {
-        ScrollView {
-            DrummerPanel(drums: AudioEngineHost.shared.drums, output: drumOutput, compact: true)
-                .frame(maxWidth: .infinity, alignment: .topLeading)
+        GeometryReader { geo in
+            ScrollView {
+                DrummerPanel(drums: AudioEngineHost.shared.drums, output: drumOutput)
+                    .frame(maxWidth: .infinity, minHeight: geo.size.height, idealHeight: geo.size.height, alignment: .topLeading)
+            }
         }.background(Color(red: 0.075, green: 0.085, blue: 0.10))
     }
     private func endEditing() { editingDraft = nil; library.editing = false }

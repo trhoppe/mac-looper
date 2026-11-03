@@ -41,12 +41,24 @@ There is no buffer selector. The Mac retains its strict 32-sample requirement.
 
 ## Chord charts, editing and iCloud library
 
-Mac Jams owns its `library.json`. **JustChords syncing is disabled**, including the
+Mac Jams owns its `library.json`, with each song's **ChordPro text as the source
+of truth**. Title, artist, key, BPM, time signature, duration and capo live in
+standard directives in `rawData`. The old JSON fields are maintained as
+compatibility copies. **JustChords syncing is disabled**, including the
 old launch-time import. Existing source bookmarks are ignored and removed; the
 original JustChords library is never written. The existing own library remains
 in **iCloud Drive → Mac Looper → library.json**, preserving access and data through
 the app rename. On iPad, choose that same folder under **Settings → Choose library
 folder…**. An iPad without a shared-folder choice uses its local Documents/Library.
+
+The first open converts existing songs once: missing ChordPro headers are filled
+from their existing details, plain section headings become labeled environments,
+and unmarked tabs receive explicit tab boundaries. Existing directives win over
+old JSON copies. Chords/lyrics/tab rows, IDs, playlist settings, saved transposes
+and unknown data are retained. An exact `library-before-chordpro-…json` backup is
+written beside the library under **Library Backups** before replacement. A
+per-song `macJamsChordProVersion` marker makes later launches leave converted
+source alone. Failed conversion never replaces the working file.
 
 The own library loads at launch and when returning to the foreground, except
 while editing. Each save coordinates access to the current iCloud file, reads its
@@ -61,9 +73,15 @@ With a chart selected, click **Edit** below the font controls. The editor fills
 
 - Song name and artist.
 - Song key (for example C, F# or Am), BPM and time signature.
-- Song length in minutes:seconds, using the existing `duration` JSON field.
+- Song length in minutes:seconds or seconds, stored as `{duration: ...}`.
 - Raw ChordPro: type `[C]` before a word to place its chord above that word in
   reading mode. Type tabs as plain text; spaces and line breaks are preserved.
+
+The detail fields and raw text edit the same ChordPro header. Changing BPM writes
+`{tempo: ...}` immediately; editing that directive updates the BPM field.
+The preamble supplies song-level details; later key/tempo/meter/capo directives
+remain local chart instructions and do not operate audio transport. The selected
+song's initial ChordPro BPM still updates the empty looper.
 
 The monospaced native editor highlights chord brackets in cyan and headings in
 gray. Smart quotes/dashes, spelling corrections and automatic replacements are
@@ -79,10 +97,10 @@ memory until Save; there is no automatic draft recovery. No-op saves do not
 rewrite the JSON or create a backup.
 
 The storage structure remains compatible with the imported JustChords format.
-Viewing retains exact file bytes. Explicit saves reformat the JSON while retaining
+After the one-time conversion, viewing retains exact file bytes. Explicit saves reformat the JSON while retaining
 unrelated values, unknown fields, trash and playlist membership/settings. The
 editor changes the library song; playlist-specific overrides remain intact.
-Changing Song key updates key metadata and clears an old display transpose;
+Changing Song key updates its ChordPro directive and compatibility copy, and clears an old display transpose;
 it does not rewrite the chord symbols in the source. Song time signature and
 length are metadata; live loop timing still uses 4/4.
 
@@ -93,6 +111,12 @@ preference and remembers it. When space allows, paired lines read left-to-right
 across each row, then down; headings and tabs span the full chart. Narrow space
 falls back to one column. Raw tab rows stay grouped and monospaced. Adjacent
 chord-only fragments have visible spacing without changing source content.
+
+ChordPro support includes standard section labels, chorus recall, annotations,
+literal tab blocks, comment styles and metadata directives. Some advanced
+ChordPro 6 features are not yet rendered; the chart reports unsupported features
+and keeps their source. See the [compatibility matrix](docs/chordpro-compatibility.md)
+for the exact supported subset and remaining features.
 
 Private user JSON and backing audio are never included in the app bundle or Git.
 
