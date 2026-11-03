@@ -81,12 +81,14 @@ public struct SongDraft: Identifiable, Equatable, Sendable {
 }
 
 public enum SongEditError: LocalizedError {
-    case validation(String), missingSong, conflict, protectedLibrary
+    case validation(String), missingSong, conflict, protectedLibrary, unresolvedCloudConflict, conflictsChanged
     public var errorDescription: String? {
         switch self {
         case .validation(let message): return message
         case .missingSong: return "This song is no longer in the library. Your changes have not been saved."
-        case .conflict: return "This song changed on another device. Your draft is still here. Cancel and reopen Edit to load the latest version before saving."
+        case .conflict: return "This song changed on another device. Your draft is still here. Your recovery copy has been kept. Copy your ChordPro before discarding this draft, then reopen Edit to review the latest version."
+        case .unresolvedCloudConflict: return "iCloud has conflicting library versions. Your draft is safe. Review the versions in Settings before saving."
+        case .conflictsChanged: return "The library changed while you were reviewing it. Refresh the versions and choose again. All copies have been kept."
         case .protectedLibrary: return "Choose the Mac Jams library folder, separate from JustChords. Its original library stays unchanged."
         }
     }

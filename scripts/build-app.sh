@@ -12,6 +12,12 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 ./scripts/build-icon.sh
 cp "$PWD/build/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
 cp Assets/AppIcon.png "$APP/Contents/Resources/LooperArtwork.png"
+# Swift package resource bundles sit beside the executable in SwiftPM output.
+# Place them inside the app before signing so the standalone remote finds catalogs.
+for resource_bundle in "$BIN"/*.bundle; do
+    [ -d "$resource_bundle" ] || continue
+    ditto "$resource_bundle" "$APP/Contents/Resources/$(basename "$resource_bundle")"
+done
 # Replace the executable atomically. A running app keeps its original inode;
 # overwriting that mapped executable in place can invalidate its code pages.
 cp "$BIN/MacLooper" "$APP/Contents/MacOS/MacLooper.next"

@@ -13,16 +13,16 @@ struct AppReadiness: Equatable {
     init(audio: LooperModel, drums: PopDrummerModel, files: AudioFilePlayerModel, library: SongLibraryModel) {
         let route = Publishers.CombineLatest3(audio.$running, audio.$starting, audio.$error)
         let instrument = Publishers.CombineLatest3(drums.$ready, drums.$loading, drums.$error)
-        let loading = Publishers.CombineLatest3(files.$loading, library.$syncing, files.$error)
+        let loading = Publishers.CombineLatest4(files.$loading, library.$syncing, files.$error, library.$error)
         Publishers.CombineLatest3(route, instrument, loading).map { route, instrument, loading in
             if let error = route.2 { return AppReadiness(title: "Check audio", detail: error) }
             if let error = instrument.2 { return AppReadiness(title: "Check drummer", detail: error) }
             if let error = loading.2 { return AppReadiness(title: "Check player", detail: error) }
-            if route.1 || instrument.1 { return AppReadiness(title: "Connecting", detail: "Preparing audio") }
+            if let error = loading.3 { return AppReadiness(title: "Check library", detail: error) }
+            if route.1 { return AppReadiness(title: "Connecting", detail: "Preparing audio") }
             if !route.0 { return AppReadiness(title: "Waiting", detail: "Connect your audio interface or check Settings") }
-            if !instrument.0 { return AppReadiness(title: "Connecting", detail: "Preparing the drummer") }
             if loading.0 || loading.1 { return AppReadiness(title: "Loading", detail: "Loading your track or song library") }
-            return AppReadiness(title: "Ready", detail: "Audio and drummer are ready")
+            return AppReadiness(title: "Ready", detail: instrument.1 ? "Audio ready · Drummer loading" : "Audio ready")
         }.removeDuplicates().assign(to: &$value)
     }
 }

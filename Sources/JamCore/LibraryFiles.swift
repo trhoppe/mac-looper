@@ -1,7 +1,13 @@
 import Foundation
 
 public actor LibraryFiles {
-    public init() { }
+    let conflictVersions: (URL) throws -> [LibraryConflictVersion]
+    let markConflictResolved: (LibraryConflictVersion, URL) throws -> Void
+    public init(conflictVersions: ((URL) throws -> [LibraryConflictVersion])? = nil,
+                markConflictResolved: ((LibraryConflictVersion, URL) throws -> Void)? = nil) {
+        self.conflictVersions = conflictVersions ?? Self.systemConflictVersions
+        self.markConflictResolved = markConflictResolved ?? Self.markSystemConflictResolved
+    }
     public func read(_ url: URL) throws -> JustChordsLibrary {
         var error: NSError?, readError: Error?, bytes: Data?
         NSFileCoordinator().coordinate(readingItemAt: url, options: [], error: &error) { file in

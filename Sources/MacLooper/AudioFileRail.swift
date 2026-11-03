@@ -152,8 +152,8 @@ struct AudioFileRail: View {
                 Button { model.skip(-10) } label: { playerIcon("gobackward.10") }
                     .disabled(model.duration <= 0 || model.loading).accessibilityLabel("Back 10 seconds")
                 Button { model.togglePlay() } label: {
-                    playerIcon(model.playing ? "pause.fill" : "play.fill", primary: true)
-                }.disabled(model.duration <= 0 || model.loading).accessibilityLabel(model.playing ? "Pause file" : "Play file")
+                    playerIcon((model.playing || model.startingPlayback) ? "pause.fill" : "play.fill", primary: true)
+                }.disabled(model.duration <= 0 || model.loading).accessibilityLabel((model.playing || model.startingPlayback) ? "Pause file" : "Play file")
                 Button { model.stop() } label: { playerIcon("stop.fill") }
                     .disabled(model.selected == nil || model.loading).accessibilityLabel("Stop file")
                 Button { model.skip(10) } label: { playerIcon("goforward.10") }

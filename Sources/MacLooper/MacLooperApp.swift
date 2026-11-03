@@ -5,14 +5,16 @@ import LooperCore
 import AppKit
 #endif
 import JamCore
+import AM4RemoteKit
 
 #if os(macOS)
 @MainActor final class AppDelegate: NSObject, NSApplicationDelegate {
     var model: LooperModel?
     var files: AudioFilePlayerModel?
     var library: SongLibraryModel?
+    var remote: AM4RemoteSession?
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
-    func applicationWillTerminate(_ notification: Notification) { model?.shutdown(); files?.shutdown(); library?.shutdown() }
+    func applicationWillTerminate(_ notification: Notification) { remote?.stop(); model?.shutdown(); files?.shutdown(); library?.shutdown() }
 }
 
 #endif
@@ -44,6 +46,11 @@ import JamCore
                 exit(0)
             } catch { fputs("\(error.localizedDescription)\n", stderr); exit(1) }
         }
+        if CommandLine.arguments.contains("--am4-resources-check") {
+            // Standalone bundle check: no MIDI connection or hardware writes.
+            print("PASS: AM4 resources: \(AM4AmpCatalog.shared.models.count) amps, \(AM4EffectsCatalog.shared.effects.count) effect editors, \(AM4AmpLibrary.shared.entries.count) amp library entries, \(AM4EffectsLibrary.shared.entries.count) effect library entries")
+            exit(0)
+        }
         if CommandLine.arguments.contains("--devices") {
             do {
                 for d in try AudioDevices.list() {
@@ -55,11 +62,11 @@ import JamCore
     }
     var body: some Scene {
         WindowGroup("Mac Jams") {
-            ContentView(model: model, readiness: session.readiness, files: files, library: library).equatable()
+            ContentView(model: model, readiness: session.readiness, files: files, remote: session.remote, library: library).equatable()
                 .preferredColorScheme(.dark)
                 .task {
                     #if os(macOS)
-                    delegate.model = model; delegate.files = files; delegate.library = library
+                    delegate.model = model; delegate.files = files; delegate.library = library; delegate.remote = session.remote
                     #endif
                     #if DEBUG && os(macOS)
                     if let index = CommandLine.arguments.firstIndex(of: "--render-preview"), CommandLine.arguments.count > index + 1 {
@@ -79,6 +86,12 @@ import JamCore
                     if CommandLine.arguments.contains("--drummer-check") {
                         do { try await DrummerDiagnostics.run(); exit(0) }
                         catch { fputs("FAIL: \(error.localizedDescription)\n", stderr); exit(1) }
+                    }
+                    if CommandLine.arguments.contains("--am4-check") {
+                        do {
+                            for line in try await AM4RemoteDiagnostics.run(session: session.remote, exerciseControls: CommandLine.arguments.contains("--am4-exercise-controls")) { print(line) }
+                            session.remote.stop(); exit(0)
+                        } catch { fputs("FAIL: \(error.localizedDescription)\n", stderr); session.remote.stop(); exit(1) }
                     }
                     if CommandLine.arguments.contains("--smoke-test") {
                         print("Smoke: requesting loop audio")
@@ -118,6 +131,11 @@ import JamCore
                                 restartContinued = restarted?.playing == true && (restarted?.position ?? 1) < 0.2
                             } catch { model.error = error.localizedDescription }
                         }
+                        if CommandLine.arguments.contains("--smoke-am4") {
+                            do {
+                                for line in try await AM4RemoteDiagnostics.run(session: session.remote, exerciseControls: CommandLine.arguments.contains("--am4-exercise-controls")) { print("Smoke MIDI: " + line) }
+                            } catch { model.error = error.localizedDescription }
+                        }
                         let durationIndex = CommandLine.arguments.firstIndex(of: "--smoke-seconds")
                         let duration = durationIndex.flatMap { CommandLine.arguments.count > $0 + 1 ? Double(CommandLine.arguments[$0 + 1]) : nil } ?? 3
                         try? await Task.sleep(for: .seconds(duration.isFinite ? min(120, max(3, duration)) : 3))
@@ -134,7 +152,7 @@ import JamCore
                             && (!fileExpected || (file?.playing == true && (file?.position ?? 0) > 0.1))
                         print(success ? "PASS: \(model.input?.name ?? "Input") input → \(model.output?.name ?? "Output") output at \(Int(model.sampleRate)) Hz; \(model.audioCallbackFrames) samples; \(model.audioCallbackCount) callbacks; concurrent silent file playback: \(fileExpected); restart kept playback: \(restartContinued); no chart selected; no live monitoring." : "FAIL: \(model.error ?? "Audio stopped or callbacks did not advance")")
                         await player.unload()
-                        model.shutdown()
+                        model.shutdown(); session.remote.stop()
                         exit(success ? 0 : 1)
                     }
                     // Hosted unit tests exercise DSP without opening physical I/O.
@@ -155,18 +173,38 @@ import JamCore
 
 @MainActor private final class JamSession: ObservableObject {
     let model = LooperModel()
+    let remote = AM4RemoteSession()
     let files = AudioFilePlayerModel()
     let library: SongLibraryModel
     let commands: JamCommandAvailability
     let readiness: AppReadinessModel
+    #if os(iOS)
+    private var lifecycle: IPadAudioLifecycle?
+    #endif
     init() {
         if let index = CommandLine.arguments.firstIndex(of: "--editor-check-folder"), CommandLine.arguments.count > index + 1 {
             // UI validation uses an isolated fixture and defaults, never user songs.
+            let folder = URL(fileURLWithPath: CommandLine.arguments[index + 1], isDirectory: true)
+            let io: LibraryFiles
+            if CommandLine.arguments.contains("--simulate-library-conflict") {
+                // Opt-in UI fixture, confined to the explicitly supplied test folder.
+                // This does not create/resolve actual iCloud file versions.
+                var resolved = false
+                io = LibraryFiles(conflictVersions: { _ in
+                    if resolved { return [] }
+                    return [LibraryConflictVersion(id: "fixture", data: try Data(contentsOf: folder.appendingPathComponent("conflicting-library.json")),
+                                                   date: Date(timeIntervalSince1970: 1793656800), device: "Test iPad")]
+                }, markConflictResolved: { _, _ in resolved = true })
+            } else { io = LibraryFiles() }
             library = SongLibraryModel(defaults: UserDefaults(suiteName: "MacJamsEditor-" + UUID().uuidString)!,
-                                       folderOverride: URL(fileURLWithPath: CommandLine.arguments[index + 1], isDirectory: true))
+                                       folderOverride: folder,
+                                       recoveryStore: SongDraftRecoveryStore(folder: folder.appendingPathComponent("Draft Recovery")), io: io)
         } else { library = SongLibraryModel() }
         commands = JamCommandAvailability(model: model, files: files, library: library)
         readiness = AppReadinessModel(audio: model, drums: AudioEngineHost.shared.drums, files: files, library: library)
+        #if os(iOS)
+        if NSClassFromString("XCTestCase") == nil { lifecycle = IPadAudioLifecycle(model: model, files: files) }
+        #endif
     }
 }
 
@@ -191,17 +229,18 @@ import JamCore
 @MainActor private struct JamCommands: Commands {
     let session: JamSession
     @ObservedObject private var available: JamCommandAvailability
-    init(session: JamSession) { self.session = session; available = session.commands }
+    @ObservedObject private var remote: AM4RemoteSession
+    init(session: JamSession) { self.session = session; available = session.commands; remote = session.remote }
     var body: some Commands {
         CommandGroup(replacing: .newItem) { }
         CommandMenu("Backing Track") {
             Button("Restart Track") { session.files.restart() }
-                .keyboardShortcut(.leftArrow, modifiers: []).disabled(!available.canRestart || available.editing)
+                .keyboardShortcut(.leftArrow, modifiers: []).disabled(!available.canRestart || available.editing || remote.isPresented)
         }
         CommandMenu("Loop") {
-            Button("Arm") { Task { await session.model.arm() } }.keyboardShortcut("r", modifiers: []).disabled(!available.canArm || available.editing)
-            Button("Play / Stop") { session.model.playStop() }.keyboardShortcut(.space, modifiers: []).disabled(!available.canPlay || available.editing)
-            Button("Clear") { session.model.clear() }.keyboardShortcut(.delete, modifiers: []).disabled(!available.canClear || available.editing)
+            Button("Arm") { Task { await session.model.arm() } }.keyboardShortcut("r", modifiers: []).disabled(!available.canArm || available.editing || remote.isPresented)
+            Button("Play / Stop") { session.model.playStop() }.keyboardShortcut(.space, modifiers: []).disabled(!available.canPlay || available.editing || remote.isPresented)
+            Button("Clear") { session.model.clear() }.keyboardShortcut(.delete, modifiers: []).disabled(!available.canClear || available.editing || remote.isPresented)
         }
     }
 }

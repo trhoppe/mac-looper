@@ -35,6 +35,7 @@ public extension LibraryFiles {
         var coordinationError: NSError?, operationError: Error?, result: JustChordsLibrary?
         NSFileCoordinator().coordinate(writingItemAt: destination, options: .forReplacing, error: &coordinationError) { file in
             do {
+                guard try conflictVersions(file).isEmpty else { throw SongEditError.unresolvedCloudConflict }
                 let previous = try Data(contentsOf: file)
                 let latest = try JustChordsLibrary(data: previous)
                 let updated = try latest.applying(draft)
@@ -97,6 +98,7 @@ public extension LibraryFiles {
             do {
                 let previous = try Data(contentsOf: file)
                 let latest = try JustChordsLibrary(data: previous)
+                guard try conflictVersions(file).isEmpty else { result = latest; return }
                 let updated = try latest.migratingToChordPro()
                 if updated.originalData != previous {
                     let backups = file.deletingLastPathComponent().appendingPathComponent("Library Backups", isDirectory: true)

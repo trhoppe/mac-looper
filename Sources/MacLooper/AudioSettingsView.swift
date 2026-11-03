@@ -1,10 +1,13 @@
 import SwiftUI
+import JamCore
 
 struct AudioSettingsView: View {
     @ObservedObject var model: LooperModel
     @ObservedObject var library: SongLibraryModel
     let dismiss: () -> Void
     let chooseFolder: () -> Void
+    let recoverDraft: (SongDraft) -> Void
+    @State private var reviewingConflicts = false
     private let accent = Color(red: 0.259, green: 0.788, blue: 0.961)
     private var bufferSummary: String {
         #if os(macOS)
@@ -41,7 +44,7 @@ struct AudioSettingsView: View {
                 Text(model.starting ? "Connecting audio…" : model.running ? "Audio connected automatically" : "Waiting for an audio interface")
                     .font(.caption).foregroundStyle(.secondary)
                 if !model.running && !model.starting {
-                    Button("Retry Connection") { Task { await model.startAudio() } }
+                    Button("Retry Connection") { Task { await model.retryAudio() } }
                         .disabled(model.input == nil || model.output == nil)
                 }
                 Divider()
@@ -49,10 +52,21 @@ struct AudioSettingsView: View {
                 Text(library.status).font(.caption).foregroundStyle(.secondary)
                 Text("Library folder: \(library.folderURL.lastPathComponent)").font(.caption).lineLimit(2)
                 Button("Choose library folder…") { chooseFolder() }
+                if !library.conflicts.isEmpty {
+                    Button("Review iCloud versions…") { reviewingConflicts = true }
+                }
+                if !library.recoveredDrafts.isEmpty {
+                    Text("Unsaved edits").font(.subheadline.weight(.semibold))
+                    ForEach(library.recoveredDrafts) { recovery in
+                        Button("Recover: " + recovery.draft.title) { recoverDraft(recovery.draft) }
+                    }
+                }
                 Text("Mac Jams edits library.json in this folder. JustChords syncing is off. Each save keeps the previous JSON in Library Backups.")
                     .font(.caption).foregroundStyle(.secondary)
                 if let error = library.error { Text(error).font(.caption).foregroundStyle(.orange) }
             }.padding(20)
         }.frame(width: 430, height: 540).tint(accent)
+        .sheet(isPresented: $reviewingConflicts) { LibraryConflictView(library: library) }
+        .task { await library.refreshRecoveredDrafts() }
     }
 }

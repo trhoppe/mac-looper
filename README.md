@@ -1,7 +1,7 @@
 # Mac Jams
 
 A native Mac and iPad guitar-jamming app. Chord charts and backing playback share
-one SwiftUI workspace. Header controls show or hide Songs, Chords, Looper, Drummer and
+one SwiftUI workspace. A full-app AM4 Remote controls the connected amp over USB MIDI. Header controls show or hide Songs, Chords, Looper, Drummer and
 Player; the chart expands into the available space.
 A shared C render core provides sample-accurate threshold capture. Live guitar
 monitoring stays on the AM4. No DAW or recording projects are required; optional
@@ -118,7 +118,8 @@ ChordPro 6 features are not yet rendered; the chart reports unsupported features
 and keeps their source. See the [compatibility matrix](docs/chordpro-compatibility.md)
 for the exact supported subset and remaining features.
 
-Private user JSON and backing audio are never included in the app bundle or Git.
+Your song `library.json` and backing audio are never included in the app bundle or Git.
+AM4 Remote retains its existing bundled offline amp/effect libraries.
 
 Use **Songs** to choose a playlist and select a chart. Click its magnifying glass
 to reveal title/artist search. The adjacent sort dropdown offers **Song name**
@@ -140,6 +141,37 @@ is adopted only while the loop is empty; an existing loop’s timing remains fix
 
 Select backing audio manually in the right rail. Chart browsing and backing-track
 selection are independent; there are no attachment controls in the chart.
+
+## AM4 Remote
+
+Click **AM4 Remote** in the header to cover the entire app with the integrated
+remote. **Close** in the upper right returns to the same jam layout, chart,
+selections and panel sizes. Looper, backing player and hosted drums keep running.
+The header's navigation strip scrolls horizontally when space is tight.
+
+The remote retains preset/scene selection, block bypass, Amp/Drive/Delay/Reverb/
+Graphic EQ/Enhancer editors, channel/model/library choices, knob/numeric/default
+editing, EQ faders and hardware read-back verification from the original app.
+Edits affect the working buffer; it does not send permanent preset Save commands.
+The standalone remote's USB playback slider is omitted here; use the existing
+Mac Jams mix controls.
+
+The source lives in `Packages/AM4RemoteKit`, imported from the original local
+`am4-remote` checkout without modifying that project. It includes its catalogs,
+saved Amp/effect libraries and protocol tests. There is no runtime dependency on
+the other checkout or on a work account. Physical Mac/iPad use Core MIDI directly;
+the optional localhost helper remains a simulator development facility.
+
+One session owns the MIDI connection. It starts on first opening the remote;
+closing pauses polling without interrupting a pending verified operation. MIDI
+updates stay inside the remote UI, and the Mac Jams single-key playback/loop
+shortcuts are disabled while it is open. Audio routing and capture are unchanged.
+Close AM4-Edit when using the remote, as with the original standalone app.
+
+```sh
+swift test --package-path Packages/AM4RemoteKit
+"build/Mac Jams.app/Contents/MacOS/MacLooper" --am4-resources-check
+```
 
 ## Resizable panels
 
@@ -334,3 +366,30 @@ private libraries, signing files and caches are ignored. No external dependencie
 
 References: [Apple AUHAL routing note](https://developer.apple.com/library/archive/technotes/tn2091/)
 and [AM4 owner's manual](https://www.fractalaudio.com/downloads/manuals/AM4/AM4-Owners-Manual.pdf).
+
+## Reliability, recovery and interruptions
+
+Pop Drummer loads when Play/Open is used. A missing or failed instrument does not
+hold up the looper/backing route; use **Retry Drummer** after fixing installation.
+Pending file playback cannot autoplay another selection or override a later Stop.
+
+Unsaved song edits have a device-local recovery copy. Reopen Edit or use Settings'
+**Unsaved edits** list. Cancel can **Keep draft and close**; **Export ChordPro**
+keeps a separate text file. Saved library JSON and its before-save backups keep
+their existing format. JustChords syncing stays off.
+
+If iCloud reports conflicting versions, saves pause until **Settings → Review
+iCloud versions** chooses one. Preview each version first: this is a whole-library
+choice. Exact copies of all versions remain in **Library Conflicts**, and recovered
+song drafts remain available. Concurrent nonconflicting field/body edits still
+use the existing three-way merge.
+
+On iPad, backgrounding/interruption pauses audio transports. Completed loops stay
+in memory, stopped, on the same route; unfinished captures are cancelled. Returning
+never starts playback automatically. A media-services reset clears the in-memory
+loop and requires Retry Connection. Draft recovery is independent of audio state.
+The older disconnect description above applies to the Mac adapter.
+
+See [the reliability validation record](docs/reliability-validation-2026-11-02.md)
+for regression coverage, device-test scope, recovery storage and diagnostic flags.
+AM4 permanent preset Save remains a separate, unimplemented feature.

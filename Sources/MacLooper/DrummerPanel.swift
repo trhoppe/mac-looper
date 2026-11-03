@@ -15,7 +15,10 @@ struct DrummerPanel: View {
             heading
             transport.padding(.top, 10)
             if drums.loading { ProgressView().controlSize(.small) }
-            if let error = drums.error { Text(error).font(.caption).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true) }
+            if let error = drums.error {
+                Text(error).font(.caption).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
+                if !drums.ready { Button("Retry Drummer") { Task { await drums.retry() } }.disabled(drums.loading) }
+            }
             Spacer(minLength: 0)
             HStack(spacing: 6) {
                 Image(systemName: "speaker.wave.2").foregroundStyle(.secondary)

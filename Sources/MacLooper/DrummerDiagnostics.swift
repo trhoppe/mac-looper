@@ -11,7 +11,7 @@ import CoreAudio
     // Render the real installed instrument into memory, never into the speakers.
     static func run() async throws {
         let drums = AudioEngineHost.shared.drums
-        let priorProcesses = Self.hardwareProcesses().map(\.pid)
+        let priorProcesses = Set(Self.hardwareProcesses().filter(\.output).map(\.pid))
         Self.dumpHardware("before loading")
         await drums.prepare()
         Self.dumpHardware("after loading")

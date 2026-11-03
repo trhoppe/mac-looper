@@ -10,10 +10,18 @@ import CoreAudio
 @MainActor final class AudioEngineHost {
     static let shared = AudioEngineHost()
     private static var registered = false
-    let drums = PopDrummerModel()
+    let drums: PopDrummerModel
+    // An injected output setup lets regression tests render the real graph offline.
+    private let playbackSetup: ((AVAudioEngine) throws -> Double)?
+    private let makeGain: () async throws -> AVAudioUnit
+    init(drums: PopDrummerModel? = nil, playbackSetup: ((AVAudioEngine) throws -> Double)? = nil,
+         makeGain: (() async throws -> AVAudioUnit)? = nil) {
+        self.drums = drums ?? PopDrummerModel(); self.playbackSetup = playbackSetup
+        self.makeGain = makeGain ?? Self.makeDrummerGain
+    }
     private var drumGainNode: AVAudioUnit?
     private var drumGain: MLDrumGainAudioUnit?
-    private var engine: AVAudioEngine?
+    private(set) var engine: AVAudioEngine?
     private var player: AVAudioPlayerNode?
     private var loopNode: AVAudioUnit?
     private(set) var loopUnit: MLGuitarLoopAudioUnit?
@@ -23,7 +31,12 @@ import CoreAudio
     private var output: AudioDevice?
     private var input: AudioDevice?
     private var inputChannel = 0
-    private var configuring = false
+    let configuration = AudioConfigurationGate()
+    private var lifecycle = UUID()
+    private(set) var suspended = false
+    #if os(iOS)
+    private var configuredRoute: [String] = []
+    #endif
     #if os(macOS)
     private var aggregate: AudioDeviceID?
     private var macDriver: MLMacAudioDriver?
@@ -37,6 +50,7 @@ import CoreAudio
     private var segmentStart: AVAudioFramePosition = 0
     private var fileGeneration = UUID()
     private var fileScheduled = false
+    private var fileIntent = UUID()
 
     var core: OpaquePointer? { loopUnit?.core }
     var callbacks: UInt64 { loopUnit?.callbackCount ?? 0 }
@@ -48,52 +62,110 @@ import CoreAudio
         return loopUnit?.renderError ?? 0
     }
     var isRunning: Bool { engine?.isRunning == true }
-    private func waitForConfiguration() async throws {
-        for _ in 0..<500 {
-            if !configuring { return }
-            try await Task.sleep(for: .milliseconds(20))
-        }
-        throw AudioFailure(message: "The audio route is still connecting. Try again.")
+    private func checkLifecycle(_ token: UUID) throws {
+        try Task.checkCancellation()
+        guard lifecycle == token else { throw CancellationError() }
     }
     func startLoop(input: AudioDevice, output: AudioDevice, channel: Int) async throws {
-        try await waitForConfiguration()
+        let token = lifecycle
+        try await configuration.acquire(); defer { configuration.release() }
+        try checkLifecycle(token)
         if captureEnabled, isRunning, self.input?.uid == input.uid, self.output?.uid == output.uid, inputChannel == channel { return }
-        configuring = true; defer { configuring = false }
         self.input = input; self.output = output; inputChannel = channel
-        let resumeBacking = filePlaying
+        let resumeBacking = filePlaying, backingSession = fileSession, backingIntent = fileIntent
         do { try await rebuild(capture: true) }
         catch {
+            try checkLifecycle(token)
             let captureError = error
-            filePlaying = resumeBacking
+            filePlaying = resumeBacking && fileSession == backingSession && fileIntent == backingIntent
             if file != nil || drums.playing { try? await rebuild(capture: false) }
             throw captureError
         }
     }
     func stopLoop() async {
         do {
-            try await waitForConfiguration()
-            configuring = true; defer { configuring = false }
+            let token = lifecycle
+            try await configuration.acquire(); defer { configuration.release() }
+            try checkLifecycle(token)
             if captureEnabled {
                 if file == nil && !drums.playing { shutdownAudio() }
                 else { try await rebuild(capture: false) }
             }
-        } catch { shutdownAudio(); filePlaying = false }
+        } catch is CancellationError { } catch { shutdownAudio(); filePlaying = false }
     }
     func shutdown() {
+        lifecycle = UUID(); fileIntent = UUID()
         filePlaying = false; drums.setPlaying(false); drums.saveState(); shutdownAudio()
+    }
+    /// iPad suspension preserves completed samples and cancels capture after
+    /// rendering stops. Returning to the app never resumes a transport.
+    func suspendAudio() {
+        lifecycle = UUID(); fileIntent = UUID(); suspended = true
+        filePosition = position(); player?.pause(); filePlaying = false
+        drums.setPlaying(false); updateDrummerVolume()
+        // iPad lifecycle calls this; offline tests have no physical driver.
+        #if os(macOS)
+        macDriver?.stop()
+        #endif
+        engine?.pause()
+        if let core { tl_suspend(core) }
+        #if os(iOS)
+        if playbackSetup == nil { try? AVAudioSession.sharedInstance().setActive(false, options: [.notifyOthersOnDeactivation]) }
+        #endif
+    }
+    func resumeSuspendedAudio() async throws -> Bool {
+        guard suspended, let engine else { return false }
+        let token = lifecycle
+        try await configuration.acquire(); defer { configuration.release() }
+        try checkLifecycle(token)
+        guard suspended, self.engine === engine else { return false }
+        #if os(iOS)
+        let session = AVAudioSession.sharedInstance()
+        try session.setActive(true)
+        if playbackSetup == nil && (Self.currentRoute != configuredRoute || abs(session.sampleRate - sampleRate) >= 0.1) {
+            if let core, tl_snapshot(core).state != TL_EMPTY {
+                throw AudioFailure(message: "The audio route changed. Your loop is retained. Reconnect the original interface, or Clear the loop before connecting a new route.")
+            }
+            shutdownAudio()
+            return false
+        }
+        #endif
+        try MLAudioGraphTools.prepare(engine)
+        try MLAudioGraphTools.start(engine)
+        suspended = false
+        return true
+    }
+    #if os(iOS)
+    private static var currentRoute: [String] {
+        let route = AVAudioSession.sharedInstance().currentRoute
+        return route.inputs.map(\.uid) + route.outputs.map(\.uid)
+    }
+    #endif
+    func resetAudioService() {
+        lifecycle = UUID(); fileIntent = UUID(); filePlaying = false
+        shutdownAudio(); drums.resetAfterAudioServiceReset()
     }
     func updateDrummerVolume() { drumGain?.volume = drums.playing ? Float(drums.volume) : 0 }
     func startDrummer(output: AudioDevice?) async throws {
-        try await waitForConfiguration()
+        guard !suspended else { throw AudioFailure(message: "Audio is paused. Return to Mac Jams and reconnect audio before playing drums.") }
+        let token = lifecycle
         guard let output else { throw AudioFailure(message: "Choose an output in Audio Settings before playing drums.") }
         await drums.prepare()
+        try checkLifecycle(token)
+        try await configuration.acquire(); defer { configuration.release() }
+        try checkLifecycle(token)
         guard let node = drums.node else { throw AudioFailure(message: drums.error ?? "Pop Drummer could not load.") }
-        if engine == nil || node.engine !== engine || self.output?.uid != output.uid {
-            if let core, tl_snapshot(core).state != TL_EMPTY { throw AudioFailure(message: "Clear the guitar loop before connecting Pop Drummer to this audio route.") }
+        if engine == nil || self.output?.uid != output.uid {
+            if let core, tl_snapshot(core).state != TL_EMPTY { throw AudioFailure(message: "Keep the current output or clear the guitar loop before changing the drum route.") }
             let capture = captureEnabled
-            self.output = output; configuring = true
-            defer { configuring = false }
+            self.output = output
             try await rebuild(capture: capture)
+        } else if let engine, node.engine !== engine {
+            // Add only the instrument branch upstream of the mixer. The loop
+            // unit, its captured samples, backing schedule and transport survive.
+            try await attachPreparedDrummer(to: engine)
+            try MLAudioGraphTools.prepare(engine)
+            drums.restoreStateWhenPrepared()
         }
         guard let engine, node.engine === engine else { throw AudioFailure(message: drums.error ?? "The drum audio route could not connect.") }
         let previousQueries = drums.transport.transportQueries
@@ -103,6 +175,7 @@ import CoreAudio
         for _ in 0..<100 {
             if drums.transport.transportQueries > previousQueries + 1 { return }
             try await Task.sleep(for: .milliseconds(5))
+            try checkLifecycle(token)
         }
         throw AudioFailure(message: "Pop Drummer’s audio route isn’t rendering. Retry the audio connection in Settings.")
     }
@@ -120,6 +193,7 @@ import CoreAudio
         #endif
         engine?.stop(); player?.stop()
         if let engine { removeDrummer(from: engine) }
+        suspended = false
         loopUnit = nil; loopNode = nil; player = nil; engine = nil; captureEnabled = false; fileScheduled = false
         #if os(macOS)
         if let aggregate { AudioHardwareDestroyAggregateDevice(aggregate) }
@@ -129,22 +203,31 @@ import CoreAudio
     private func trace(_ value: String) { if CommandLine.arguments.contains("--smoke-test") { print("Audio: " + value) } }
     private func rebuild(capture: Bool) async throws {
         trace("rebuild capture=\(capture)")
+        let token = lifecycle, session = fileSession, intent = fileIntent
         let resume = filePlaying
         filePosition = position()
         fileGeneration = UUID()
         shutdownAudio()
         guard let output else { throw AudioFailure(message: "Choose an output in Audio Settings.") }
-        await drums.prepare()
         let e = AVAudioEngine(), p = AVAudioPlayerNode()
         self.engine = e; player = p
         var left = inputChannel, right = inputChannel + 1
         do {
             #if os(macOS)
             var captureRoute: AudioDevices.Route?
-            if capture {
+            if let playbackSetup {
+                sampleRate = try playbackSetup(e); actualBufferFrames = 32
+            } else if capture {
                 guard let input else { throw AudioFailure(message: "Choose an input in Audio Settings.") }
                 trace("routing hardware")
                 let route = try await AudioDevices.route(input: input, output: output)
+                do { try checkLifecycle(token) }
+                catch {
+                    // The route is still locally owned here. Shutdown may have
+                    // run while route creation yielded, before host ownership.
+                    if let aggregate = route.aggregate { AudioHardwareDestroyAggregateDevice(aggregate) }
+                    throw error
+                }
                 trace("hardware route ready")
                 captureRoute = route; aggregate = route.aggregate
                 left += route.inputOffset; right = route.inputOffset + min(inputChannel + 1, input.inputs - 1)
@@ -162,6 +245,9 @@ import CoreAudio
                 actualBufferFrames = Int(AudioDevices.number(output.id, kAudioDevicePropertyBufferFrameSize, fallback: UInt32(0)))
             }
             #else
+            if let playbackSetup {
+                sampleRate = try playbackSetup(e); actualBufferFrames = 32
+            } else {
             let session = AVAudioSession.sharedInstance()
             try session.setCategory(capture ? .playAndRecord : .playback, mode: .default, options: [.mixWithOthers])
             try session.setPreferredSampleRate(48000)
@@ -176,6 +262,7 @@ import CoreAudio
             }
             sampleRate = session.sampleRate
             actualBufferFrames = Int((session.ioBufferDuration * sampleRate).rounded())
+            }
             // iPadOS controls the hardware quantum. Request 32, accept the actual
             // route buffer, and report render callback sizes in the shared UI.
             #endif
@@ -196,6 +283,7 @@ import CoreAudio
                         else { continuation.resume(throwing: error ?? AudioFailure(message: "Could not create the guitar looper.")) }
                     }
                 }
+                try checkLifecycle(token)
                 trace("loop instantiated")
                 guard let unit = node.auAudioUnit as? MLGuitarLoopAudioUnit else { throw AudioFailure(message: "Unexpected guitar processing unit.") }
                 unit.inputLeft = UInt32(max(0, left)); unit.inputRight = UInt32(max(0, right)); #if os(macOS)
@@ -212,17 +300,15 @@ import CoreAudio
                 try MLAudioGraphTools.connect(e, source: node, sourceBus: 0, destination: e.mainMixerNode, destinationBus: 0, format: stereo)
             }
             if !e.isInManualRenderingMode { try MLAudioGraphTools.connect(e, source: e.mainMixerNode, sourceBus: 0, destination: e.outputNode, destinationBus: 0, format: stereo) }
-            if let node = drums.node {
-                do {
-                    let gain = try await Self.makeDrummerGain()
-                    drumGainNode = gain; drumGain = gain.auAudioUnit as? MLDrumGainAudioUnit
-                    e.attach(node); e.attach(gain)
-                    drums.transport.configureSampleRate(sampleRate)
-                    try MLAudioGraphTools.connect(e, source: node, sourceBus: 0, destination: gain, destinationBus: 0, format: stereo)
-                    try MLAudioGraphTools.connect(e, source: gain, sourceBus: 0, destination: e.mainMixerNode, destinationBus: 2, format: stereo)
-                    updateDrummerVolume()
-                } catch { removeDrummer(from: e); drums.error = "Pop Drummer couldn’t connect: " + error.localizedDescription }
+            if drums.node != nil {
+                do { try await attachPreparedDrummer(to: e) }
+                catch is CancellationError { throw CancellationError() }
+                catch {
+                    try checkLifecycle(token)
+                    removeDrummer(from: e); drums.error = "Pop Drummer couldn’t connect: " + error.localizedDescription
+                }
             }
+            try checkLifecycle(token)
             trace("prepare graph")
             do { try MLAudioGraphTools.prepare(e) }
             catch {
@@ -244,10 +330,33 @@ import CoreAudio
             #endif
             trace("route running")
             captureEnabled = capture
-            filePlaying = resume
-            if file != nil { schedule(from: filePosition, play: resume) }
+            #if os(iOS)
+            configuredRoute = Self.currentRoute
+            #endif
+            let stillPlaying = resume && session == fileSession && intent == fileIntent && filePlaying
+            filePlaying = stillPlaying
+            if file != nil { schedule(from: filePosition, play: stillPlaying) }
             p.volume = fileVolume
-        } catch { shutdownAudio(); filePlaying = false; throw error }
+        } catch {
+            if self.engine === e { shutdownAudio(); filePlaying = false }
+            throw error
+        }
+    }
+    func attachPreparedDrummer(to engine: AVAudioEngine) async throws {
+        guard let node = drums.node, node.engine !== engine else { return }
+        let token = lifecycle
+        let gain = try await makeGain()
+        try checkLifecycle(token)
+        guard self.engine === engine else { throw CancellationError() }
+        let stereo = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 2)!
+        do {
+            drumGainNode = gain; drumGain = gain.auAudioUnit as? MLDrumGainAudioUnit
+            engine.attach(node); engine.attach(gain)
+            drums.transport.configureSampleRate(sampleRate)
+            try MLAudioGraphTools.connect(engine, source: node, sourceBus: 0, destination: gain, destinationBus: 0, format: stereo)
+            try MLAudioGraphTools.connect(engine, source: gain, sourceBus: 0, destination: engine.mainMixerNode, destinationBus: 2, format: stereo)
+            updateDrummerVolume()
+        } catch { removeDrummer(from: engine); throw error }
     }
     private static var gainRegistered = false
     static func makeDrummerGain() async throws -> AVAudioUnit {
@@ -274,39 +383,59 @@ import CoreAudio
     private static let description = AudioComponentDescription(componentType: kAudioUnitType_Effect, componentSubType: 0x6D6C6C70, componentManufacturer: 0x4D614C70, componentFlags: 0, componentFlagsMask: 0)
 
     func loadFile(_ asset: PlaybackAsset, session: UUID, volume: Float, repeating: Bool) {
-        fileGeneration = UUID(); player?.stop()
+        fileIntent = UUID(); fileGeneration = UUID(); player?.stop()
         file = asset; fileSession = session; filePosition = 0; filePlaying = false; fileScheduled = false
         fileVolume = min(1, max(0, volume)); fileRepeat = repeating
         player?.volume = fileVolume
     }
-    func playFile(session: UUID, output: AudioDevice) async throws {
-        guard fileSession == session, let file else { return }
-        try await waitForConfiguration()
-        #if os(macOS)
-        guard AudioDevices.alive(output.id), AudioDevices.string(output.id, kAudioDevicePropertyDeviceUID) == output.uid else { throw AudioFailure(message: "The selected output is disconnected. Choose an output in Audio Settings.") }
-        #endif
-        if self.output?.uid != output.uid || engine == nil {
-            self.output = output; filePlaying = false
-            configuring = true
-            do { try await rebuild(capture: false); configuring = false } catch { configuring = false; throw error }
+    func requestFilePlay(session: UUID) -> UUID? {
+        guard !suspended, fileSession == session, file != nil else { return nil }
+        fileIntent = UUID(); return fileIntent
+    }
+    func playFile(session: UUID, output: AudioDevice, requestedIntent: UUID? = nil) async throws {
+        guard !suspended, fileSession == session, file != nil else { return }
+        if let requestedIntent { guard fileIntent == requestedIntent else { return } }
+        else { fileIntent = UUID() }
+        let intent = fileIntent, token = lifecycle
+        func current() -> Bool { fileSession == session && fileIntent == intent && lifecycle == token && !Task.isCancelled }
+        do {
+            try await configuration.acquire(); defer { configuration.release() }
+            guard current() else { return }
+            #if os(macOS)
+            if playbackSetup == nil {
+                guard AudioDevices.alive(output.id), AudioDevices.string(output.id, kAudioDevicePropertyDeviceUID) == output.uid else { throw AudioFailure(message: "The selected output is disconnected. Choose an output in Audio Settings.") }
+            }
+            #else
+            guard playbackSetup != nil || output.uid == "ios-system-output" else { throw AudioFailure(message: "Choose an available output in Audio Settings.") }
+            #endif
+            if self.output?.uid != output.uid || engine == nil {
+                self.output = output; filePlaying = false
+                try await rebuild(capture: false)
+                guard current() else { return }
+            }
+            guard let engine, let player, let file else { throw AudioFailure(message: "The audio player could not start.") }
+            if !engine.isRunning { try MLAudioGraphTools.start(engine) }
+            if filePosition >= file.duration { filePosition = 0; fileScheduled = false }
+            if !fileScheduled { schedule(from: filePosition, play: true) } else { player.play(); filePlaying = true }
+        } catch {
+            // A failure from an obsolete Play must not become the new track's error.
+            guard current() else { return }
+            throw error
         }
-        guard let engine, let player else { throw AudioFailure(message: "The audio player could not start.") }
-        if !engine.isRunning { try MLAudioGraphTools.start(engine) }
-        if filePosition >= file.duration { filePosition = 0; fileScheduled = false }
-        if !fileScheduled { schedule(from: filePosition, play: true) } else { player.play(); filePlaying = true }
     }
     func pauseFile(session: UUID) {
         guard fileSession == session else { return }
-        filePosition = position(); player?.pause(); filePlaying = false
+        fileIntent = UUID(); filePosition = position(); player?.pause(); filePlaying = false
     }
     func stopFile(session: UUID) {
         guard fileSession == session else { return }
-        fileGeneration = UUID(); player?.stop(); filePosition = 0; filePlaying = false; fileScheduled = false
+        fileIntent = UUID(); fileGeneration = UUID(); player?.stop(); filePosition = 0; filePlaying = false; fileScheduled = false
     }
     func seekFile(session: UUID, to seconds: Double) {
         guard fileSession == session, let file, seconds.isFinite else { return }
         filePosition = min(file.duration, max(0, seconds))
-        if player != nil { schedule(from: filePosition, play: filePlaying) }
+        if player != nil, engine?.isRunning == true { schedule(from: filePosition, play: filePlaying) }
+        else { fileScheduled = false }
     }
     func configureFile(session: UUID, volume: Float, repeating: Bool) {
         guard fileSession == session else { return }
@@ -322,7 +451,7 @@ import CoreAudio
     }
     func unloadFile(session: UUID? = nil) {
         if let session, fileSession != session { return }
-        fileGeneration = UUID(); player?.stop(); file = nil; fileSession = nil; filePlaying = false; filePosition = 0; fileScheduled = false
+        fileIntent = UUID(); fileGeneration = UUID(); player?.stop(); file = nil; fileSession = nil; filePlaying = false; filePosition = 0; fileScheduled = false
     }
     private func position() -> Double {
         guard let file else { return 0 }

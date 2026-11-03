@@ -23,9 +23,9 @@ actor FilePlayback {
         await AudioEngineHost.shared.loadFile(asset, session: session, volume: volume, repeating: repeating)
         return FilePlaybackSnapshot(duration: asset.duration, position: 0, playing: false)
     }
-    func play(session: UUID, output: AudioDevice) async throws {
+    func play(session: UUID, output: AudioDevice, requestedIntent: UUID? = nil) async throws {
         guard self.session == session else { return }
-        try await AudioEngineHost.shared.playFile(session: session, output: output)
+        try await AudioEngineHost.shared.playFile(session: session, output: output, requestedIntent: requestedIntent)
     }
     func pause(session: UUID) async { guard self.session == session else { return }; await AudioEngineHost.shared.pauseFile(session: session) }
     func stop(session: UUID) async { guard self.session == session else { return }; await AudioEngineHost.shared.stopFile(session: session) }

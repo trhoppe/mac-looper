@@ -94,7 +94,7 @@ struct LooperPanel: View {
             Button { model.playStop() } label: {
                 Label(model.state == TL_PLAYING || model.busy ? "Stop" : "Play", systemImage: model.state == TL_PLAYING || model.busy ? "stop.fill" : "play.fill").frame(minWidth: 50)
             }.disabled(!model.hasLoop && !model.busy)
-            Button { model.clear() } label: { Label("Clear", systemImage: "trash") }.disabled(!model.running || model.state == TL_EMPTY)
+            Button { model.clear() } label: { Label("Clear", systemImage: "trash") }.disabled((!model.running && !model.audioPaused) || model.state == TL_EMPTY)
         }.buttonStyle(.bordered).controlSize(.large)
     }
     private var volume: some View {
