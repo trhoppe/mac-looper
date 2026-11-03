@@ -36,7 +36,7 @@ import SwiftUI
             HStack {
                 Label("AM4 Remote", systemImage: "slider.horizontal.3").font(.headline)
                 Spacer()
-                Button("Close") { session.dismiss() }.buttonStyle(.bordered)
+                Button("Close") { session.dismiss() }.buttonStyle(AM4NativeButtonStyle())
                     .accessibilityLabel("Close AM4 Remote")
             }.padding(18)
             Divider()

@@ -63,6 +63,7 @@ import AM4RemoteKit
     var body: some Scene {
         WindowGroup("Mac Jams") {
             ContentView(model: model, readiness: session.readiness, files: files, remote: session.remote, library: library).equatable()
+                .buttonStyle(JamButtonStyle())
                 .preferredColorScheme(.dark)
                 .task {
                     #if os(macOS)

@@ -165,6 +165,8 @@ import JamCore
             guard token == revision else { throw SongEditError.conflict }
             library = next; lastBytes = next.originalData; error = nil
             status = "\(next.songs.count) songs · saved to Mac Jams"
+            if let playlistID, !next.songs(in: playlistID).contains(where: { $0.id == draft.id }) { self.playlistID = nil }
+            if draft.isNew { query = ""; selectedSongID = draft.id }
         } catch {
             self.error = error.localizedDescription
             if let copies = try? await io.conflictCopies(at: destination), token == revision { conflicts = copies }

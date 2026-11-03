@@ -6,7 +6,7 @@ struct AM4RemoteView: View {
     @Environment(\.displayScale) private var displayScale
     @State private var selection: Int?
     @State private var selectedBlock: BlockSelection?
-    private let accent = Color.cyan
+    private let accent = AM4Appearance.accent
 
     private var selectedPreset: AM4Preset? {
         let index = selection ?? midi.location
@@ -23,7 +23,11 @@ struct AM4RemoteView: View {
         AM4WorkspaceSplit {
             VStack(spacing: 0) {
                 connectionStatus.padding(16).frame(maxWidth: .infinity, alignment: .leading)
-                Divider()
+                HStack {
+                    Text("Presets").font(.title3.weight(.semibold))
+                    Spacer()
+                    Text("\(midi.presets.count) / 104").font(.caption).foregroundStyle(.secondary).monospacedDigit()
+                }.padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 10)
                 if midi.presets.isEmpty {
                     VStack(spacing: 12) {
                         if midi.isConnected || midi.status.hasPrefix("Connecting") {
@@ -36,8 +40,7 @@ struct AM4RemoteView: View {
                     }.padding(24).frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     ScrollViewReader { proxy in
-                    List(selection: $selection) {
-                        Section {
+                        List(selection: $selection) {
                             ForEach(midi.presets) { preset in
                                 HStack(spacing: 12) {
                                     Text(AM4Message.locationLabel(preset.id))
@@ -54,32 +57,34 @@ struct AM4RemoteView: View {
                                             .foregroundStyle(selection == preset.id ? Color.primary : accent)
                                             .accessibilityLabel("Current preset on AM4")
                                     }
-                                }.padding(.vertical, 8).id(preset.id).tag(preset.id)
+                                }.frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.horizontal, 16).padding(.vertical, 9).frame(minHeight: 34)
+                                    .am4PresetRowHighlight(selected: selection == preset.id)
+                                    #if os(macOS)
+                                    .padding(.horizontal, -9)
+                                    #endif
+                                    .id(preset.id).tag(preset.id)
+                                    .listRowInsets(EdgeInsets()).listRowBackground(Color.clear)
+                                    .listRowSeparator(.hidden)
                             }
-                        } header: {
-                            HStack {
-                                Text("Presets")
-                                Spacer()
-                                Text("\(midi.presets.count) / 104").monospacedDigit()
+                        }.listStyle(.plain).scrollContentBackground(.hidden).tint(.gray).accentColor(.gray)
+                            .contentMargins(.horizontal, 0, for: .scrollContent)
+                            .disabled(!midi.isConnected || midi.isLoadingPresets || midi.isApplyingGain || midi.isNavigating)
+                            .onAppear {
+                                if let current = midi.location { proxy.scrollTo(current, anchor: .center) }
+                            }
+                            .onChange(of: midi.presets.count) { _, count in
+                                if count == 104, let current = midi.location { proxy.scrollTo(current, anchor: .center) }
+                            }
+                            .onChange(of: midi.location) { _, current in
+                                guard let current else { return }
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    proxy.scrollTo(current, anchor: .center)
+                                }
                             }
                         }
-                    }.listStyle(.sidebar)
-                        .disabled(!midi.isConnected || midi.isLoadingPresets || midi.isApplyingGain || midi.isNavigating)
-                        .onAppear {
-                            if let current = midi.location { proxy.scrollTo(current, anchor: .center) }
-                        }
-                        .onChange(of: midi.presets.count) { _, count in
-                            if count == 104, let current = midi.location { proxy.scrollTo(current, anchor: .center) }
-                        }
-                        .onChange(of: midi.location) { _, current in
-                            guard let current else { return }
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                proxy.scrollTo(current, anchor: .center)
-                            }
-                        }
-                    }
                 }
-            }
+            }.background(AM4Appearance.background)
         } detail: {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
@@ -94,7 +99,7 @@ struct AM4RemoteView: View {
                 }.padding(28).frame(maxWidth: 1000, alignment: .leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .background(Color(red: 0.075, green: 0.08, blue: 0.095))
+            .background(AM4Appearance.panel)
         }
         .tint(accent)
         .preferredColorScheme(.dark)
@@ -187,8 +192,23 @@ struct AM4RemoteView: View {
                         .font(.system(.title2, design: .monospaced).weight(.semibold))
                         .foregroundStyle(accent).fixedSize()
                     Text(detailTitle)
-                        .font(.system(size: 34, weight: .semibold, design: .rounded))
+                        .font(.title2.weight(.semibold))
                         .frame(maxWidth: .infinity, alignment: .leading)
+                    Button {
+                        guard let snapshot = midi.snapshot else { return }
+                        Task { try? await midi.savePreset(AM4PresetSaveCommand(location: preset.id, snapshot: snapshot)) }
+                    } label: {
+                        HStack(spacing: 7) {
+                            Circle().fill(midi.hasUnsavedPresetChanges ? Color.orange : Color.secondary).frame(width: 6, height: 6)
+                            Text(midi.isSavingPreset ? "Saving…" : "Save")
+                        }
+                    }.buttonStyle(AM4NativeButtonStyle()).controlSize(.large)
+                        .disabled(!midi.canSavePreset || preset.id != midi.location)
+                        .accessibilityLabel("Save preset to AM4")
+                        .accessibilityValue(midi.hasUnsavedPresetChanges ? "Unsaved changes" : "No unsaved changes")
+                }
+                if !midi.presetSaveStatus.isEmpty {
+                    Text(midi.presetSaveStatus).font(.caption).foregroundStyle(.secondary)
                 }
                 if preset.id == midi.location, let snapshot = midi.snapshot {
                     if snapshot.name != preset.name {
@@ -209,13 +229,13 @@ struct AM4RemoteView: View {
                                         .font(.headline).foregroundStyle(active ? accent : Color(white: 0.82))
                                     Text(type == 0 ? "Empty" : (state == nil ? "Reading status…" : ((type == 0x3A || AM4EffectsCatalog.shared.effect(Int(type)) != nil) ? "Edit controls" : "View block")))
                                         .font(.caption).foregroundStyle(.secondary)
-                                }.frame(maxWidth: .infinity, minHeight: 90, alignment: .leading).padding(16)
-                                    .background(.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 14))
+                                }.frame(maxWidth: .infinity, minHeight: 64, alignment: .leading).padding(12)
+                                    .background(.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 6))
                                     .overlay {
-                                        RoundedRectangle(cornerRadius: 14)
+                                        RoundedRectangle(cornerRadius: 6)
                                             .strokeBorder(active ? accent : .clear, lineWidth: 1 / displayScale)
-                                    }.contentShape(RoundedRectangle(cornerRadius: 14))
-                            }.buttonStyle(.plain)
+                                    }.contentShape(RoundedRectangle(cornerRadius: 6))
+                            }.buttonStyle(AM4ButtonStyle())
                                 .highPriorityGesture(TapGesture(count: 2).exclusively(before: TapGesture(count: 1)).onEnded { tap in
                                     switch tap {
                                     case .first:
@@ -255,11 +275,13 @@ struct AM4RemoteView: View {
                             Text(snapshot.sceneNames[index].isEmpty ? "Unnamed scene" : snapshot.sceneNames[index])
                             Spacer()
                             if index == snapshot.scene {
-                                Text("CURRENT").font(.caption2.weight(.bold)).foregroundStyle(accent)
+                                Text("Current").font(.caption2.weight(.bold)).foregroundStyle(accent)
                             }
-                        }.padding(16)
-                            .background(.white.opacity(index == snapshot.scene ? 0.08 : 0.04), in: RoundedRectangle(cornerRadius: 12))
-                        }.buttonStyle(.plain)
+                        }.frame(maxWidth: .infinity, minHeight: 36, alignment: .leading)
+                            .padding(.horizontal, 12).padding(.vertical, 6)
+                            .background(.white.opacity(index == snapshot.scene ? 0.112 : 0.04), in: RoundedRectangle(cornerRadius: 6))
+                            .contentShape(RoundedRectangle(cornerRadius: 6))
+                        }.buttonStyle(AM4ButtonStyle(isSelected: index == snapshot.scene))
                             .disabled(midi.isNavigating || midi.isApplyingGain || midi.isLoadingPresets)
                             .accessibilityLabel("Scene \(index + 1), \(snapshot.sceneNames[index])")
                     }
@@ -296,9 +318,8 @@ private struct BlockPanel: View {
     let close: () -> Void
     @State private var page = "Amp"
     @State private var selectionFailure: String?
-    @State private var selector: AmpSelector?
     private let catalog = AM4AmpCatalog.shared
-    private let dialAccent = Color.cyan
+    private let dialAccent = AM4Appearance.accent
 
     private var pages: [AM4AmpPage] {
         ["Amp", "GEQ", "Cabinet", "Extras", "Expert", "Preamp", "Power Amp", "Speaker"]
@@ -307,25 +328,11 @@ private struct BlockPanel: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 16) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(BlockLabel.name(blockID))
-                        .font(.title2.weight(.semibold))
-                    if let amp = midi.ampControls, blockID == 0x3A {
-                        Text("\(AM4Message.locationLabel(amp.context.location)) · Scene \(amp.context.scene + 1)")
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
+            AM4EditorHeader(title: BlockLabel.name(blockID),
+                subtitle: midi.ampControls.map { "\(AM4Message.locationLabel($0.context.location)) · Scene \($0.context.scene + 1)" },
+                busy: midi.isApplyingGain, close: close) {
+                    if blockID == 0x3A { ampSelectionMenus }
                 }
-                if blockID == 0x3A {
-                    ampSelectionMenus
-                }
-                Spacer(minLength: 4)
-                if midi.isApplyingGain { ProgressView().controlSize(.small) }
-                Button(action: close) {
-                    Image(systemName: "xmark").font(.headline).frame(width: 44, height: 44)
-                }.buttonStyle(.plain).background(.white.opacity(0.07), in: Circle())
-                    .accessibilityLabel("Close block editor").disabled(midi.isApplyingGain)
-            }.padding(.horizontal, 24).padding(.vertical, 16)
             Divider()
             if blockID == 0x3A {
                 HStack(spacing: 10) {
@@ -338,9 +345,9 @@ private struct BlockPanel: View {
                                 Text(String(UnicodeScalar(65 + index)!)).font(.headline)
                                     .foregroundStyle(channel == index ? dialAccent : .secondary)
                                     .frame(width: 48, height: 36)
-                                    .background(channel == index ? dialAccent.opacity(0.16) : .white.opacity(0.035), in: Capsule())
-                                    .overlay(Capsule().strokeBorder(channel == index ? dialAccent.opacity(0.65) : .clear))
-                            }.buttonStyle(.plain).accessibilityLabel("Amp channel " + String(UnicodeScalar(65 + index)!))
+                                    .background(channel == index ? dialAccent.opacity(0.16) : .white.opacity(0.035), in: RoundedRectangle(cornerRadius: 6))
+                                    .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(channel == index ? dialAccent.opacity(0.65) : .clear))
+                            }.buttonStyle(AM4ButtonStyle()).accessibilityLabel("Amp channel " + String(UnicodeScalar(65 + index)!))
                                 .accessibilityAddTraits(channel == index ? [.isSelected] : [])
                         }
                     } else { ProgressView().controlSize(.small) }
@@ -355,14 +362,14 @@ private struct BlockPanel: View {
                                 Button { page = item.id } label: {
                                     Text(item.title == "Cabinet" ? "Cab" : item.title)
                                         .font(.headline).foregroundStyle(page == item.id ? .white : .secondary)
-                                        .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
+                                        .frame(maxWidth: .infinity, minHeight: 36, alignment: .leading)
                                         .padding(.horizontal, 18)
                                         .background(page == item.id ? Color.white.opacity(0.08) : .clear,
-                                                    in: RoundedRectangle(cornerRadius: 9))
+                                                    in: RoundedRectangle(cornerRadius: 6))
                                         .overlay(alignment: .leading) {
                                             if page == item.id { Capsule().fill(dialAccent).frame(width: 3).padding(.vertical, 12) }
                                         }
-                                }.buttonStyle(.plain)
+                                }.buttonStyle(AM4ButtonStyle())
                             }
                         }.padding(.vertical, 14).padding(.horizontal, 8)
                     }.frame(width: 148).background(.white.opacity(0.025))
@@ -408,8 +415,8 @@ private struct BlockPanel: View {
                         .font(.caption2).foregroundStyle(.tertiary)
                     Button {
                         Task { await midi.showAmpPage(page) }
-                    } label: { Image(systemName: "arrow.clockwise").frame(width: 32, height: 32) }
-                        .buttonStyle(.plain).accessibilityLabel("Refresh Amp controls").disabled(midi.isApplyingGain)
+                    } label: { Label("Refresh", systemImage: "arrow.clockwise") }
+                        .buttonStyle(AM4NativeButtonStyle()).accessibilityLabel("Refresh Amp controls").disabled(midi.isApplyingGain)
                 }.padding(.horizontal, 20).padding(.vertical, 8)
             } else {
                 Text("Loaded in the current preset. Controls are available in the Amp block.")
@@ -417,7 +424,7 @@ private struct BlockPanel: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
         }
-        .background(Color(red: 0.085, green: 0.09, blue: 0.10))
+        .background(AM4Appearance.panel)
         .task(id: page) {
             if blockID == 0x3A { await midi.showAmpPage(page) }
         }
@@ -428,63 +435,23 @@ private struct BlockPanel: View {
 
     private var ampSelectionMenus: some View {
         HStack(spacing: 12) {
-            Button { openSelector(library: false) } label: {
-                selectorLabel("Type", value: midi.ampControls?.modelName ?? "Reading…")
-            }.frame(maxWidth: 280)
-            Button { openSelector(library: true) } label: {
-                selectorLabel("Library", value: "Choose preset…")
-            }.frame(maxWidth: 220)
-        }.buttonStyle(.plain)
-            .disabled(midi.ampControls?.context.channel == nil || !midi.isConnected || midi.isApplyingGain || midi.isNavigating || midi.isLoadingPresets)
-            .popover(item: $selector) { selection in
-                AmpSelectorList(selection: selection) { command in
-                    selector = nil
-                    select(command)
-                }.equatable().presentationCompactAdaptation(.popover)
-            }
-            .alert("Amp selection failed", isPresented: Binding(
-                get: { selectionFailure != nil }, set: { if !$0 { selectionFailure = nil } })) {
-                    Button("OK", role: .cancel) { selectionFailure = nil }
-                } message: { Text(selectionFailure ?? "Refresh the Amp controls and try again.") }
-    }
-
-    private func openSelector(library: Bool) {
-        guard let current = midi.ampControls else { return }
-        let choices: [AmpSelector.Choice]
-        if library {
-            choices = AM4AmpLibrary.shared.entries.map {
-                AmpSelector.Choice(id: $0.id, name: $0.name, selected: false,
-                    command: AM4AmpSelection(context: current.context, expectedModel: current.model, libraryID: $0.id))
-            }
-        } else {
-            choices = Array(catalog.models.enumerated()).sorted { $0.element.localizedStandardCompare($1.element) == .orderedAscending }.map {
-                AmpSelector.Choice(id: String($0.offset), name: $0.element, selected: current.model == $0.offset,
-                    command: AM4AmpSelection(context: current.context, expectedModel: current.model, model: $0.offset))
-            }
+            if let current = midi.ampControls {
+                let identity = ParameterEditorState.amp(current).menuIdentity
+                AM4Dropdown(title: "Type", accessibilityName: "Amp type", choices: AM4MenuChoices.ampTypes,
+                    selected: String(current.model), identity: identity) { id in
+                        if let model = Int(id) { select(AM4AmpSelection(context: current.context, expectedModel: current.model, model: model)) }
+                    }.equatable().frame(maxWidth: 280)
+                AM4Dropdown(title: "Library", accessibilityName: "Amp library", choices: AM4MenuChoices.ampLibrary,
+                    selected: nil, placeholder: "Choose preset…", identity: identity) { id in
+                        select(AM4AmpSelection(context: current.context, expectedModel: current.model, libraryID: id))
+                    }.equatable().frame(maxWidth: 220)
+            } else { ProgressView("Reading amp…").controlSize(.small) }
         }
-        // Snapshot both choices and expected context once. Live MIDI publishing
-        // must not reconstruct the open list or disturb its scroll position.
-        selector = AmpSelector(title: library ? "Amp library" : "Amp type", choices: choices)
-    }
-
-    private func selectorLabel(_ title: String, value: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title).font(.caption).foregroundStyle(Color.secondary)
-            HStack(spacing: 8) {
-                Text(value).font(.subheadline.weight(.semibold)).foregroundStyle(Color.primary).lineLimit(1)
-                Spacer(minLength: 0)
-                Image(systemName: "chevron.down").font(.caption.weight(.semibold)).foregroundStyle(dialAccent)
-            }
-        }.padding(.horizontal, 12).padding(.vertical, 9)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(.white.opacity(0.08)))
-            .contentShape(Rectangle())
-            .accessibilityElement(children: .combine)
-    }
-
-    private func select(_ command: ParameterEditorSelection) {
-        if case .amp(let value) = command { select(value) }
+        .disabled(midi.ampControls?.context.channel == nil || !midi.isConnected || midi.isApplyingGain || midi.isNavigating || midi.isLoadingPresets)
+        .alert("Amp selection failed", isPresented: Binding(
+            get: { selectionFailure != nil }, set: { if !$0 { selectionFailure = nil } })) {
+                Button("OK", role: .cancel) { selectionFailure = nil }
+            } message: { Text(selectionFailure ?? "Refresh the Amp controls and try again.") }
     }
 
     private func select(_ command: AM4AmpSelection) {
@@ -502,62 +469,6 @@ private struct BlockPanel: View {
             } else { result.append(AmpControlSection(id: control.section, controls: [control])) }
         }
         return result
-    }
-}
-
-private struct AmpSelector: Identifiable {
-    let id = UUID()
-    let title: String
-    let choices: [Choice]
-    struct Choice: Identifiable {
-        let id: String
-        let name: String
-        let selected: Bool
-        let command: ParameterEditorSelection
-        init(id: String, name: String, selected: Bool, command: AM4AmpSelection) {
-            self.id = id; self.name = name; self.selected = selected; self.command = .amp(command)
-        }
-        init(id: String, name: String, selected: Bool, command: AM4EffectSelection) {
-            self.id = id; self.name = name; self.selected = selected; self.command = .effect(command)
-        }
-        init(id: String, name: String, selected: Bool, command: ParameterEditorEdit) {
-            self.id = id; self.name = name; self.selected = selected; self.command = .parameter(command)
-        }
-    }
-}
-
-private struct AmpSelectorList: View, Equatable {
-    let selection: AmpSelector
-    let choose: (ParameterEditorSelection) -> Void
-    @State private var search = ""
-    static func == (lhs: Self, rhs: Self) -> Bool { lhs.selection.id == rhs.selection.id }
-    private var filtered: [AmpSelector.Choice] {
-        search.isEmpty ? selection.choices : selection.choices.filter { $0.name.localizedCaseInsensitiveContains(search) }
-    }
-    var body: some View {
-        NavigationStack {
-            List(filtered) { item in
-                Button { choose(item.command) } label: {
-                    HStack {
-                        Text(item.name).foregroundStyle(.primary)
-                        Spacer()
-                        if item.selected { Image(systemName: "checkmark").foregroundStyle(.cyan) }
-                    }.padding(.vertical, 6).contentShape(Rectangle())
-                }.buttonStyle(.plain)
-            }.listStyle(.plain)
-                .overlay {
-                    if selection.choices.isEmpty {
-                        ContentUnavailableView("No saved presets", systemImage: "square.stack", description: Text("There are no saved library presets for this block yet."))
-                    }
-                }
-                #if os(iOS)
-                .searchable(text: $search, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search")
-                .navigationTitle(selection.title).navigationBarTitleDisplayMode(.inline)
-                #else
-                .searchable(text: $search, prompt: "Search")
-                .navigationTitle(selection.title)
-                #endif
-        }.frame(width: 420, height: 560).preferredColorScheme(.dark)
     }
 }
 
@@ -581,9 +492,8 @@ private struct AmpParameterRow: View {
     @State private var submitting = false
     @State private var failure: String?
     @State private var numberEditor = false
-    @State private var choiceSelector: AmpSelector?
     @State private var pendingSwitch: Bool?
-    private let dialAccent = Color.cyan
+    private let dialAccent = AM4Appearance.accent
 
     init(midi: AM4Connection, control: AM4AmpControl, definition: AM4ParameterDefinition, actual: AM4ParameterValue, state: AM4AmpControls) {
         self.midi = midi; self.control = control; self.definition = definition; self.actual = actual; self.state = .amp(state); self.isEQFader = false
@@ -615,7 +525,7 @@ private struct AmpParameterRow: View {
                         RotaryKnob(position: normalized, accent: dialAccent)
                             .frame(width: 94, height: 94).contentShape(Circle())
                     }
-                }
+                }.am4ControlHover()
                     .gesture(DragGesture(minimumDistance: 4)
                         .onChanged { gesture in
                             if !editing {
@@ -651,7 +561,7 @@ private struct AmpParameterRow: View {
                         .lineLimit(1).minimumScaleFactor(0.55)
                         .frame(maxWidth: .infinity, minHeight: 38)
                         .background(.black.opacity(0.6), in: RoundedRectangle(cornerRadius: 5))
-                }.buttonStyle(.plain).accessibilityLabel("Type \(control.label) value")
+                }.buttonStyle(AM4ButtonStyle()).accessibilityLabel("Type \(control.label) value")
                     .popover(isPresented: $numberEditor) {
                         ParameterNumberEditor(definition: definition, label: control.label,
                                               initialPosition: expected?.normalized ?? actual.normalized) { value in
@@ -677,33 +587,22 @@ private struct AmpParameterRow: View {
                 Toggle(control.label, isOn: Binding(
                     get: { pendingSwitch ?? (definition.ordinal(actual) == 1) },
                     set: setSwitch))
-                    .labelsHidden().toggleStyle(.switch).tint(Color(red: 0.04, green: 0.46, blue: 0.58))
-                    .scaleEffect(1.8).frame(width: 104, height: 64)
+                    .labelsHidden().toggleStyle(.switch).tint(AM4Appearance.accent)
+                    .scaleEffect(1.8).frame(width: 104, height: 64).am4ControlHover()
                     .accessibilityLabel(control.label)
                     .accessibilityValue(actual.text)
                     .disabled(!(0...1).contains(definition.ordinal(actual)))
                 Text(actual.text).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
             }
         } else if !definition.dynamic, !definition.choices.isEmpty, definition.ordinal(actual) < definition.choices.count {
-            Button {
-                let choices = Array(definition.choices.enumerated()).map { index, name in
-                    AmpSelector.Choice(id: String(index), name: name, selected: definition.ordinal(actual) == index,
-                        command: state.edit(key: definition.key, expected: actual, ordinal: index))
-                }
-                choiceSelector = AmpSelector(title: control.label.replacingOccurrences(of: "\n", with: " "), choices: choices)
-            } label: {
-                VStack(spacing: 10) {
-                    Text(actual.text).font(.subheadline.weight(.semibold)).multilineTextAlignment(.center)
-                    Image(systemName: "chevron.up.chevron.down").font(.caption).foregroundStyle(dialAccent)
-                }.padding(12).frame(maxWidth: .infinity, minHeight: 100)
-                    .background(.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 8))
-            }.buttonStyle(.plain)
-                .popover(item: $choiceSelector) { selection in
-                    AmpSelectorList(selection: selection) { command in
-                        choiceSelector = nil
-                        if case .parameter(let edit) = command { submit(edit) }
-                    }.equatable().presentationCompactAdaptation(.popover)
-                }
+            Picker(control.label, selection: Binding(get: { definition.ordinal(actual) }, set: { ordinal in
+                guard ordinal != definition.ordinal(actual) else { return }
+                submit(state.edit(key: definition.key, expected: actual, ordinal: ordinal))
+            })) {
+                ForEach(Array(definition.choices.enumerated()), id: \.offset) { index, name in Text(name).tag(index) }
+            }.labelsHidden().pickerStyle(.menu).controlSize(.regular)
+                .frame(maxWidth: .infinity, minHeight: 38).am4ControlHover().accessibilityLabel(control.label)
+                .id("\(state.menuIdentity):\(definition.key):\(actual.raw):\(actual.normalized):\(actual.text)")
         } else {
             VStack(spacing: 14) {
                 Text(actual.text).font(.subheadline.weight(.semibold)).multilineTextAlignment(.center)
@@ -713,7 +612,7 @@ private struct AmpParameterRow: View {
                     Spacer(minLength: 4)
                     Button { nudge(1) } label: { Image(systemName: "chevron.right").frame(width: 40, height: 36) }
                         .accessibilityLabel("Next \(control.label) choice")
-                }.buttonStyle(.bordered).tint(dialAccent)
+                }.buttonStyle(AM4NativeButtonStyle()).tint(dialAccent)
             }
         }
     }
@@ -879,7 +778,7 @@ private struct ParameterNumberEditor: View {
         VStack(alignment: .leading, spacing: 18) {
             Text(label.replacingOccurrences(of: "\n", with: " ")).font(.headline)
             HStack {
-                TextField("Value", text: $text).textFieldStyle(.roundedBorder)
+                TextField("Value", text: $text).textFieldStyle(.roundedBorder).am4ControlHover()
                     .font(.system(.title2, design: .monospaced)).focused($focused)
                     .onSubmit(commit)
                     #if os(iOS)
@@ -891,9 +790,9 @@ private struct ParameterNumberEditor: View {
                 .font(.caption).foregroundStyle(.secondary)
             if let error { Text(error).font(.caption).foregroundStyle(.red) }
             HStack {
-                Button("Cancel") { dismiss() }.buttonStyle(.bordered)
+                Button("Cancel") { dismiss() }.buttonStyle(AM4NativeButtonStyle())
                 Spacer()
-                Button("Apply", action: commit).buttonStyle(.borderedProminent).tint(.cyan)
+                Button("Apply", action: commit).buttonStyle(AM4NativeButtonStyle(prominent: true)).tint(AM4Appearance.accent)
                     .keyboardShortcut(.defaultAction)
             }
         }.padding(22).frame(width: 300)
@@ -916,11 +815,6 @@ private struct ParameterNumberEditor: View {
 }
 
 
-private enum ParameterEditorSelection {
-    case amp(AM4AmpSelection)
-    case effect(AM4EffectSelection)
-    case parameter(ParameterEditorEdit)
-}
 private enum ParameterEditorEdit {
     case amp(AM4AmpEdit)
     case effect(AM4EffectEdit)
@@ -928,6 +822,14 @@ private enum ParameterEditorEdit {
 private enum ParameterEditorState {
     case amp(AM4AmpControls)
     case effect(AM4EffectControls)
+    var menuIdentity: String {
+        switch self {
+        case .amp(let value):
+            return "amp:\(value.context.location):\(value.context.scene):\(value.context.channel ?? -1):\(value.context.blocks):\(value.model):\(value.page)"
+        case .effect(let value):
+            return "effect:\(value.context.location):\(value.context.scene):\(value.context.channel):\(value.context.slot):\(value.context.blocks):\(value.model):\(value.page)"
+        }
+    }
     var values: [String: AM4ParameterValue] {
         switch self { case .amp(let state): return state.values; case .effect(let state): return state.values }
     }
@@ -955,7 +857,6 @@ private struct EffectPanel: View {
     let close: () -> Void
     @State private var page = ""
     @State private var failure: String?
-    @State private var selector: AmpSelector?
     private var effect: AM4EffectDefinition { AM4EffectsCatalog.shared.effect(blockID)! }
     private var activePage: String { page.isEmpty ? effect.pages[0].id : page }
     private var state: AM4EffectControls? {
@@ -966,21 +867,9 @@ private struct EffectPanel: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 16) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(blockID == 119 ? "Drive 2" : effect.name).font(.title2.weight(.semibold))
-                    if let state {
-                        Text("\(AM4Message.locationLabel(state.context.location)) · Scene \(state.context.scene + 1)")
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
-                }
-                Button { openSelector(library: false) } label: { selectorLabel("Type", state?.modelName ?? "Reading…") }.frame(maxWidth: 280).disabled(busy || state == nil)
-                Button { openSelector(library: true) } label: { selectorLabel("Library", "Choose preset…") }.frame(maxWidth: 220).disabled(busy || state == nil)
-                Spacer(minLength: 4)
-                if midi.isApplyingGain { ProgressView().controlSize(.small) }
-                Button(action: close) { Image(systemName: "xmark").font(.headline).frame(width: 44, height: 44) }
-                    .buttonStyle(.plain).background(.white.opacity(0.07), in: Circle()).accessibilityLabel("Close block editor").disabled(midi.isApplyingGain)
-            }.buttonStyle(.plain).padding(.horizontal, 24).padding(.vertical, 16)
+            AM4EditorHeader(title: blockID == 119 ? "Drive 2" : effect.name,
+                subtitle: state.map { "\(AM4Message.locationLabel($0.context.location)) · Scene \($0.context.scene + 1)" },
+                busy: midi.isApplyingGain, close: close) { effectSelectionMenus }
             Divider()
             HStack(spacing: 10) {
                 Text("Channel").font(.subheadline).foregroundStyle(.secondary)
@@ -988,11 +877,11 @@ private struct EffectPanel: View {
                     ForEach(0..<4) { index in
                         Button { select(AM4EffectSelection(state: state, channel: index)) } label: {
                             Text(String(UnicodeScalar(65 + index)!)).font(.headline)
-                                .foregroundStyle(state.context.channel == index ? Color.cyan : .secondary)
+                                .foregroundStyle(state.context.channel == index ? AM4Appearance.accent : .secondary)
                                 .frame(width: 48, height: 36)
-                                .background(state.context.channel == index ? Color.cyan.opacity(0.16) : .white.opacity(0.035), in: Capsule())
-                                .overlay(Capsule().strokeBorder(state.context.channel == index ? Color.cyan.opacity(0.65) : .clear))
-                        }.buttonStyle(.plain).accessibilityLabel("\(effect.name) channel \(String(UnicodeScalar(65 + index)!))")
+                                .background(state.context.channel == index ? AM4Appearance.accent.opacity(0.16) : .white.opacity(0.035), in: RoundedRectangle(cornerRadius: 6))
+                                .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(state.context.channel == index ? AM4Appearance.accent.opacity(0.65) : .clear))
+                        }.buttonStyle(AM4ButtonStyle()).accessibilityLabel("\(effect.name) channel \(String(UnicodeScalar(65 + index)!))")
                             .accessibilityAddTraits(state.context.channel == index ? [.isSelected] : [])
                     }
                 } else { ProgressView().controlSize(.small) }
@@ -1005,10 +894,10 @@ private struct EffectPanel: View {
                         ForEach(effect.pages) { item in
                             Button { page = item.id } label: {
                                 Text(item.title).font(.headline).foregroundStyle(activePage == item.id ? .white : .secondary)
-                                    .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading).padding(.horizontal, 18)
-                                    .background(activePage == item.id ? Color.white.opacity(0.08) : .clear, in: RoundedRectangle(cornerRadius: 9))
-                                    .overlay(alignment: .leading) { if activePage == item.id { Capsule().fill(.cyan).frame(width: 3).padding(.vertical, 12) } }
-                            }.buttonStyle(.plain)
+                                    .frame(maxWidth: .infinity, minHeight: 36, alignment: .leading).padding(.horizontal, 18)
+                                    .background(activePage == item.id ? Color.white.opacity(0.08) : .clear, in: RoundedRectangle(cornerRadius: 6))
+                                    .overlay(alignment: .leading) { if activePage == item.id { Capsule().fill(AM4Appearance.accent).frame(width: 3).padding(.vertical, 12) } }
+                            }.buttonStyle(AM4ButtonStyle())
                         }
                     }.padding(.vertical, 14).padding(.horizontal, 8)
                 }.frame(width: 148).background(.white.opacity(0.025)).disabled(busy)
@@ -1050,51 +939,32 @@ private struct EffectPanel: View {
                 Text(midi.gainStatus).font(.caption).foregroundStyle(.secondary)
                 Spacer()
                 Text("Drag to adjust · Tap a number to type · Double-tap to reset").font(.caption2).foregroundStyle(.tertiary)
-                Button { loadPage() } label: { Image(systemName: "arrow.clockwise").frame(width: 32, height: 32) }
-                    .buttonStyle(.plain).accessibilityLabel("Refresh controls").disabled(busy)
+                Button { loadPage() } label: { Label("Refresh", systemImage: "arrow.clockwise") }
+                    .buttonStyle(AM4NativeButtonStyle()).accessibilityLabel("Refresh controls").disabled(busy)
             }.padding(.horizontal, 20).padding(.vertical, 8)
-        }.background(Color(red: 0.085, green: 0.09, blue: 0.10))
+        }.background(AM4Appearance.panel)
             .clipShape(RoundedRectangle(cornerRadius: 22))
             .overlay(RoundedRectangle(cornerRadius: 22).strokeBorder(.white.opacity(0.12)))
             .onAppear(perform: loadPage).onChange(of: page) { _, _ in loadPage() }
             .onDisappear { Task { try? await midi.showEffectPage(AM4EffectPageSelection(slot: slot, block: blockID, page: nil)) } }
-            .popover(item: $selector) { selection in
-                AmpSelectorList(selection: selection) { command in
-                    selector = nil
-                    if case .effect(let value) = command { select(value) }
-                }.equatable().presentationCompactAdaptation(.popover)
-            }
             .alert("\(effect.name) update failed", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
                 Button("OK", role: .cancel) { failure = nil }
             } message: { Text(failure ?? "Refresh the block and try again.") }
     }
-    private func selectorLabel(_ title: String, _ value: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title).font(.caption).foregroundStyle(Color.secondary)
-            HStack(spacing: 8) {
-                Text(value).font(.subheadline.weight(.semibold)).foregroundStyle(Color.primary).lineLimit(1)
-                Spacer(minLength: 0)
-                Image(systemName: "chevron.down").font(.caption.weight(.semibold)).foregroundStyle(.cyan)
-            }
-        }.padding(.horizontal, 12).padding(.vertical, 9).frame(maxWidth: .infinity, alignment: .leading)
-            .background(.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(.white.opacity(0.08)))
-    }
-    private func openSelector(library: Bool) {
-        guard let state else { return }
-        let choices: [AmpSelector.Choice]
-        if library {
-            choices = AM4EffectsLibrary.shared.entries.filter { $0.block == effect.block }.map {
-                AmpSelector.Choice(id: $0.id, name: $0.name + ($0.parsed?.allChannels == true ? " · All channels" : ""), selected: false,
-                                  command: AM4EffectSelection(state: state, libraryID: $0.id))
-            }
-        } else {
-            choices = Array(effect.models.enumerated()).sorted { $0.element.localizedStandardCompare($1.element) == .orderedAscending }.map {
-                AmpSelector.Choice(id: String($0.offset), name: $0.element, selected: state.model == $0.offset,
-                                  command: AM4EffectSelection(state: state, model: $0.offset))
-            }
-        }
-        selector = AmpSelector(title: "\(effect.name) \(library ? "library" : "type")", choices: choices)
+    private var effectSelectionMenus: some View {
+        HStack(spacing: 12) {
+            if let state {
+                let identity = ParameterEditorState.effect(state).menuIdentity
+                AM4Dropdown(title: "Type", accessibilityName: "\(effect.name) type", choices: AM4MenuChoices.effectTypes[effect.block] ?? [],
+                    selected: String(state.model), identity: identity) { id in
+                        if let model = Int(id) { select(AM4EffectSelection(state: state, model: model)) }
+                    }.equatable().frame(maxWidth: 280)
+                AM4Dropdown(title: "Library", accessibilityName: "\(effect.name) library", choices: AM4MenuChoices.effectLibraries[effect.block] ?? [],
+                    selected: nil, placeholder: "Choose preset…", identity: identity) { id in
+                        select(AM4EffectSelection(state: state, libraryID: id))
+                    }.equatable().frame(maxWidth: 220)
+            } else { ProgressView("Reading controls…").controlSize(.small) }
+        }.disabled(busy || state == nil || midi.isLoadingPresets)
     }
     private func loadPage() {
         Task {
@@ -1127,7 +997,7 @@ private struct AM4WorkspaceSplit<Sidebar: View, Detail: View>: View {
         HSplitView {
             sidebar()
                 .frame(minWidth: 250, idealWidth: 300, maxWidth: 450)
-                .background(Color(red: 0.075, green: 0.08, blue: 0.095))
+                .background(AM4Appearance.panel)
             detail().frame(minWidth: 320, maxWidth: .infinity)
         }
         #else

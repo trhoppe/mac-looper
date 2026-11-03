@@ -41,7 +41,7 @@ struct ContentView: View, Equatable {
                         HStack(spacing: 12) {
                     panelButton("Songs", icon: "sidebar.left", visible: geo.size.width >= 1250 ? sidebar : showingSongs) {
                         if geo.size.width >= 1250 { sidebar.toggle() } else { showingSongs.toggle() }
-                    }.popover(isPresented: $showingSongs) { SongBrowserView(library: library, onSelectSong: revealChords).frame(width: 310, height: 520) }
+                    }.popover(isPresented: $showingSongs) { SongBrowserView(library: library, onSelectSong: revealChords, onAddSong: beginAdding).frame(width: 310, height: 520) }
                     panelButton("Chords", icon: "text.alignleft", visible: showingChords) { showingChords.toggle() }
                     panelButton("Looper", icon: "arrow.triangle.2.circlepath", visible: showingLooper) { showingLooper.toggle() }
                     panelButton("Drummer", icon: "square.grid.2x2", visible: showingDrummer) { showingDrummer.toggle() }
@@ -50,8 +50,8 @@ struct ContentView: View, Equatable {
                         }
                     }.frame(height: 32)
                     AppReadinessBadge(model: readiness)
-                    Button { showingSettings.toggle() } label: { Image(systemName: "gearshape").font(.title3) }
-                        .buttonStyle(.plain).accessibilityLabel("Settings")
+                    Button { showingSettings.toggle() } label: { Image(systemName: "gearshape").font(.title3).frame(width: 30, height: 30) }
+                        .buttonStyle(JamPlainButtonStyle()).accessibilityLabel("Settings")
                         .popover(isPresented: $showingSettings, arrowEdge: .top) {
                             AudioSettingsView(model: model, library: library, dismiss: { showingSettings = false },
                                               chooseFolder: { beginImport(.libraryFolder) }, recoverDraft: { draft in
@@ -125,9 +125,9 @@ struct ContentView: View, Equatable {
     private func panelButton(_ title: String, icon: String, visible: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Label(title, systemImage: icon).foregroundStyle(visible ? accent : .secondary)
-                .padding(.horizontal, 9).padding(.vertical, 6).hoverHighlight()
+                .padding(.horizontal, 9).padding(.vertical, 6)
         }
-            .buttonStyle(.plain).accessibilityLabel("Show or hide \(title.lowercased())")
+            .buttonStyle(JamPlainButtonStyle()).accessibilityLabel("Show or hide \(title.lowercased())")
             .accessibilityValue(visible ? "Shown" : "Hidden")
     }
     @ViewBuilder private func panes(width: Double) -> some View {
@@ -151,10 +151,10 @@ struct ContentView: View, Equatable {
             ResizableSplit(axis: .horizontal, side: .leading, size: $songsWidth, defaultSize: 240,
                            minimumLeading: 220, minimumTrailing: showingChords && showingPlayer ? 660 : 320,
                            label: "Resize Songs sidebar") {
-                SongBrowserView(library: library, onSelectSong: revealChords)
+                SongBrowserView(library: library, onSelectSong: revealChords, onAddSong: beginAdding)
             } trailing: { chartAndPlayer(windowWidth: width) }
         } else if songsVisible {
-            SongBrowserView(library: library, onSelectSong: revealChords)
+            SongBrowserView(library: library, onSelectSong: revealChords, onAddSong: beginAdding)
         } else { chartAndPlayer(windowWidth: width) }
     }
     private func chartAndPlayer(windowWidth: Double) -> some View {
@@ -218,7 +218,12 @@ struct ContentView: View, Equatable {
     }
     private func beginEditing() {
         guard let id = library.selectedSongID, let song = library.library?.songs.first(where: { $0.id == id }) else { return }
-        library.editing = true; editingDraft = SongDraft(song: song)
+        library.editing = true; editingDraft = SongDraft(song: song, playlistIDs: library.library?.playlistIDs(containing: id))
+    }
+    private func beginAdding() {
+        guard library.library != nil && !library.editing && !library.saving else { return }
+        showingSongs = false; library.editing = true
+        editingDraft = SongDraft(playlistIDs: library.playlistID.map { Set([$0]) } ?? [])
     }
     private func revealChords() { showingChords = true; showingSongs = false }
     private func beginImport(_ kind: ImportKind) { showingSettings = false; importKind = kind; importing = true }

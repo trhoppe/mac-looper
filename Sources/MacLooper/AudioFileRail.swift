@@ -42,9 +42,9 @@ struct AudioFileRail: View {
                         Button {
                             searching.toggle(); searchFocused = searching
                             if !searching { model.query = "" }
-                        } label: { Image(systemName: "magnifyingglass") }.buttonStyle(.plain).accessibilityLabel("Search audio files")
+                        } label: { Image(systemName: "magnifyingglass").frame(width: 28, height: 28) }.buttonStyle(JamPlainButtonStyle()).accessibilityLabel("Search audio files")
                         Button { model.chooseFolder() } label: { Image(systemName: "folder.badge.plus") }
-                            .buttonStyle(.bordered).help("Open a folder and include all of its subfolders")
+                            .buttonStyle(JamButtonStyle()).help("Open a folder and include all of its subfolders")
                             .accessibilityLabel("Open audio folder")
                     }
                     if let folder = model.folder {
@@ -56,7 +56,7 @@ struct AudioFileRail: View {
                         }.font(.caption).foregroundStyle(.secondary).help(folder.path)
                         if searching {
                             TextField("Search files or folders", text: $model.query)
-                                .textFieldStyle(.roundedBorder).focused($searchFocused).accessibilityLabel("Search audio files")
+                                .textFieldStyle(.roundedBorder).hoverHighlight().focused($searchFocused).accessibilityLabel("Search audio files")
                         }
                     }
                 }.padding(18)
@@ -70,7 +70,7 @@ struct AudioFileRail: View {
                             Text(model.folder == nil ? "Your backing tracks, in one place" : "No audio files found").font(.callout)
                             Text(model.folder == nil ? "Open a folder to browse its audio files and subfolders." : "Choose another folder to browse your audio files.")
                                 .font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
-                            Button("Open Folder…") { model.chooseFolder() }.buttonStyle(.bordered)
+                            Button("Open Folder…") { model.chooseFolder() }.buttonStyle(JamButtonStyle())
                         }.padding(24)
                     } else if model.visibleGroups.isEmpty {
                         Text("No matches").foregroundStyle(.secondary)
@@ -85,7 +85,10 @@ struct AudioFileRail: View {
                                                 .frame(width: 16)
                                             Text(track.title).font(.callout).lineLimit(1).truncationMode(.middle)
                                             Spacer(minLength: 4)
-                                        }.padding(.vertical, 5).hoverHighlight().tag(track.id).help(track.url.path)
+                                        }.padding(.horizontal, 10).padding(.vertical, 8).frame(minHeight: 32)
+                                            .browserRowHighlight(selected: model.selected?.id == track.id, background: Color(red: 0.075, green: 0.085, blue: 0.10))
+                                            .tag(track.id).help(track.url.path)
+                                            .listRowInsets(EdgeInsets()).listRowBackground(Color.clear)
                                     }
                                 } header: {
                                     HStack {
@@ -95,7 +98,7 @@ struct AudioFileRail: View {
                                     }.font(.caption.weight(.medium)).textCase(nil)
                                 }
                             }
-                        }.listStyle(.sidebar).scrollContentBackground(.hidden)
+                        }.listStyle(.sidebar).scrollContentBackground(.hidden).tint(.gray).accentColor(.gray)
                     }
                 }.frame(maxWidth: .infinity, maxHeight: .infinity)
                 if let notice = model.scanNotice { Text(notice).font(.caption).foregroundStyle(.secondary).padding(.horizontal, 16).padding(.bottom, 8) }
@@ -104,7 +107,7 @@ struct AudioFileRail: View {
                         Image(systemName: "exclamationmark.circle").foregroundStyle(.orange)
                         Text(error).font(.caption).textSelection(.enabled)
                         Spacer(minLength: 0)
-                        Button { model.error = nil } label: { Image(systemName: "xmark") }.buttonStyle(.plain)
+                        Button { model.error = nil } label: { Image(systemName: "xmark") }.buttonStyle(JamPlainButtonStyle())
                     }.padding(12).background(.orange.opacity(0.08))
                 }
             }
@@ -139,7 +142,7 @@ struct AudioFileRail: View {
                        onEditingChanged: { editing in
                     if editing { scrubPosition = model.position; scrubbing = true }
                     else { model.seek(scrubPosition); scrubbing = false }
-                }).disabled(model.duration <= 0 || model.loading).accessibilityLabel("File playback position")
+                }).hoverHighlight().disabled(model.duration <= 0 || model.loading).accessibilityLabel("File playback position")
                 HStack {
                     Text(Self.time(scrubbing ? scrubPosition : model.position))
                     Spacer()
@@ -164,10 +167,10 @@ struct AudioFileRail: View {
                     playerIcon("repeat.1").foregroundStyle(model.repeatTrack ? accent : .secondary)
                 }.help(model.repeatTrack ? "Repeat this file: on" : "Repeat this file: off")
                     .accessibilityLabel("Repeat file").accessibilityValue(model.repeatTrack ? "On" : "Off")
-            }.buttonStyle(.plain)
+            }.buttonStyle(JamPlainButtonStyle())
             HStack(spacing: 8) {
                 Image(systemName: "speaker.wave.2").font(.caption).foregroundStyle(.secondary)
-                Slider(value: $model.volume, in: 0...1).accessibilityLabel("File player volume")
+                Slider(value: $model.volume, in: 0...1).hoverHighlight().accessibilityLabel("File player volume")
                 Text("\(Int((model.volume * 100).rounded()))%").font(.caption.monospacedDigit()).foregroundStyle(.secondary).frame(width: 34, alignment: .trailing)
             }
         }

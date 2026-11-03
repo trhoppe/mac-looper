@@ -68,10 +68,10 @@ concurrent change to the same edited field keeps your draft open and reports a
 conflict instead of overwriting it. A missing own file does not fall back to
 importing JustChords again. Choose the existing own folder in Settings.
 
-With a chart selected, click **Edit** below the font controls. The editor fills
+Use **+** beside Songs search to open a blank **New song** editor, or select a chart and click **Edit** below the font controls. Nothing is inserted until Save; new songs use the playlist currently being browsed. The editor fills
 **the entire app workspace**, with no dimmed border, on Mac and iPad. Edit:
 
-- Song name and artist.
+- Song name, artist, and playlists on the first row. All Songs always includes every song; the Playlists menu can check one or more existing lists or choose All Songs only.
 - Song key (for example C, F# or Am), BPM and time signature.
 - Song length in minutes:seconds or seconds, stored as `{duration: ...}`.
 - Raw ChordPro: type `[C]` before a word to place its chord above that word in
@@ -92,14 +92,13 @@ text without operating the jam controls. Playing audio continues independently.
 **Save** (Command-S on Mac) commits changes and immediately refreshes the chart,
 song list and editable looper BPM. **Cancel** leaves the stored song unchanged;
 a changed draft asks before discarding. Before each changed save, the complete
-previous file is kept in **Library Backups** beside `library.json`. Drafts stay in
-memory until Save; there is no automatic draft recovery. No-op saves do not
+previous file is kept in **Library Backups** beside `library.json`. Device-local recovery retains existing and new-song drafts, including their playlist choices. No-op saves do not
 rewrite the JSON or create a backup.
 
 The storage structure remains compatible with the imported JustChords format.
 After the one-time conversion, viewing retains exact file bytes. Explicit saves reformat the JSON while retaining
 unrelated values, unknown fields, trash and playlist membership/settings. The
-editor changes the library song; playlist-specific overrides remain intact.
+editor changes the library song and explicitly selected playlist membership; retained playlist entries keep their ordering, duplicates, and per-song overrides. Independent remote membership changes merge without replacing entire playlists.
 Changing Song key updates its ChordPro directive and compatibility copy, and clears an old display transpose;
 it does not rewrite the chord symbols in the source. Song time signature and
 length are metadata; live loop timing still uses 4/4.
@@ -152,7 +151,15 @@ The header's navigation strip scrolls horizontally when space is tight.
 The remote retains preset/scene selection, block bypass, Amp/Drive/Delay/Reverb/
 Graphic EQ/Enhancer editors, channel/model/library choices, knob/numeric/default
 editing, EQ faders and hardware read-back verification from the original app.
-Edits affect the working buffer; it does not send permanent preset Save commands.
+Edits affect the working buffer. **Save** beside the preset name has a gray dot
+while clean and an orange dot when the AM4 reports unsaved changes (including
+front-panel edits). Clicking it stores only the current preset in its current
+slot. Preset/scene/layout and connection checks run immediately before the write;
+a distinct command acknowledgement, cleared hardware edited flag, and matching
+stored name are required for success. It never retries a permanent write automatically.
+A recent local edit stays orange while the device's flag catches up. Save errors
+remain visible beside the preset heading; changing presets follows the AM4's
+normal behavior of leaving the previous working buffer.
 The standalone remote's USB playback slider is omitted here; use the existing
 Mac Jams mix controls.
 
@@ -392,4 +399,4 @@ The older disconnect description above applies to the Mac adapter.
 
 See [the reliability validation record](docs/reliability-validation-2026-11-02.md)
 for regression coverage, device-test scope, recovery storage and diagnostic flags.
-AM4 permanent preset Save remains a separate, unimplemented feature.
+AM4 preset Save now has offline wire/state-machine regression coverage. Acknowledgement plus device edited-state readback verifies the store path; persistence across preset reload/power-cycle requires an explicit on-device check.

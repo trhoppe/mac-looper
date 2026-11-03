@@ -143,7 +143,8 @@ public struct AM4Message: Equatable, Sendable {
         return AM4Snapshot(
             name: name(at: 16), scene: Int(scene),
             sceneNames: (0..<4).map { name(at: 48 + $0 * 32) },
-            blockIDs: (0..<4).map { uint32(at: 176 + $0 * 4) }
+            blockIDs: (0..<4).map { uint32(at: 176 + $0 * 4) },
+            edited: payload[15] & 0x04 != 0
         )
     }
 
@@ -159,6 +160,7 @@ public struct AM4Snapshot: Equatable, Sendable, Codable {
     public let scene: Int
     public let sceneNames: [String]
     public let blockIDs: [UInt32]
+    public var edited: Bool? = nil
 }
 
 public struct AM4Preset: Identifiable, Equatable, Sendable, Codable {
@@ -217,6 +219,10 @@ public struct AM4DeviceState: Codable, Sendable {
     public var navigationBusy: Bool = false
     public var gainStatus: String = ""
     public var gainBusy: Bool = false
+    public var presetEdited: Bool? = nil
+    public var presetSaveSupported: Bool? = nil
+    public var presetSaveBusy: Bool? = nil
+    public var presetSaveStatus: String? = nil
 
     public var isValid: Bool {
         version == 9 && presets.count <= 104 &&
@@ -286,5 +292,45 @@ public struct SysExStream: Sendable {
             }
         }
         return messages
+    }
+}
+
+
+/// Saving is limited to the exact preset/scene/layout displayed when clicked.
+public struct AM4PresetSaveCommand: Codable, Equatable, Sendable {
+    public let location: Int
+    public let snapshot: AM4Snapshot
+    public var isValid: Bool {
+        (0..<104).contains(location) && (0..<4).contains(snapshot.scene) && snapshot.sceneNames.count == 4 &&
+        snapshot.blockIDs.count == 4 && snapshot.blockIDs.allSatisfy { $0 < 0x4000 } && snapshot.name.count <= 32
+    }
+    public func matches(location: Int, snapshot: AM4Snapshot) -> Bool {
+        isValid && self.location == location && self.snapshot.name == snapshot.name &&
+        self.snapshot.scene == snapshot.scene && self.snapshot.sceneNames == snapshot.sceneNames && self.snapshot.blockIDs == snapshot.blockIDs
+    }
+}
+
+extension AM4Message {
+    /// AM4-Edit's SAVE_TO_LOCATION: uint32 LE slot, not a Float32 or bank/PC.
+    /// Wire evidence: TheAndrewStaker/mcp-midi-control, am4/setParam.ts,
+    /// session-18-save-preset-z04 capture. Only the current slot is used by the UI.
+    public static func savePresetWrite(_ command: AM4PresetSaveCommand) -> [UInt8]? {
+        guard command.isValid else { return nil }
+        let slot = UInt32(command.location)
+        return request(function: 1, payload: [0, 0, 0, 0, 0x1B, 0, 0, 0, 4, 0] + pack((0..<4).map { UInt8((slot >> ($0 * 8)) & 255) }))
+    }
+    /// An addressing-only 18-byte acknowledgement; a reflected 23-byte write
+    /// or a parameter descriptor must never count as a completed save.
+    public var acknowledgesPresetSave: Bool {
+        function == 1 && payload == [0, 0, 0, 0, 0x1B, 0, 0, 0, 0, 0]
+    }
+    public var editsPreset: Bool {
+        if function == 0x75 { return true } // Working block library data.
+        guard function == 1, payload.count >= 10 else { return false }
+        let block = Int(payload[0]) | Int(payload[1]) << 7
+        let parameter = Int(payload[2]) | Int(payload[3]) << 7
+        let action = Int(payload[4]) | Int(payload[5]) << 7
+        // Global USB playback level and loading a different preset are not edits.
+        return block > 1 && !(block == 206 && parameter == 10) && [1, 2, 3, 5, 8].contains(action)
     }
 }

@@ -30,7 +30,7 @@ struct LibraryConflictView: View {
                         Spacer()
                         Text(copy.isValid ? "\(copy.songs.count) songs" : "Unreadable · copy preserved").font(.caption)
                     }.padding(10).background(selection == copy.id ? Color.cyan.opacity(0.10) : Color.clear)
-                }.buttonStyle(.plain)
+                }.buttonStyle(JamPlainButtonStyle())
             }
             Divider()
             if let selected {
@@ -48,7 +48,7 @@ struct LibraryConflictView: View {
                 Button("Refresh versions") { Task { await library.refresh() } }.disabled(busy)
                 Spacer()
                 Button(busy ? "Applying…" : "Use selected version") { confirming = true }
-                    .buttonStyle(.borderedProminent).disabled(busy || selected?.isValid != true || library.editing)
+                    .buttonStyle(JamButtonStyle(prominent: true)).disabled(busy || selected?.isValid != true || library.editing)
             }
         }.padding(20).frame(minWidth: 540, idealWidth: 780, minHeight: 480, idealHeight: 700)
         .confirmationDialog("Use this library version?", isPresented: $confirming, titleVisibility: .visible) {

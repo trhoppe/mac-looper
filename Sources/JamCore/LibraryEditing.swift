@@ -4,22 +4,72 @@ public extension JustChordsLibrary {
     /// Re-read/patch the original JSON representation so large numeric values in
     /// unknown fields never pass through JSONValue's Double representation.
     func applying(_ draft: SongDraft, modifiedAt: Date = Date()) throws -> JustChordsLibrary {
-        guard !(try draft.changes()).isEmpty else { return self }
-        guard let current = songs.first(where: { $0.id == draft.id }) else { throw SongEditError.missingSong }
-        let merged = try ChordProSongSource.merging(base: SongDraft(song: draft.original).chordPro,
-            edited: draft.chordPro, latest: SongDraft(song: current).chordPro)
-        var mergedDraft = SongDraft(song: current); mergedDraft.chordPro = merged
-        let edits = try mergedDraft.changes()
-        if edits.allSatisfy({ field, proposed in current.fields[field] == (proposed == .null ? nil : proposed) }) { return self }
+        _ = try draft.changes()
+        guard draft.hasChanges else { return self }
+        let current = songs.first(where: { $0.id == draft.id })
+        guard draft.isNew || current != nil else { throw SongEditError.missingSong }
+        if draft.isNew, let current, current.chordPro != draft.chordPro { throw SongEditError.conflict }
         guard var root = try JSONSerialization.jsonObject(with: originalData) as? [String: Any],
-              var songs = root["songs"] as? [[String: Any]],
-              let index = self.songs.firstIndex(where: { $0.id == draft.id }) else { throw SongEditError.missingSong }
-        try Self.patch(edits, into: &songs[index])
-        // JustChords stores dates in seconds since Apple's 2001 reference date.
-        songs[index]["date"] = modifiedAt.timeIntervalSinceReferenceDate
-        root["songs"] = songs
+              var entries = root["songs"] as? [[String: Any]] else { throw LibraryError.invalidFormat }
+        var changed = false
+        if let current, let index = songs.firstIndex(where: { $0.id == draft.id }) {
+            let merged = try ChordProSongSource.merging(base: SongDraft(song: draft.original).chordPro,
+                edited: draft.chordPro, latest: SongDraft(song: current).chordPro)
+            var mergedDraft = SongDraft(song: current); mergedDraft.chordPro = merged
+            let edits = try mergedDraft.changes()
+            if !edits.isEmpty {
+                try Self.patch(edits, into: &entries[index])
+                entries[index]["date"] = modifiedAt.timeIntervalSinceReferenceDate
+                changed = true
+            }
+        } else {
+            var entry: [String: Any] = ["id": draft.id]
+            try Self.patch(draft.changes(), into: &entry)
+            entry["date"] = modifiedAt.timeIntervalSinceReferenceDate
+            entries.append(entry); changed = true
+        }
+        root["songs"] = entries
+        if let base = draft.originalPlaylistIDs {
+            let memberships = playlistIDs(containing: draft.id)
+            let touched = draft.isNew ? draft.playlistIDs : base.symmetricDifference(draft.playlistIDs)
+            let available = Set(playlists.map(\.id))
+            guard draft.playlistIDs.intersection(touched).isSubset(of: available) else {
+                throw SongEditError.validation("A selected playlist was removed on another device. Reopen the song to choose its playlists.")
+            }
+            guard var lists = root["playlists"] as? [[String: Any]] else { throw LibraryError.invalidFormat }
+            for index in lists.indices {
+                let id = Self.identifier(lists[index]["id"])
+                guard touched.contains(id) else { continue }
+                let included = draft.playlistIDs.contains(id)
+                guard included != memberships.contains(id) else { continue }
+                var arrangement = lists[index]["arrangement"] as? [Any] ?? []
+                if included {
+                    arrangement.append(["type": "song", "id": entries.first { Self.identifier($0["id"]) == draft.id }!["id"]!,
+                                        "index": UUID().uuidString])
+                } else { arrangement = Self.removingSong(draft.id, from: arrangement) }
+                lists[index]["arrangement"] = arrangement
+                lists[index]["date"] = modifiedAt.timeIntervalSinceReferenceDate
+                changed = true
+            }
+            root["playlists"] = lists
+        }
+        guard changed else { return self }
         return try JustChordsLibrary(data: JSONSerialization.data(withJSONObject: root, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]))
     }
+    private static func identifier(_ value: Any?) -> String {
+        if let value = value as? String { return value }
+        return (value as? NSNumber)?.stringValue ?? ""
+    }
+    private static func removingSong(_ id: String, from items: [Any]) -> [Any] {
+        items.compactMap { value in
+            guard let item = value as? [String: Any] else { return value }
+            if item["type"] as? String == "song", identifier(item["id"]) == id { return nil }
+            var copy = item
+            if let nested = item["arrangement"] as? [Any] { copy["arrangement"] = removingSong(id, from: nested) }
+            return copy
+        }
+    }
+
 }
 
 public extension LibraryFiles {

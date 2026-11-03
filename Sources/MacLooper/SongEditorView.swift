@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 struct SongEditorView: View {
     @StateObject private var editor: SongEditorModel
     private var draft: SongDraft { editor.draft }
+    @ObservedObject private var library: SongLibraryModel
     @State private var saving = false
     @State private var saveError: String?
     @State private var confirmingDiscard = false
@@ -12,12 +13,13 @@ struct SongEditorView: View {
     let close: () -> Void
     let save: (SongDraft) async throws -> Void
     init(draft: SongDraft, library: SongLibraryModel, close: @escaping () -> Void, save: @escaping (SongDraft) async throws -> Void) {
+        self.library = library
         _editor = StateObject(wrappedValue: SongEditorModel(draft: draft, library: library)); self.close = close; self.save = save
     }
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Text("Edit song").font(.headline)
+                Text(draft.isNew ? "New song" : "Edit song").font(.headline)
                 Spacer()
                 Button("Export ChordPro…") { exporting = true }.disabled(saving)
                 Button("Cancel") {
@@ -29,13 +31,14 @@ struct SongEditorView: View {
                         do { try await save(draft); try await editor.clearRecovery(); close() }
                         catch { saveError = error.localizedDescription; saving = false }
                     }
-                }.buttonStyle(.borderedProminent).keyboardShortcut("s", modifiers: .command)
+                }.buttonStyle(JamButtonStyle(prominent: true)).keyboardShortcut("s", modifiers: .command)
                     .disabled(saving || !draft.hasChanges || draft.validationError != nil)
             }.padding(18)
             VStack(spacing: 12) {
                     HStack(spacing: 14) {
                         field("Song name", text: $editor.draft.title, prompt: "Song name")
                         field("Artist", text: $editor.draft.artist, prompt: "Artist name")
+                        playlistField.frame(minWidth: 140, maxWidth: 260)
                     }
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 14), count: 4), spacing: 12) {
                         field("Song key", text: $editor.draft.key, prompt: "C, F# or Am")
@@ -75,10 +78,35 @@ struct SongEditorView: View {
         }
 
     }
+    private var playlistField: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text("Playlists").font(.caption).foregroundStyle(.secondary)
+            Menu {
+                Button("All Songs only") { editor.draft.playlistIDs = [] }
+                if let playlists = library.library?.playlists, !playlists.isEmpty {
+                    Divider()
+                    ForEach(playlists) { playlist in
+                        Toggle(playlist.title, isOn: Binding(get: { editor.draft.playlistIDs.contains(playlist.id) }, set: { selected in
+                            if selected { editor.draft.playlistIDs.insert(playlist.id) }
+                            else { editor.draft.playlistIDs.remove(playlist.id) }
+                        }))
+                    }
+                }
+            } label: {
+                Text(playlistSummary).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
+            }.hoverHighlight().accessibilityLabel("Song playlists").accessibilityValue(playlistSummary)
+                .help("Every song appears in All Songs. Select any additional playlists.")
+        }
+    }
+    private var playlistSummary: String {
+        let selected = (library.library?.playlists ?? []).filter { draft.playlistIDs.contains($0.id) }
+        if selected.isEmpty { return "All Songs only" }
+        return selected.count == 1 ? selected[0].title : "\(selected.count) playlists"
+    }
     private func field(_ name: String, text: Binding<String>, prompt: String) -> some View {
         VStack(alignment: .leading, spacing: 5) {
             Text(name).font(.caption).foregroundStyle(.secondary)
-            TextField(prompt, text: text).textFieldStyle(.roundedBorder).accessibilityLabel(name)
+            TextField(prompt, text: text).textFieldStyle(.roundedBorder).hoverHighlight().accessibilityLabel(name)
         }
     }
 }

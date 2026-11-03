@@ -7,16 +7,21 @@ public struct RecoveredSongDraft: Codable, Identifiable, Sendable {
     public let library: String
     public let originalFields: [String: JSONValue]
     public let chordPro: String
+    public let newSong: Bool?
+    public let originalPlaylistIDs: Set<String>?
+    public let playlistIDs: Set<String>?
     public let updatedAt: Date
     public var id: String { originalFields["id"]?.text ?? "" }
     public var draft: SongDraft {
-        var value = SongDraft(song: LibrarySong(fields: originalFields))
+        var value = newSong == true ? SongDraft(newSongID: id) : SongDraft(song: LibrarySong(fields: originalFields), playlistIDs: originalPlaylistIDs)
+        if let playlistIDs { value.playlistIDs = playlistIDs }
         value.chordPro = chordPro
         return value
     }
     public init(draft: SongDraft, library: URL, updatedAt: Date = Date()) {
         self.library = Self.identity(library); originalFields = draft.original.fields
         chordPro = draft.chordPro; self.updatedAt = updatedAt
+        newSong = draft.isNew; originalPlaylistIDs = draft.originalPlaylistIDs; playlistIDs = draft.playlistIDs
     }
     public static func identity(_ library: URL) -> String { library.standardizedFileURL.resolvingSymlinksInPath().path }
 }

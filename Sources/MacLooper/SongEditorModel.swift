@@ -15,7 +15,13 @@ import JamCore
         defer { recovering = false }
         do {
             if let saved = try await library.recoveryStore.drafts(in: library.destination).first(where: { $0.id == draft.id }) {
-                restoring = true; draft = saved.draft; restoring = false; recovered = true
+                restoring = true
+                var restored = saved.draft
+                if !restored.isNew, restored.originalPlaylistIDs == nil, let current = library.library {
+                    var upgraded = SongDraft(song: restored.original, playlistIDs: current.playlistIDs(containing: restored.id))
+                    upgraded.chordPro = restored.chordPro; restored = upgraded
+                }
+                draft = restored; restoring = false; recovered = true
             }
         } catch { recoveryError = "Couldn’t read recovered edits: " + error.localizedDescription }
     }

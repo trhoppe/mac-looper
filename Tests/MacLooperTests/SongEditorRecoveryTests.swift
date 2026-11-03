@@ -40,4 +40,25 @@ final class SongEditorRecoveryTests: XCTestCase {
         XCTAssertNotNil(editor.recoveryError)
         XCTAssertEqual(editor.draft.title, "Still in editor")
     }
+    @MainActor func testNewSongSaveSelectsCreatedSongAndRecoversItsPlaylists() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try Data(#"{"songs":[],"playlists":[{"id":"p","title":"Acoustic Songs","arrangement":[]}]}"#.utf8).write(to: root.appendingPathComponent("library.json"))
+        let library = SongLibraryModel(defaults: UserDefaults(suiteName: UUID().uuidString)!, loadOnLaunch: false, folderOverride: root,
+            recoveryStore: SongDraftRecoveryStore(folder: root.appendingPathComponent("Recovery")))
+        defer { library.shutdown() }
+        await library.refresh(); library.playlistID = "p"; library.query = "old search"
+        let editor = SongEditorModel(draft: SongDraft(newSongID: "new", playlistIDs: ["p"]), library: library)
+        await editor.restore(); editor.draft.title = "New song"
+        try await editor.keepForLater()
+        let recovered = try XCTUnwrap(library.recoveredDrafts.first?.draft)
+        XCTAssertTrue(recovered.isNew); XCTAssertEqual(recovered.playlistIDs, ["p"])
+        try await library.save(recovered)
+        XCTAssertEqual(library.selectedSongID, "new"); XCTAssertEqual(library.playlistID, "p"); XCTAssertTrue(library.query.isEmpty)
+        XCTAssertEqual(library.songs.map(\.id), ["new"])
+        try await editor.clearRecovery()
+        XCTAssertTrue(library.recoveredDrafts.isEmpty)
+    }
+
 }

@@ -22,23 +22,23 @@ struct AudioSettingsView: View {
                 HStack {
                     Text("Settings").font(.headline)
                     Spacer()
-                    Button { dismiss() } label: { Image(systemName: "xmark") }.buttonStyle(.plain)
+                    Button { dismiss() } label: { Image(systemName: "xmark") }.buttonStyle(JamPlainButtonStyle())
                 }
                 Text("Audio").font(.subheadline.weight(.semibold))
                 VStack(spacing: 12) {
                     Picker("Input", selection: $model.inputUID) {
                         if model.input == nil { Text("Choose input…").tag(model.inputUID) }
                         ForEach(model.inputs) { Text($0.name).tag($0.uid) }
-                    }
+                    }.hoverHighlight()
                     Picker("Output", selection: $model.outputUID) {
                         if model.output == nil { Text("Choose output…").tag(model.outputUID) }
                         ForEach(model.outputs) { Text($0.name).tag($0.uid) }
-                    }
+                    }.hoverHighlight()
                     Picker("Capture", selection: $model.inputChannel) {
                         ForEach(Array(stride(from: 0, to: max(1, model.input?.inputs ?? 2), by: 2)), id: \.self) { ch in
                             Text((model.input?.inputs ?? 2) > ch + 1 ? "Inputs \(ch + 1)–\(ch + 2)" : "Input \(ch + 1)").tag(ch)
                         }
-                    }
+                    }.hoverHighlight()
                 }.disabled(model.starting || model.hasLoop || model.busy)
                 Text("\(Int(model.sampleRate / 1000)) kHz · " + bufferSummary + " · outputs 1–2 · AM4 live monitoring").font(.caption).foregroundStyle(.secondary)
                 Text(model.starting ? "Connecting audio…" : model.running ? "Audio connected automatically" : "Waiting for an audio interface")

@@ -33,6 +33,20 @@ final class AM4Connection: ObservableObject {
     @Published private(set) var gainStatus = ""
     @Published private(set) var isApplyingGain = false
 
+    @Published private(set) var hasUnsavedPresetChanges = false
+    @Published private(set) var isSavingPreset = false
+    @Published private(set) var presetSaveStatus = ""
+    private var lastPresetEdit: TimeInterval?
+    private var helperSupportsPresetSave = false
+    var canSavePreset: Bool {
+        let idle = isConnected && !isLoadingPresets && !isApplyingGain && !isNavigating && !isSavingPreset && hasUnsavedPresetChanges
+        #if targetEnvironment(simulator)
+        return idle && helperSupportsPresetSave
+        #else
+        return idle
+        #endif
+    }
+
     static var transportLabel: String {
         #if targetEnvironment(simulator)
         return "Mac helper"
@@ -116,6 +130,10 @@ final class AM4Connection: ObservableObject {
             guard let self else { throw ConnectionError.message("Helper is unavailable.") }
             try await self.changeUSBPlayback(command)
             return self.deviceState
+        }, savePreset: { [weak self] command in
+            guard let self else { throw ConnectionError.message("Helper is unavailable.") }
+            try await self.savePreset(command)
+            return self.deviceState
         })
         helper = server
         server.onStatus = { [weak self] in self?.helperStatus = $0 }
@@ -158,7 +176,8 @@ final class AM4Connection: ObservableObject {
         AM4DeviceState(version: 9, status: status, connected: isConnected,
                        loadingPresets: isLoadingPresets, location: location,
                        snapshot: snapshot, presets: presets, amp: amp, ampControls: ampControls, effectControls: effectControls, effectResetValue: effectResetValue, ampResetValue: ampResetValue, blocks: blocks, blockStatus: blockStatus, usbPlayback: usbPlayback, usbPlaybackStatus: usbPlaybackStatus,
-                       navigationStatus: navigationStatus, navigationBusy: isNavigating, gainStatus: gainStatus, gainBusy: isApplyingGain)
+                       navigationStatus: navigationStatus, navigationBusy: isNavigating, gainStatus: gainStatus, gainBusy: isApplyingGain, presetEdited: hasUnsavedPresetChanges,
+                       presetSaveSupported: true, presetSaveBusy: isSavingPreset, presetSaveStatus: presetSaveStatus)
     }
 
     private func connectUSB() {
@@ -284,7 +303,7 @@ final class AM4Connection: ObservableObject {
     }
 
     /// Every query is serialized; an echoed write never verifies a value.
-    private func query(_ bytes: [UInt8], matches: @escaping (AM4Message) -> Bool) async throws -> AM4Message {
+    private func query(_ bytes: [UInt8], timeoutNanoseconds: UInt64 = 1_500_000_000, matches: @escaping (AM4Message) -> Bool) async throws -> AM4Message {
         try Task.checkCancellation()
         guard pendingQuery == nil else { throw ConnectionError.message("Another AM4 read is in progress.") }
         return try await withCheckedThrowingContinuation { continuation in
@@ -293,7 +312,7 @@ final class AM4Connection: ObservableObject {
             do { try send(bytes) }
             catch { finishQuery(.failure(error)); return }
             queryTimeout = Task { [weak self] in
-                try? await Task.sleep(nanoseconds: 1_500_000_000)
+                try? await Task.sleep(nanoseconds: timeoutNanoseconds)
                 guard !Task.isCancelled, let self, self.pendingQuery?.id == id else { return }
                 self.finishQuery(.failure(ConnectionError.message("AM4 read timed out. Try Refresh.")))
             }
@@ -740,6 +759,49 @@ final class AM4Connection: ObservableObject {
     }
     #endif
 
+    func savePreset(_ command: AM4PresetSaveCommand) async throws {
+        guard command.isValid, canSavePreset, command.location == location else {
+            presetSaveStatus = "Wait for the current preset to finish updating before saving."
+            throw ConnectionError.message(presetSaveStatus)
+        }
+        let token = session
+        isSavingPreset = true; isApplyingGain = true; presetSaveStatus = "Checking preset…"
+        defer { isSavingPreset = false; isApplyingGain = false }
+        do {
+            #if targetEnvironment(simulator)
+            let state = try await helperRequest(path: "/preset/save", body: JSONEncoder().encode(command))
+            guard state.presetSaveSupported == true, state.presetEdited == false,
+                  let location = state.location, let snapshot = state.snapshot, command.matches(location: location, snapshot: snapshot) else {
+                throw ConnectionError.message("The helper did not confirm the preset save.")
+            }
+            hasUnsavedPresetChanges = false; lastPresetEdit = nil; presetSaveStatus = state.presetSaveStatus ?? "Saved to AM4"
+            #else
+            await refreshTask?.value
+            let result = try await AM4PresetSaveOperation.run(command,
+                requireEdited: lastPresetEdit.map { ProcessInfo.processInfo.systemUptime - $0 < 2 } ?? false,
+                readLocation: { try await self.query(AM4Message.locationRequest) { $0.location != nil }.location! },
+                readSnapshot: { try await self.query(AM4Message.snapshotRequest) { $0.snapshot != nil }.snapshot! },
+                commit: {
+                    self.presetSaveStatus = "Saving to AM4…"
+                    _ = try await self.query(AM4Message.savePresetWrite(command)!, timeoutNanoseconds: 5_000_000_000) { $0.acknowledgesPresetSave }
+                },
+                readStoredName: { try await self.query(AM4Message.storedPresetNameRequest(command.location)!) { $0.storedPresetName != nil }.storedPresetName! },
+                sessionIsCurrent: { self.session == token })
+            if result == .alreadyClean {
+                hasUnsavedPresetChanges = false; lastPresetEdit = nil; presetSaveStatus = "No unsaved changes on AM4"; return
+            }
+            let stored = command.snapshot.name
+            if let index = presets.firstIndex(where: { $0.id == command.location }) { presets[index] = AM4Preset(id: command.location, name: stored) }
+            hasUnsavedPresetChanges = false; lastPresetEdit = nil
+            presetSaveStatus = "Saved to AM4 · " + AM4Message.locationLabel(command.location)
+            append(presetSaveStatus)
+            #endif
+        } catch {
+            if session == token { presetSaveStatus = "Save could not be verified: " + error.localizedDescription; append(presetSaveStatus) }
+            throw error
+        }
+    }
+
     func selectPreset(_ target: Int) async throws {
         guard let location else { throw ConnectionError.message("Wait for the AM4 connection.") }
         try await navigate(AM4NavigationCommand(preset: target, expectedLocation: location))
@@ -983,6 +1045,7 @@ final class AM4Connection: ObservableObject {
         scanStarted = false
         effectControls = nil; effectResetValue = nil
         snapshot = nil; location = nil; presets = []
+        hasUnsavedPresetChanges = false; lastPresetEdit = nil; presetSaveStatus = ""
         isConnected = false; isLoadingPresets = false
     }
 
@@ -990,12 +1053,15 @@ final class AM4Connection: ObservableObject {
         guard source != 0 else { return }
         for message in stream.receive(bytes) {
             if let result = message.location {
-                if location != result { amp = nil; ampControls = nil; effectControls = nil; effectResetValue = nil; blocks = nil; ampResetValue = nil; if !isNavigating { navigationStatus = "" } }
+                if location != result { hasUnsavedPresetChanges = false; lastPresetEdit = nil; presetSaveStatus = ""; amp = nil; ampControls = nil; effectControls = nil; effectResetValue = nil; blocks = nil; ampResetValue = nil; if !isNavigating { navigationStatus = "" } }
                 location = result
             }
             if let result = message.snapshot {
                 if snapshot?.scene != result.scene || snapshot?.blockIDs != result.blockIDs { amp = nil; ampControls = nil; effectControls = nil; effectResetValue = nil; blocks = nil; ampResetValue = nil; if !isNavigating { navigationStatus = "" } }
                 snapshot = result
+                if let edited = result.edited, edited || lastPresetEdit.map({ ProcessInfo.processInfo.systemUptime - $0 >= 2 }) != false {
+                    hasUnsavedPresetChanges = edited
+                }
             }
             if let pending = pendingQuery, pending.matches(message) { finishQuery(.success(message)) }
             if snapshot != nil, location != nil, !isConnected {
@@ -1049,6 +1115,9 @@ final class AM4Connection: ObservableObject {
             return MIDISend(output, destination, pointer)
         }
         try check(result, operation: "Send AM4 MIDI request")
+        if AM4Message(bytes: bytes)?.editsPreset == true {
+            hasUnsavedPresetChanges = true; lastPresetEdit = ProcessInfo.processInfo.systemUptime; presetSaveStatus = ""
+        }
     }
 
     private func checkConnection() {
@@ -1089,6 +1158,8 @@ final class AM4Connection: ObservableObject {
             }
             isLoadingPresets = state.loadingPresets
             snapshot = state.snapshot
+            helperSupportsPresetSave = state.presetSaveSupported == true
+            if !isSavingPreset { hasUnsavedPresetChanges = state.presetEdited ?? state.snapshot?.edited ?? false; presetSaveStatus = state.presetSaveStatus ?? "" }
             location = state.location
             presets = state.presets
         } catch {
@@ -1339,6 +1410,7 @@ private final class AM4LocalHelper {
     private let navigate: (AM4NavigationCommand) async throws -> AM4DeviceState
     private let bypassBlock: (AM4BlockBypassCommand) async throws -> AM4DeviceState
     private let setUSBPlayback: (AM4USBPlaybackCommand) async throws -> AM4DeviceState
+    private let savePreset: (AM4PresetSaveCommand) async throws -> AM4DeviceState
 
     init(state: @escaping () -> AM4DeviceState?,
          setGain: @escaping (AM4GainCommand) async throws -> AM4DeviceState,
@@ -1350,7 +1422,8 @@ private final class AM4LocalHelper {
          selectEffect: @escaping (AM4EffectSelection) async throws -> AM4DeviceState,
          navigate: @escaping (AM4NavigationCommand) async throws -> AM4DeviceState,
          bypassBlock: @escaping (AM4BlockBypassCommand) async throws -> AM4DeviceState,
-         setUSBPlayback: @escaping (AM4USBPlaybackCommand) async throws -> AM4DeviceState) {
+         setUSBPlayback: @escaping (AM4USBPlaybackCommand) async throws -> AM4DeviceState,
+         savePreset: @escaping (AM4PresetSaveCommand) async throws -> AM4DeviceState) {
         self.state = state
         self.setGain = setGain
         self.selectPage = selectPage
@@ -1361,7 +1434,7 @@ private final class AM4LocalHelper {
         self.selectEffect = selectEffect
         self.navigate = navigate
         self.bypassBlock = bypassBlock
-        self.setUSBPlayback = setUSBPlayback
+        self.setUSBPlayback = setUSBPlayback; self.savePreset = savePreset
     }
 
     func start() {
@@ -1463,7 +1536,7 @@ private final class AM4LocalHelper {
                         let body = (try? JSONEncoder().encode(AM4ControlError(message: error.localizedDescription))) ?? Data()
                         self.respond(id, status: "409 Conflict", body: body)
                     }
-                } else if line == "POST /amp/page HTTP/1.1" || line == "POST /amp/parameter HTTP/1.1" || line == "POST /amp/select HTTP/1.1" || line == "POST /effect/page HTTP/1.1" || line == "POST /effect/parameter HTTP/1.1" || line == "POST /effect/select HTTP/1.1" || line == "POST /navigate HTTP/1.1" || line == "POST /blocks/bypass HTTP/1.1" || line == "POST /usb/playback HTTP/1.1" {
+                } else if line == "POST /amp/page HTTP/1.1" || line == "POST /amp/parameter HTTP/1.1" || line == "POST /amp/select HTTP/1.1" || line == "POST /effect/page HTTP/1.1" || line == "POST /effect/parameter HTTP/1.1" || line == "POST /effect/select HTTP/1.1" || line == "POST /navigate HTTP/1.1" || line == "POST /blocks/bypass HTTP/1.1" || line == "POST /usb/playback HTTP/1.1" || line == "POST /preset/save HTTP/1.1" {
                     guard headers["x-am4-client"] == "AM4Remote/9", headers["origin"] == nil,
                           headers["content-type"] == "application/json" else {
                         self.respond(id, status: "400 Bad Request", body: Data()); return
@@ -1471,7 +1544,12 @@ private final class AM4LocalHelper {
                     let body = buffer.subdata(in: separator.upperBound..<end)
                     do {
                         let result: AM4DeviceState
-                        if line == "POST /effect/page HTTP/1.1" {
+                        if line == "POST /preset/save HTTP/1.1" {
+                            guard let command = try? JSONDecoder().decode(AM4PresetSaveCommand.self, from: body), command.isValid else {
+                                self.respond(id, status: "400 Bad Request", body: Data()); return
+                            }
+                            result = try await self.savePreset(command)
+                        } else if line == "POST /effect/page HTTP/1.1" {
                             guard let command = try? JSONDecoder().decode(AM4EffectPageSelection.self, from: body), command.isValid else {
                                 self.respond(id, status: "400 Bad Request", body: Data()); return
                             }
