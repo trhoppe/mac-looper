@@ -7,7 +7,7 @@ typedef struct TLCore TLCore;
 typedef struct TLHardware TLHardware;
 enum { TL_BUFFER_FRAMES = 32, TL_BUFFER_SIZE_ERROR = -60001 };
 enum { TL_EMPTY = 0, TL_ARMED, TL_RECORDING, TL_PLAYING, TL_STOPPED };
-enum { TL_CMD_ARM = 1, TL_CMD_CLEAR, TL_CMD_PLAY_STOP };
+enum { TL_CMD_ARM = 1, TL_CMD_CLEAR, TL_CMD_PLAY_STOP, TL_CMD_RECORD };
 typedef struct {
     int state;
     uint32_t length, recorded, position;

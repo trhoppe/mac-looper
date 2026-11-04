@@ -66,3 +66,58 @@ extension LibraryLaunchTests {
         first.shutdown(); reopened.shutdown()
     }
 }
+
+extension LibraryLaunchTests {
+    @MainActor func testLaunchRestoresFolderAndWaitsForNewCloudChordsBeforePublishing() async throws {
+        let suite = "MacJamsCloudLaunch-" + UUID().uuidString
+        let defaults = UserDefaults(suiteName: suite)!
+        // Isolate both preferences and disk data from the real library.
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(suite)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root); defaults.removePersistentDomain(forName: suite) }
+        let url = root.appendingPathComponent("library.json")
+        let cached = Data(#"{"songs":[{"id":"a","title":"Song","rawData":"[C]Old chords"}],"playlists":[]}"#.utf8)
+        let updated = Data(#"{"songs":[{"id":"a","title":"Song","rawData":"[G]New chords"}],"playlists":[]}"#.utf8)
+        try cached.write(to: url)
+        defaults.set(try XCTUnwrap(SongLibraryModel.bookmark(root)), forKey: "libraryFolder")
+        let held = Suspension()
+        let io = LibraryFiles(refreshCloudFile: { destination in
+            XCTAssertEqual(destination.standardizedFileURL, url.standardizedFileURL)
+            if !held.entered { await held.wait() }
+        })
+        let model = SongLibraryModel(defaults: defaults, readTracks: { _ in [:] }, io: io)
+        defer { model.shutdown() }
+        for _ in 0..<1000 where !held.entered { await Task.yield() }
+        XCTAssertTrue(held.entered); XCTAssertTrue(model.syncing); XCTAssertNil(model.library)
+        try updated.write(to: url, options: .atomic)
+        held.resume()
+        await model.refresh()
+        XCTAssertTrue(model.library?.songs.first?.chordPro.contains("[G]New chords") == true)
+        XCTAssertNil(model.error); XCTAssertNil(model.selectedSongID)
+    }
+    @MainActor func testUnavailableCloudUsesCachedChordsWithWarningAndNextOpenRefreshClearsIt() async throws {
+        let suite = "MacJamsCloudOffline-" + UUID().uuidString
+        let defaults = UserDefaults(suiteName: suite)!
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(suite)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root); defaults.removePersistentDomain(forName: suite) }
+        let url = root.appendingPathComponent("library.json")
+        let cached = Data(#"{"songs":[{"id":"a","title":"Cached","rawData":"[C]Old chords"}],"playlists":[]}"#.utf8)
+        try cached.write(to: url)
+        var offline = true
+        let io = LibraryFiles(refreshCloudFile: { _ in
+            if offline { throw LibraryCloudRefreshError.unavailable("Offline") }
+        })
+        let model = SongLibraryModel(defaults: defaults, loadOnLaunch: false, folderOverride: root, readTracks: { _ in [:] }, io: io)
+        defer { model.shutdown() }
+        await model.refresh()
+        XCTAssertTrue(model.library?.songs.first?.chordPro.contains("[C]Old chords") == true)
+        XCTAssertNotNil(model.error); XCTAssertTrue(model.status.contains("iCloud update pending"))
+        XCTAssertEqual(try Data(contentsOf: url), cached, "Offline refresh must not migrate the stale file")
+        offline = false
+        try Data(#"{"songs":[{"id":"a","title":"Updated","rawData":"[G]New chords"}],"playlists":[]}"#.utf8).write(to: url, options: .atomic)
+        await model.refresh()
+        XCTAssertTrue(model.library?.songs.first?.chordPro.contains("[G]New chords") == true)
+        XCTAssertNil(model.error); XCTAssertFalse(model.status.contains("pending"))
+    }
+}

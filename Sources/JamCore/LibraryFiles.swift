@@ -3,10 +3,13 @@ import Foundation
 public actor LibraryFiles {
     let conflictVersions: (URL) throws -> [LibraryConflictVersion]
     let markConflictResolved: (LibraryConflictVersion, URL) throws -> Void
+    let refreshCloudFile: (URL) async throws -> Void
     public init(conflictVersions: ((URL) throws -> [LibraryConflictVersion])? = nil,
-                markConflictResolved: ((LibraryConflictVersion, URL) throws -> Void)? = nil) {
+                markConflictResolved: ((LibraryConflictVersion, URL) throws -> Void)? = nil,
+                refreshCloudFile: ((URL) async throws -> Void)? = nil) {
         self.conflictVersions = conflictVersions ?? Self.systemConflictVersions
         self.markConflictResolved = markConflictResolved ?? Self.markSystemConflictResolved
+        self.refreshCloudFile = refreshCloudFile ?? Self.downloadCurrentCloudFile
     }
     public func read(_ url: URL) throws -> JustChordsLibrary {
         var error: NSError?, readError: Error?, bytes: Data?
@@ -29,6 +32,50 @@ public actor LibraryFiles {
             do { try library.originalData.write(to: file, options: .atomic) } catch { writeError = error }
         }
         if let error { throw error }; if let writeError { throw writeError }
+    }
+}
+
+public enum LibraryCloudRefreshError: LocalizedError {
+    case unavailable(String)
+    public var errorDescription: String? {
+        switch self {
+        case .unavailable(let reason):
+            "iCloud hasn’t updated the library yet. Showing the downloaded copy. \(reason)"
+        }
+    }
+}
+
+extension LibraryFiles {
+    private static func downloadCurrentCloudFile(_ url: URL) async throws {
+        try await waitForCurrentCloudFile(url, status: { url in
+            var fresh = url
+            fresh.removeAllCachedResourceValues()
+            let values = try fresh.resourceValues(forKeys: [.isUbiquitousItemKey, .ubiquitousItemDownloadingStatusKey])
+            guard values.isUbiquitousItem == true else { return nil }
+            return values.ubiquitousItemDownloadingStatus ?? .notDownloaded
+        }, request: { try FileManager.default.startDownloadingUbiquitousItem(at: $0) },
+           pause: { try await Task.sleep(for: .milliseconds(250)) })
+    }
+
+    // Bounded launch/foreground refresh only; no periodic library polling.
+    static func waitForCurrentCloudFile(_ url: URL,
+        status: (URL) throws -> URLUbiquitousItemDownloadingStatus?,
+        request: (URL) throws -> Void, pause: () async throws -> Void, attempts: Int = 120) async throws {
+        guard try status(url) != nil else { return }
+        do {
+            try Task.checkCancellation()
+            // Request even for a local copy currently marked current: iCloud may
+            // not have discovered the other device’s revision when we launch.
+            try request(url)
+            for _ in 0..<attempts {
+                try Task.checkCancellation()
+                if try status(url) == .current { return }
+                try await pause()
+            }
+            throw LibraryCloudRefreshError.unavailable("Try opening the app again when connected.")
+        } catch is CancellationError { throw CancellationError() }
+        catch let error as LibraryCloudRefreshError { throw error }
+        catch { throw LibraryCloudRefreshError.unavailable(error.localizedDescription) }
     }
 }
 

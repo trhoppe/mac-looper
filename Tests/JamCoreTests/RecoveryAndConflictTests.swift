@@ -83,3 +83,55 @@ extension RecoveryAndConflictTests {
         XCTAssertEqual(try Data(contentsOf: damaged), bytes)
     }
 }
+
+extension RecoveryAndConflictTests {
+    func testCloudRefreshWaitsForCurrentCopyAndRequestsOnlyOnce() async throws {
+        let url = URL(fileURLWithPath: "/tmp/library.json")
+        let states: [URLUbiquitousItemDownloadingStatus] = [.downloaded, .downloaded, .notDownloaded, .current]
+        var reads = 0, requests = 0, pauses = 0
+        try await LibraryFiles.waitForCurrentCloudFile(url, status: { _ in
+            defer { reads += 1 }; return states[min(reads, states.count - 1)]
+        }, request: { XCTAssertEqual($0, url); requests += 1 }, pause: { pauses += 1 }, attempts: 4)
+        XCTAssertEqual(requests, 1); XCTAssertEqual(pauses, 2); XCTAssertEqual(reads, 4)
+    }
+    func testLocalLibrarySkipsCloudRequestButCurrentCloudCopyStillRequestsSync() async throws {
+        let url = URL(fileURLWithPath: "/tmp/library.json")
+        var requests = 0
+        try await LibraryFiles.waitForCurrentCloudFile(url, status: { _ in nil },
+            request: { _ in requests += 1 }, pause: { XCTFail("Local file must not wait") })
+        XCTAssertEqual(requests, 0)
+        try await LibraryFiles.waitForCurrentCloudFile(url, status: { _ in .current },
+            request: { _ in requests += 1 }, pause: { XCTFail("Current file must not wait") })
+        XCTAssertEqual(requests, 1)
+    }
+    func testCloudRefreshTimeoutAndCancellationAreBounded() async throws {
+        let url = URL(fileURLWithPath: "/tmp/library.json")
+        var pauses = 0
+        do {
+            try await LibraryFiles.waitForCurrentCloudFile(url, status: { _ in .downloaded },
+                request: { _ in }, pause: { pauses += 1 }, attempts: 3)
+            XCTFail("A stale copy must not be reported as current")
+        } catch is LibraryCloudRefreshError { }
+        XCTAssertEqual(pauses, 3)
+        do {
+            try await LibraryFiles.waitForCurrentCloudFile(url, status: { _ in .notDownloaded },
+                request: { _ in }, pause: { throw CancellationError() })
+            XCTFail("Cancellation must propagate")
+        } catch is CancellationError { }
+    }
+    func testCloudRequestFailureDoesNotMigrateOrReplaceCachedFile() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let destination = root.appendingPathComponent("library.json"), cached = try library("Cached")
+        try cached.originalData.write(to: destination)
+        let io = LibraryFiles(refreshCloudFile: { url in
+            try await LibraryFiles.waitForCurrentCloudFile(url, status: { _ in .downloaded },
+                request: { _ in throw CocoaError(.fileReadUnknown) }, pause: { XCTFail("Request failed") })
+        })
+        do { _ = try await io.prepareChordProLibrary(at: destination); XCTFail("Must report cloud failure") }
+        catch is LibraryCloudRefreshError { }
+        XCTAssertEqual(try Data(contentsOf: destination), cached.originalData)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: root.appendingPathComponent("Library Backups").path))
+    }
+}

@@ -118,8 +118,17 @@ import JamCore
             let token = revision, folder = folderURL, destination = destination
             do {
                 let next: JustChordsLibrary
-                if let readLibrary { next = try await readLibrary(destination) }
-                else { next = try await io.prepareChordProLibrary(at: destination) }
+                let cloudWarning: String?
+                if let readLibrary { next = try await readLibrary(destination); cloudWarning = nil }
+                else {
+                    do { next = try await io.prepareChordProLibrary(at: destination); cloudWarning = nil }
+                    catch let cloudError as LibraryCloudRefreshError {
+                        // Keep offline jamming available, but never migrate a
+                        // stale cached file or claim it has finished syncing.
+                        next = try await io.read(destination)
+                        cloudWarning = cloudError.localizedDescription
+                    }
+                }
                 guard token == revision, !Task.isCancelled else { continue }
                 let tracks: [String: URL]
                 if let readTracks { tracks = (try? await readTracks(folder)) ?? [:] }
@@ -132,8 +141,8 @@ import JamCore
                 backingLinks = bookmarkStore.compactMapValues { Self.resolve($0)?.path }
                 for (id, url) in tracks { backingLinks[id] = url.path }
                 conflicts = versions
-                error = versions.isEmpty ? nil : SongEditError.unresolvedCloudConflict.localizedDescription
-                status = "\(next.songs.count) songs · Mac Jams library"
+                error = versions.isEmpty ? cloudWarning : SongEditError.unresolvedCloudConflict.localizedDescription
+                status = "\(next.songs.count) songs · " + (cloudWarning == nil ? "Mac Jams library" : "iCloud update pending")
                 if let id = selectedSongID, !next.songs.contains(where: { $0.id == id }) { selectedSongID = nil }
             } catch {
                 guard token == revision, !Task.isCancelled else { continue }

@@ -7,6 +7,7 @@ import LooperCore
 import JamCore
 
 @MainActor final class LooperModel: ObservableObject {
+    let midi = JamMIDIInput()
     @Published var devices: [AudioDevice] = []
     @Published var inputUID = UserDefaults.standard.string(forKey: "inputUID") ?? ""
     @Published var outputUID = UserDefaults.standard.string(forKey: "outputUID") ?? ""
@@ -59,6 +60,8 @@ import JamCore
     var output: AudioDevice? { outputs.first { $0.uid == outputUID } }
     var hasLoop: Bool { state == TL_PLAYING || state == TL_STOPPED }
     var canEditTiming: Bool { state == TL_EMPTY && !starting }
+    var canRecord: Bool { !starting && !audioPaused && (state == TL_EMPTY || state == TL_ARMED || state == TL_RECORDING) }
+    var acceptsMIDI: Bool { lifecyclePolicy.mayConnect && !audioPaused }
     var busy: Bool { state == TL_ARMED || state == TL_RECORDING }
     var plannedFrames: UInt32 { tl_loop_frames(sampleRate, bpm, UInt32(bars), 4) }
     var seconds: Double { 60 / bpm * 4 * Double(bars) }
@@ -79,7 +82,9 @@ import JamCore
         case Int32(TL_RECORDING):
             let remaining = max(0, Double(length - recorded) / sampleRate)
             return String(format: "%.1f seconds remaining", remaining)
-        case Int32(TL_PLAYING): return "Bar \(min(bars, Int(progress * Double(bars)) + 1)) of \(bars) · \(cycles) passes"
+        case Int32(TL_PLAYING):
+            if length < Int(plannedFrames) { return String(format: "%.2f s loop · %llu passes", Double(length) / sampleRate, cycles) }
+            return "Bar \(min(bars, Int(progress * Double(bars)) + 1)) of \(bars) · \(cycles) passes"
         case Int32(TL_STOPPED): return "Play restarts your loop from the beginning"
         default: return "Arm, then play. Your first strum starts the loop."
         }
@@ -239,6 +244,13 @@ import JamCore
         if !tl_command(core, Int32(TL_CMD_ARM), plannedFrames) { error = "Audio controls are busy. Try again." }
         else { state = Int32(TL_ARMED); length = Int(plannedFrames) }
     }
+    func record() async {
+        if !running { await startAudio() }
+        guard running, let core else { return }
+        // The audio thread decides start/finish, avoiding races with the 30 Hz display.
+        if !tl_command(core, Int32(TL_CMD_RECORD), plannedFrames) { error = "Audio controls are busy. Try again." }
+        else if state == TL_EMPTY || state == TL_ARMED { state = Int32(TL_RECORDING); length = Int(plannedFrames) }
+    }
     func clear() {
         if audioPaused {
             host.shutdown(); audioPaused = false; state = Int32(TL_EMPTY); length = 0; recorded = 0; progress = 0; cycles = 0
@@ -258,6 +270,7 @@ import JamCore
         if !tl_command(core, Int32(TL_CMD_PLAY_STOP), 0) { error = "Audio controls are busy. Try again." }
     }
     func shutdown() {
+        midi.stop()
         automaticAudio = false; routeTask?.cancel(); stopTask?.cancel(); timer?.invalidate(); host.shutdown(); running = false
     }
     private func poll() {

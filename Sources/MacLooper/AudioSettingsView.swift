@@ -48,6 +48,8 @@ struct AudioSettingsView: View {
                         .disabled(model.input == nil || model.output == nil)
                 }
                 Divider()
+                MIDIPedalSettings(midi: model.midi)
+                Divider()
                 Text("Chord Library").font(.subheadline.weight(.semibold))
                 Text(library.status).font(.caption).foregroundStyle(.secondary)
                 Text("Library folder: \(library.folderURL.lastPathComponent)").font(.caption).lineLimit(2)
@@ -68,5 +70,19 @@ struct AudioSettingsView: View {
         }.frame(width: 430, height: 540).tint(accent)
         .sheet(isPresented: $reviewingConflicts) { LibraryConflictView(library: library) }
         .task { await library.refreshRecoveredDrafts() }
+    }
+}
+
+private struct MIDIPedalSettings: View {
+    @ObservedObject var midi: JamMIDIInput
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("MIDI Pedals").font(.subheadline.weight(.semibold))
+            Text(midi.status).font(.caption).foregroundStyle(.secondary)
+            Text("CC22 Arm · CC23 Record / Finish · CC24 Play / Stop\nCC25 Clear · CC26 Drummer Play / Stop")
+                .font(.caption).foregroundStyle(.secondary)
+            Text("All MIDI inputs and channels · nonzero values trigger; zero releases are ignored")
+                .font(.caption).foregroundStyle(.secondary)
+        }
     }
 }

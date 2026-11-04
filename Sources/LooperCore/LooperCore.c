@@ -66,8 +66,8 @@ void tl_destroy(TLCore *c) {
     free(c->left); free(c->right); free(c->historyLeft); free(c->historyRight); free(c);
 }
 bool tl_command(TLCore *c, int command, uint32_t length) {
-    if (!c || command < TL_CMD_ARM || command > TL_CMD_PLAY_STOP) return false;
-    if (command == TL_CMD_ARM && (length < 16 || length > c->capacity)) return false;
+    if (!c || command < TL_CMD_ARM || command > TL_CMD_RECORD) return false;
+    if ((command == TL_CMD_ARM || command == TL_CMD_RECORD) && (length < 16 || length > c->capacity)) return false;
     uint32_t w = atomic_load_explicit(&c->commandWrite, memory_order_relaxed);
     if (w - atomic_load_explicit(&c->commandRead, memory_order_acquire) >= COMMANDS) return false;
     c->commands[w % COMMANDS] = (TLCommand){command, length};
@@ -109,12 +109,34 @@ static void consume_commands(TLCore *c) {
     // Bounded: process only commands present at the start of the callback.
     while (r != w) {
         TLCommand cmd = c->commands[r++ % COMMANDS];
+        // A stale UI/MIDI Arm must never replace an existing take.
+        if (cmd.kind == TL_CMD_ARM && c->state != TL_EMPTY) continue;
         if (cmd.kind == TL_CMD_ARM || cmd.kind == TL_CMD_CLEAR) {
             reset_tail(c);
             c->length = cmd.kind == TL_CMD_ARM ? cmd.length : 0;
             c->recorded = 0; c->position = 0; c->cycles = 0;
             c->state = cmd.kind == TL_CMD_ARM ? TL_ARMED : TL_EMPTY;
             for (int b = 0; b < WAVE_BINS; b++) atomic_store_explicit(&c->waveform[b], 0, memory_order_relaxed);
+        } else if (cmd.kind == TL_CMD_RECORD) {
+            if (c->state == TL_EMPTY || c->state == TL_ARMED) {
+                reset_tail(c);
+                c->length = cmd.length;
+                c->recorded = c->position = 0; c->cycles = 0;
+                c->state = TL_RECORDING; // Capture the next sample, with no threshold or history.
+                for (int b = 0; b < WAVE_BINS; b++) atomic_store_explicit(&c->waveform[b], 0, memory_order_relaxed);
+            } else if (c->state == TL_RECORDING && c->recorded > 0) {
+                // Stretch existing peak bins to the shortened take. Constant bounded work;
+                // never rescan seconds of audio or allocate on the render thread.
+                float peaks[WAVE_BINS];
+                for (int b = 0; b < WAVE_BINS; b++) peaks[b] = atomic_load_explicit(&c->waveform[b], memory_order_relaxed);
+                for (int b = 0; b < WAVE_BINS; b++) {
+                    uint32_t source = (uint32_t)((uint64_t)b * c->recorded / c->length);
+                    atomic_store_explicit(&c->waveform[b], peaks[source], memory_order_relaxed);
+                }
+                c->length = c->recorded;
+                c->position = 0; c->gain = 0; c->state = TL_PLAYING;
+            }
+            // A second press before even one sample, or after auto-completion, is harmless.
         } else if (cmd.kind == TL_CMD_PLAY_STOP) {
             if (c->state == TL_PLAYING) { reset_tail(c); c->state = TL_STOPPED; c->position = 0; }
             else if (c->state == TL_STOPPED) { c->state = TL_PLAYING; c->position = 0; c->gain = 0; }

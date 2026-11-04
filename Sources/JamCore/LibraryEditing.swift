@@ -141,8 +141,14 @@ public extension JustChordsLibrary {
 public extension LibraryFiles {
     /// App launches/foreground refreshes migrate only an existing own library.
     /// The exact prior file is durably backed up before the atomic replacement.
-    func prepareChordProLibrary(at destination: URL) throws -> JustChordsLibrary {
+    func prepareChordProLibrary(at destination: URL) async throws -> JustChordsLibrary {
         guard !Self.isProtectedLibrary(destination) else { throw SongEditError.protectedLibrary }
+        try await refreshCloudFile(destination)
+        try Task.checkCancellation()
+        // A coordinated read materializes provider-backed files before any
+        // migration asks for write access. Most launches need no write at all.
+        let current = try read(destination)
+        guard try current.migratingToChordPro().originalData != current.originalData else { return current }
         var coordinationError: NSError?, operationError: Error?, result: JustChordsLibrary?
         NSFileCoordinator().coordinate(writingItemAt: destination, options: .forReplacing, error: &coordinationError) { file in
             do {

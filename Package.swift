@@ -19,7 +19,7 @@ let package = Package(
         .target(name: "LooperAudioUnit", dependencies: ["LooperCore"], publicHeadersPath: "include", cSettings: [.unsafeFlags(["-fobjc-arc"])],
                 linkerSettings: [.linkedFramework("AVFoundation"), .linkedFramework("AudioToolbox")]),
         .executableTarget(name: "MacLooper", dependencies: ["LooperCore", "LooperAudioUnit", "JamCore", .product(name: "AM4RemoteKit", package: "AM4RemoteKit")], linkerSettings: [
-            .linkedFramework("SwiftUI"), .linkedFramework("AVFoundation"), .linkedFramework("CoreAudioKit")
+            .linkedFramework("SwiftUI"), .linkedFramework("AVFoundation"), .linkedFramework("CoreAudioKit"), .linkedFramework("CoreMIDI")
         ]),
         .testTarget(name: "LooperCoreTests", dependencies: ["LooperCore", "LooperAudioUnit"]),
         .testTarget(name: "MacLooperTests", dependencies: ["MacLooper"]),

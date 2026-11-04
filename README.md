@@ -212,20 +212,29 @@ larger touch target. Songs remains a popover in the compact layout.
    Defaults are **120 BPM / 4 bars**. V1 uses **4/4**.
 4. Audio connects automatically when the app opens. Allow microphone access when asked;
    macOS requires this for USB audio input too. There is no software input monitoring.
-5. Adjust the strum threshold with the slider or type a value in the dB field (−72 to 0 dBFS).
+5. Type the strum threshold in the dB field (−72 to 0 dBFS).
    The orange line shows the threshold over the input meter. Put it above idle guitar noise
    and below your normal strum. You can adjust the threshold while armed.
 6. Click **Arm** (or **R**). The first sample at or above the threshold on either input channel
    starts capture. It records the calculated length and automatically loops it.
+   Or click **Record** to capture immediately, without threshold or pre-roll. Press **Record**
+   again during either kind of recording to finish early and immediately loop the captured
+   length. Otherwise it finishes at the preset bar count. Clear a completed take before recording a new one.
 7. **Space** stops/restarts a completed loop. Stopping while waiting or recording cancels the take.
    **Clear** (Delete) discards the loop and unlocks BPM/length. Closing the app releases its
    audio route. Changing devices in Settings reconnects automatically while the loop is empty.
    If the interface is unavailable, reconnect it; **Retry Connection** is available in Settings.
 
-The volume control beside **Clear** changes **loop playback only**.
+The looper volume control changes **loop playback only**.
 Loop, file-player and drummer volume each start at **100%**. Type a percentage beside its speaker icon
 for an exact setting. The AM4 handles live guitar monitoring. Captured loops stay in memory;
 there are no saved sessions. Overdub is deferred to a later version.
+
+MIDI controllers connect automatically on all channels (USB, or a controller already paired
+through the system). **CC22** arms, **CC23** records/finishes, **CC24** plays/stops the loop,
+**CC25** clears, and **CC26** plays/stops Drummer. Send a nonzero value for a press;
+zero-value releases are ignored. Settings shows connected MIDI inputs and these assignments.
+The pedal listener receives only; it does not send commands to the AM4 or change its MIDI connection.
 
 ## Pop Drummer AUv3
 

@@ -48,6 +48,18 @@ final class SharedGraphTests: XCTestCase {
         let peaks = (0..<256).map { tl_waveform(core, UInt32($0)) }
         XCTAssertEqual(peaks.max()!, 0.5, accuracy: 0.0001, "Backing is mixed after capture")
         XCTAssertTrue(Array(UnsafeBufferPointer(start: buffer.floatChannelData![0], count: 32)).contains { $0 > 0.2 })
+        XCTAssertTrue(tl_command(core, Int32(TL_CMD_CLEAR), 0))
+        for _ in 0..<12 { XCTAssertEqual(try engine.renderOffline(32, to: buffer), .success) }
+        XCTAssertTrue(tl_command(core, Int32(TL_CMD_RECORD), 1024))
+        for _ in 0..<10 { XCTAssertEqual(try engine.renderOffline(32, to: buffer), .success) }
+        XCTAssertEqual(tl_snapshot(core).recorded, 320, "Manual capture adds no history")
+        XCTAssertEqual(buffer.floatChannelData![0][16], 0.125, accuracy: 0.0001, "Guitar still is not monitored")
+        XCTAssertTrue(tl_command(core, Int32(TL_CMD_RECORD), 1024))
+        for _ in 0..<20 { XCTAssertEqual(try engine.renderOffline(32, to: buffer), .success) }
+        XCTAssertEqual(tl_snapshot(core).length, 320)
+        XCTAssertEqual(tl_snapshot(core).cycles, 2)
+        XCTAssertEqual((0..<256).map { tl_waveform(core, UInt32($0)) }.max()!, 0.5, accuracy: 0.0001)
+        XCTAssertEqual(unit.callbackFrames, 32); XCTAssertEqual(unit.renderError, 0)
     }
 }
 

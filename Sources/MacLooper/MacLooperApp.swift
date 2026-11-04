@@ -203,6 +203,18 @@ import AM4RemoteKit
         } else { library = SongLibraryModel() }
         commands = JamCommandAvailability(model: model, files: files, library: library)
         readiness = AppReadinessModel(audio: model, drums: AudioEngineHost.shared.drums, files: files, library: library)
+        if NSClassFromString("XCTestCase") == nil {
+            model.midi.start { [weak model] action in
+                guard let model, model.acceptsMIDI else { return }
+                switch action {
+                case .arm: await model.arm()
+                case .record: await model.record()
+                case .playStop: model.playStop()
+                case .clear: model.clear()
+                case .drummer: await AudioEngineHost.shared.drums.toggle(output: model.output)
+                }
+            }
+        }
         #if os(iOS)
         if NSClassFromString("XCTestCase") == nil { lifecycle = IPadAudioLifecycle(model: model, files: files) }
         #endif
