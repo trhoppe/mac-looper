@@ -69,6 +69,9 @@ struct SongBrowserView: View {
             Text(library.status).font(.caption2).foregroundStyle(.secondary).lineLimit(3)
                 .padding(.horizontal, 16).padding(.vertical, 12).accessibilityLabel("Library status: \(library.status)")
         }.frame(maxHeight: .infinity)
+            #if os(iOS)
+            .background(Color(red: 0.075, green: 0.085, blue: 0.10))
+            #endif
             .onAppear { searching = !library.query.isEmpty }
             .onChange(of: library.playlistID) { _, _ in
                 if let id = library.selectedSongID, !library.songs.contains(where: { $0.id == id }) { library.selectedSongID = nil }
