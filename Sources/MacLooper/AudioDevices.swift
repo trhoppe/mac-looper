@@ -97,8 +97,13 @@ enum AudioDevices {
     }
     @MainActor static func route(input: AudioDevice, output: AudioDevice) async throws -> Route {
         guard alive(input.id), alive(output.id) else { throw AudioFailure(message: "The selected audio device is disconnected.") }
-        guard input.rate >= 8000, input.rate <= 192000, abs(input.rate - output.rate) < 0.1 else {
-            throw AudioFailure(message: "Set both devices to the same sample rate in Audio MIDI Setup, then try again. AM4 uses 48 kHz.")
+        guard input.rate >= 8000, input.rate <= 192000, output.rate >= 8000, output.rate <= 192000 else {
+            throw AudioFailure(message: "The selected devices have an unsupported sample rate. Choose a rate between 8 and 192 kHz in Audio MIDI Setup, then Retry Connection.")
+        }
+        guard abs(input.rate - output.rate) < 0.1 else {
+            let inputRate = String(format: "%g", input.rate / 1000)
+            let outputRate = String(format: "%g", output.rate / 1000)
+            throw AudioFailure(message: "Sample rates don’t match: \(input.name) is at \(inputRate) kHz; \(output.name) is at \(outputRate) kHz. Set both devices to the same rate in Audio MIDI Setup, then Retry Connection.")
         }
         try require32Frames(input.id, name: input.name)
         if input.id != output.id { try require32Frames(output.id, name: output.name) }

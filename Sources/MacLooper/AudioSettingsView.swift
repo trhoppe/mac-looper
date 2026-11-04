@@ -41,8 +41,14 @@ struct AudioSettingsView: View {
                     }.hoverHighlight()
                 }.disabled(model.starting || model.hasLoop || model.busy)
                 Text("\(Int(model.sampleRate / 1000)) kHz · " + bufferSummary + " · outputs 1–2 · AM4 live monitoring").font(.caption).foregroundStyle(.secondary)
-                Text(model.starting ? "Connecting audio…" : model.running ? "Audio connected automatically" : "Waiting for an audio interface")
-                    .font(.caption).foregroundStyle(.secondary)
+                if let error = model.error {
+                    Text(error).font(.caption).foregroundStyle(.orange)
+                        .fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
+                        .accessibilityLabel("Audio error: \(error)")
+                } else {
+                    Text(model.starting ? "Connecting audio…" : model.running ? "Audio connected automatically" : "Waiting for an audio interface")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
                 if !model.running && !model.starting {
                     Button("Retry Connection") { Task { await model.retryAudio() } }
                         .disabled(model.input == nil || model.output == nil)
