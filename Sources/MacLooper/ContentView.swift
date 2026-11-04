@@ -38,6 +38,12 @@ struct ContentView: View, Equatable {
     static func == (lhs: Self, rhs: Self) -> Bool { lhs.model === rhs.model && lhs.files === rhs.files && lhs.library === rhs.library && lhs.remote === rhs.remote }
     private enum ImportKind { case libraryFolder, audioFolder }
     private var types: [UTType] { [.folder] }
+    private var settingsContent: some View {
+        AudioSettingsView(model: model, library: library, dismiss: { showingSettings = false },
+                          chooseFolder: { beginImport(.libraryFolder) }, recoverDraft: { draft in
+                              showingSettings = false; library.editing = true; editingDraft = draft
+                          })
+    }
 
     var body: some View {
         GeometryReader { geo in
@@ -63,12 +69,13 @@ struct ContentView: View, Equatable {
                     AppReadinessBadge(model: readiness).fixedSize()
                     Button { showingSettings.toggle() } label: { Image(systemName: "gearshape").font(.title3).frame(width: 30, height: 30) }
                         .buttonStyle(JamPlainButtonStyle()).accessibilityLabel("Settings")
+                        #if os(macOS)
+                        .anchorPreference(key: SettingsPopupAnchorKey.self, value: .bounds) { showingSettings ? $0 : nil }
+                        #else
                         .popover(isPresented: $showingSettings, arrowEdge: .top) {
-                            AudioSettingsView(model: model, library: library, dismiss: { showingSettings = false },
-                                              chooseFolder: { beginImport(.libraryFolder) }, recoverDraft: { draft in
-                                                  showingSettings = false; library.editing = true; editingDraft = draft
-                                              })
+                            settingsContent.frame(width: 430, height: 540)
                         }
+                        #endif
                 }.padding(.horizontal, compactHeader ? 14 : 18).padding(.vertical, 14)
                     .onGeometryChange(for: Double.self) { $0.size.height } action: { navigationHeight = $0 }
                 Divider()
@@ -96,6 +103,11 @@ struct ContentView: View, Equatable {
                             .keyboardShortcut(.cancelAction)
                             .frame(width: 0, height: 0).opacity(0).accessibilityHidden(true)
                     }
+                }
+            }
+            .overlayPreferenceValue(SettingsPopupAnchorKey.self) { anchor in
+                if let anchor {
+                    WindowSettingsPopup(anchor: anchor, close: { showingSettings = false }) { settingsContent }
                 }
             }
             #endif

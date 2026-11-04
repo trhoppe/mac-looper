@@ -159,6 +159,35 @@ struct AudioBrowserPopupKey: PreferenceKey {
         if let next = nextValue() { value = next }
     }
 }
+struct SettingsPopupAnchorKey: PreferenceKey {
+    static var defaultValue: Anchor<CGRect>? { nil }
+    static func reduce(value: inout Anchor<CGRect>?, nextValue: () -> Anchor<CGRect>?) {
+        if let next = nextValue() { value = next }
+    }
+}
+
+struct WindowSettingsPopup<Content: View>: View {
+    let anchor: Anchor<CGRect>
+    let close: () -> Void
+    @ViewBuilder let content: () -> Content
+    var body: some View {
+        GeometryReader { geo in
+            let trigger = geo[anchor]
+            let width = min(430, max(0, geo.size.width - 16))
+            let y = min(trigger.maxY + 6, max(8, geo.size.height - 48))
+            let height = min(548, max(0, geo.size.height - y - 8))
+            let x = min(max(8, trigger.midX - width / 2), max(8, geo.size.width - width - 8))
+            ZStack(alignment: .topLeading) {
+                Color.black.opacity(0.001).contentShape(Rectangle()).onTapGesture(perform: close)
+                JamPopupSurface(edge: .top, pointer: trigger.midX - x, content: content)
+                    .frame(width: width, height: height).offset(x: x, y: y)
+                Button("Close Settings", action: close).keyboardShortcut(.cancelAction)
+                    .frame(width: 0, height: 0).opacity(0).accessibilityHidden(true)
+            }
+        }
+    }
+}
+
 struct WindowAudioBrowserPopup: View {
     let request: AudioBrowserPopupRequest
     var top: CGFloat = 0

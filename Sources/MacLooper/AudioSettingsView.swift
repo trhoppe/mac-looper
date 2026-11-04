@@ -67,7 +67,7 @@ struct AudioSettingsView: View {
                     .font(.caption).foregroundStyle(.secondary)
                 if let error = library.error { Text(error).font(.caption).foregroundStyle(.orange) }
             }.padding(20)
-        }.frame(width: 430, height: 540).tint(accent)
+        }.tint(accent)
         .sheet(isPresented: $reviewingConflicts) { LibraryConflictView(library: library) }
         .task { await library.refreshRecoveredDrafts() }
     }
