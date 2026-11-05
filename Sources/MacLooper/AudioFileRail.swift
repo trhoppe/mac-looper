@@ -194,8 +194,9 @@ struct AudioFileRail: View {
                 }.font(.caption.monospacedDigit()).foregroundStyle(.secondary)
             }
             HStack(spacing: 4) {
-                Button { model.step(-1) } label: { playerIcon("backward.end.fill") }
-                    .disabled(!model.canStep(-1)).accessibilityLabel("Previous audio file")
+                Button { model.restart() } label: { playerIcon("backward.end.fill") }
+                    .disabled(model.duration <= 0 || model.loading).accessibilityLabel("Restart current song")
+                    .help("Restart current song")
                 Button { model.skip(-10) } label: { playerIcon("gobackward.10") }
                     .disabled(model.duration <= 0 || model.loading).accessibilityLabel("Back 10 seconds")
                 Button { model.togglePlay() } label: {
