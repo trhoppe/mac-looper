@@ -8,6 +8,9 @@ struct AudioSettingsView: View {
     let chooseFolder: () -> Void
     let recoverDraft: (SongDraft) -> Void
     @State private var reviewingConflicts = false
+    #if os(macOS)
+    @AppStorage("desktopLooperInRightRail") private var desktopLooperInRightRail = false
+    #endif
     private let accent = Color(red: 0.259, green: 0.788, blue: 0.961)
     private var bufferSummary: String {
         #if os(macOS)
@@ -24,6 +27,15 @@ struct AudioSettingsView: View {
                     Spacer()
                     Button { dismiss() } label: { Image(systemName: "xmark") }.buttonStyle(JamPlainButtonStyle())
                 }
+                #if os(macOS)
+                Text("Layout").font(.subheadline.weight(.semibold))
+                Picker("Looper position", selection: $desktopLooperInRightRail) {
+                    Text("Bottom (full width)").tag(false)
+                    Text("Right rail").tag(true)
+                }.pickerStyle(.menu).hoverHighlight()
+                    .accessibilityLabel("Looper position")
+                Divider()
+                #endif
                 Text("Audio").font(.subheadline.weight(.semibold))
                 VStack(spacing: 12) {
                     Picker("Input", selection: $model.inputUID) {

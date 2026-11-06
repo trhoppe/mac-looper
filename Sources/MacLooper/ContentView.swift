@@ -15,6 +15,11 @@ struct ContentView: View, Equatable {
     @State private var showingSongs = false
     @State private var navigationHeight = 60.0
     @State private var measuredLooperMinimum = 208.0
+    @State private var measuredRailLooperMinimum = 360.0
+    @State private var measuredRailWidth = 340.0
+    #if os(macOS)
+    @AppStorage("desktopLooperInRightRail") private var desktopLooperInRightRail = false
+    #endif
     @AppStorage("showChords") private var showingChords = true
     @AppStorage("showLooper") private var showingLooper = true
     @AppStorage("showDrummer") private var showingDrummer = true
@@ -22,6 +27,7 @@ struct ContentView: View, Equatable {
     @AppStorage("audioPaneWidth") private var audioWidth = 340.0
     @AppStorage("jamFooterHeight") private var footerHeight = 230.0
     @AppStorage("rightRailPlayerHeight") private var railPlayerHeight = 280.0
+    @AppStorage("rightRailLooperHeight") private var railLooperHeight = 380.0
     @AppStorage("compactPlayerDrummerHeight") private var compactRailHeight = 450.0
     @State private var drumOutput: AudioDevice?
     @State private var importing = false
@@ -30,7 +36,15 @@ struct ContentView: View, Equatable {
     private var compactPlayerMinimumHeight: Double {
         280
     }
-    private var railVisible: Bool { showingPlayer || showingDrummer }
+    private var railHasLooper: Bool {
+        #if os(macOS)
+        desktopLooperInRightRail && showingLooper
+        #else
+        false
+        #endif
+    }
+    private var bottomLooperVisible: Bool { showingLooper && !railHasLooper }
+    private var railVisible: Bool { showingPlayer || railHasLooper || showingDrummer }
     private var splitThickness: Double {
         #if os(macOS)
         8
@@ -39,9 +53,11 @@ struct ContentView: View, Equatable {
         #endif
     }
     private func railMinimumHeight(compact: Bool) -> Double {
-        (showingPlayer ? compactPlayerMinimumHeight : 0) +
-        (showingDrummer ? (compact ? 130 : 180) : 0) +
-        (showingPlayer && showingDrummer ? splitThickness : 0)
+        let count = [showingPlayer, railHasLooper, showingDrummer].filter { $0 }.count
+        return (showingPlayer ? compactPlayerMinimumHeight : 0) +
+        (railHasLooper ? measuredRailLooperMinimum : 0) +
+        (showingDrummer ? (compact || railHasLooper ? 130 : 180) : 0) +
+        Double(max(0, count - 1)) * splitThickness
     }
     private let accent = Color(red: 0.259, green: 0.788, blue: 0.961)
     static func == (lhs: Self, rhs: Self) -> Bool { lhs.model === rhs.model && lhs.files === rhs.files && lhs.library === rhs.library && lhs.remote === rhs.remote }
@@ -82,7 +98,10 @@ struct ContentView: View, Equatable {
                         .anchorPreference(key: SettingsPopupAnchorKey.self, value: .bounds) { showingSettings ? $0 : nil }
                         #else
                         .popover(isPresented: $showingSettings, arrowEdge: .top) {
-                            settingsContent.frame(width: 430, height: 540)
+                            settingsContent
+                                .frame(width: min(430, max(0, geo.size.width - 32)),
+                                       height: max(0, geo.size.height * 0.9 - navigationHeight - 8))
+                                .presentationCompactAdaptation(.popover)
                         }
                         #endif
                 }.padding(.horizontal, compactHeader ? 14 : 18).padding(.vertical, 14)
@@ -192,7 +211,7 @@ struct ContentView: View, Equatable {
     }
     @ViewBuilder private func panes(width: Double) -> some View {
         let workspaceVisible = showingChords || railVisible
-        if workspaceVisible && showingLooper {
+        if workspaceVisible && bottomLooperVisible {
             ResizableSplit(axis: .vertical, side: .trailing, size: $footerHeight, defaultSize: 230,
                            minimumLeading: 200, minimumTrailing: measuredLooperMinimum,
                            label: "Resize chart and jam controls") {
@@ -200,63 +219,98 @@ struct ContentView: View, Equatable {
             } trailing: { looperPane }
         } else if workspaceVisible {
             chartAndPlayer(windowWidth: width)
-        } else if showingLooper {
+        } else if bottomLooperVisible {
             looperPane
         } else { Color.clear.frame(maxWidth: .infinity, maxHeight: .infinity) }
     }
     private func chartAndPlayer(windowWidth: Double) -> some View {
-        GeometryReader { geo in
-            if showingChords && railVisible {
+        let chordsVisible = showingChords, showsRail = railVisible, looperInRail = railHasLooper
+        let compactMinimum = railMinimumHeight(compact: true)
+        return GeometryReader { geo in
+            if chordsVisible && showsRail {
                 if windowWidth >= 1000 && geo.size.width >= 660 {
                     ResizableSplit(axis: .horizontal, side: .trailing, size: $audioWidth, defaultSize: 340,
-                                   minimumLeading: 300, minimumTrailing: 320, label: "Resize audio files panel") {
+                                   minimumLeading: 300, minimumTrailing: looperInRail ? 340 : 320, label: "Resize right rail") {
                         ChordChartView(song: library.selectedSong, edit: beginEditing)
                     } trailing: { rightRail(compact: false) }
                 } else {
-                    ResizableSplit(axis: .vertical, side: .trailing, size: $compactRailHeight, defaultSize: railMinimumHeight(compact: true),
-                                   minimumLeading: 140, minimumTrailing: railMinimumHeight(compact: true), label: "Resize compact player and drummer") {
+                    ResizableSplit(axis: .vertical, side: .trailing, size: $compactRailHeight, defaultSize: compactMinimum,
+                                   minimumLeading: 140, minimumTrailing: compactMinimum, label: "Resize compact player and drummer") {
                         ChordChartView(song: library.selectedSong, edit: beginEditing)
                     } trailing: {
                         rightRail(compact: true)
                     }
                 }
-            } else if showingChords {
+            } else if chordsVisible {
                 ChordChartView(song: library.selectedSong, edit: beginEditing)
-            } else if railVisible {
+            } else if showsRail {
                 rightRail(compact: windowWidth < 1000)
             }
         }
     }
     private func rightRail(compact: Bool) -> some View {
-        GeometryReader { geo in
-            if showingPlayer && showingDrummer && geo.size.height >= railMinimumHeight(compact: compact) {
-                ResizableSplit(axis: .vertical, side: .leading, size: $railPlayerHeight, defaultSize: compactPlayerMinimumHeight,
-                               minimumLeading: compactPlayerMinimumHeight, minimumTrailing: compact ? 130 : 180,
-                               label: "Resize Player and Drummer") {
-                    ScrollView { AudioFileRail(model: files, accent: accent, compact: true) }
-                } trailing: { drummerPane(compact: compact) }
-            } else if showingPlayer && showingDrummer {
-                // Keep both sets of controls reachable when a short window cannot
-                // hold the rail's minimum heights; the looper retains its own space.
+        // Capture values before the geometry closure so AppStorage visibility
+        // changes invalidate its content even when the rail's size is unchanged.
+        let playerVisible = showingPlayer, looperInRail = railHasLooper, drummerVisible = showingDrummer
+        let compactDrummer = compact || looperInRail
+        let count = [playerVisible, looperInRail, drummerVisible].filter { $0 }.count
+        let minimum = railMinimumHeight(compact: compact)
+        return GeometryReader { geo in
+            if count > 1 && geo.size.height < minimum {
+                // A short window can scroll the rail without squeezing out controls.
                 ScrollView {
                     VStack(spacing: 0) {
-                        AudioFileRail(model: files, accent: accent, compact: true)
-                        Divider()
-                        DrummerPanel(drums: AudioEngineHost.shared.drums, output: drumOutput, compact: compact)
-                            .frame(minHeight: compact ? 130 : 180)
+                        if playerVisible {
+                            AudioFileRail(model: files, accent: accent, compact: true)
+                            Divider()
+                        }
+                        if drummerVisible {
+                            DrummerPanel(drums: AudioEngineHost.shared.drums, output: drumOutput, compact: compactDrummer)
+                                .frame(minHeight: compactDrummer ? 130 : 180)
+                            if looperInRail { Divider() }
+                        }
+                        if looperInRail {
+                            loopPane(compact: true).frame(height: measuredRailLooperMinimum)
+                        }
                     }
                 }
-            } else if showingPlayer {
+            } else if playerVisible && (looperInRail || drummerVisible) {
+                ResizableSplit(axis: .vertical, side: .leading, size: $railPlayerHeight, defaultSize: compactPlayerMinimumHeight,
+                               minimumLeading: compactPlayerMinimumHeight,
+                               minimumTrailing: minimum - compactPlayerMinimumHeight - splitThickness,
+                               label: drummerVisible ? "Resize Player and Drummer" : "Resize Player and Looper") {
+                    ScrollView { AudioFileRail(model: files, accent: accent, compact: true) }
+                } trailing: { lowerRail(hasLooper: looperInRail, hasDrummer: drummerVisible, compactDrummer: compactDrummer) }
+            } else if playerVisible {
                 ScrollView { AudioFileRail(model: files, accent: accent, compact: true) }
             } else {
-                drummerPane(compact: compact)
+                lowerRail(hasLooper: looperInRail, hasDrummer: drummerVisible, compactDrummer: compactDrummer)
             }
         }.background(Color(red: 0.075, green: 0.085, blue: 0.10))
+            .onGeometryChange(for: Double.self) { $0.size.width } action: { measuredRailWidth = $0 }
     }
-    private var looperPane: some View {
+    @ViewBuilder private func lowerRail(hasLooper: Bool, hasDrummer: Bool, compactDrummer: Bool) -> some View {
+        if hasLooper && hasDrummer {
+            ResizableSplit(axis: .vertical, side: .trailing, size: $railLooperHeight, defaultSize: 380,
+                           minimumLeading: compactDrummer ? 130 : 180, minimumTrailing: measuredRailLooperMinimum,
+                           label: "Resize Drummer and Looper") {
+                drummerPane(compact: compactDrummer)
+            } trailing: { loopPane(compact: true) }
+        } else if hasLooper {
+            loopPane(compact: true)
+        } else {
+            drummerPane(compact: compactDrummer)
+        }
+    }
+    private var looperPane: some View { loopPane(compact: false) }
+    private func loopPane(compact: Bool) -> some View {
         GeometryReader { geo in
             ScrollView {
-                LooperPanel(model: model, availableHeight: geo.size.height) { measuredLooperMinimum = max(208, $0) }
+                LooperPanel(model: model, compact: compact, availableHeight: geo.size.height,
+                            volumeWidth: geo.size.width >= 1000 && showingChords && railVisible ? max(180, measuredRailWidth - 32) : 260) {
+                    if compact { measuredRailLooperMinimum = max(320, $0) }
+                    else { measuredLooperMinimum = max(208, $0) }
+                }
                     .frame(maxWidth: .infinity, minHeight: geo.size.height, alignment: .topLeading)
             }
         }.background(Color(red: 0.075, green: 0.085, blue: 0.10))

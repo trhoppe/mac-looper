@@ -3,7 +3,9 @@ import LooperCore
 
 struct LooperPanel: View {
     @ObservedObject var model: LooperModel
+    var compact = false
     var availableHeight: Double = 208
+    var volumeWidth: Double = 260
     var minimumHeightChanged: (Double) -> Void = { _ in }
     @State private var controlsHeight = 133.0
     private let accent = Color(red: 0.259, green: 0.788, blue: 0.961)
@@ -25,10 +27,14 @@ struct LooperPanel: View {
         VStack(alignment: .leading, spacing: 10) {
             title
             VStack(alignment: .leading, spacing: 14) {
-                HStack(alignment: .top, spacing: 12) {
-                    timing
-                    Spacer(minLength: 8)
-                    volume.frame(minWidth: 180, idealWidth: 260, maxWidth: 260)
+                if compact {
+                    VStack(alignment: .leading, spacing: 10) { timing; volume }
+                } else {
+                    HStack(alignment: .top, spacing: 12) {
+                        timing
+                        Spacer(minLength: 8)
+                        volume.frame(width: volumeWidth)
+                    }
                 }
                 transport
             }.padding(.bottom, 6)
@@ -100,20 +106,33 @@ struct LooperPanel: View {
             .font(.system(size: 13, weight: .regular).monospacedDigit()).foregroundStyle(.secondary).fixedSize()
     }
     private var transport: some View {
-        HStack(spacing: 8) {
-            Button { Task { await model.arm() } } label: { Label("Arm", systemImage: "record.circle").frame(minWidth: 55) }
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 8) { armButton; recordButton; playButton; clearButton }
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) { armButton; recordButton }
+                HStack(spacing: 8) { playButton; clearButton }
+            }
+        }.buttonStyle(JamButtonStyle()).controlSize(.large)
+    }
+    private var armButton: some View {
+        Button { Task { await model.arm() } } label: { Label("Arm", systemImage: "record.circle").frame(minWidth: 55) }
                 .buttonStyle(JamButtonStyle(prominent: true)).tint(accent).foregroundStyle(.black)
                 .disabled(!model.canEditTiming || model.input == nil || model.output == nil)
-            Button { Task { await model.record() } } label: {
+    }
+    private var recordButton: some View {
+        Button { Task { await model.record() } } label: {
                 Label("Record", systemImage: model.state == TL_RECORDING ? "stop.circle" : "record.circle.fill")
             }.disabled(!model.canRecord || model.input == nil || model.output == nil)
                 .help(model.state == TL_RECORDING ? "Finish recording and loop now" : "Record immediately without waiting for a strum")
                 .accessibilityLabel(model.state == TL_RECORDING ? "Finish recording" : "Record")
-            Button { model.playStop() } label: {
+    }
+    private var playButton: some View {
+        Button { model.playStop() } label: {
                 Label(model.state == TL_PLAYING || model.busy ? "Stop" : "Play", systemImage: model.state == TL_PLAYING || model.busy ? "stop.fill" : "play.fill").frame(minWidth: 50)
             }.disabled(!model.hasLoop && !model.busy)
-            Button { model.clear() } label: { Label("Clear", systemImage: "trash") }.disabled((!model.running && !model.audioPaused) || model.state == TL_EMPTY)
-        }.buttonStyle(JamButtonStyle()).controlSize(.large)
+    }
+    private var clearButton: some View {
+        Button { model.clear() } label: { Label("Clear", systemImage: "trash") }.disabled((!model.running && !model.audioPaused) || model.state == TL_EMPTY)
     }
     private var volume: some View {
         HStack(spacing: 6) {
@@ -121,7 +140,7 @@ struct LooperPanel: View {
             TextField("Volume", value: percent, format: .number.precision(.fractionLength(0)))
                 .textFieldStyle(.plain).jamNumberField(width: 36, fontSize: 12).multilineTextAlignment(.trailing).accessibilityLabel("Loop volume percentage")
             Text("%").font(.caption).foregroundStyle(.secondary)
-            Slider(value: $model.volume, in: 0...1).frame(minWidth: 80, idealWidth: 180, maxWidth: 250).hoverHighlight().accessibilityLabel("Loop playback volume")
+            Slider(value: $model.volume, in: 0...1).frame(minWidth: 80, maxWidth: .infinity).hoverHighlight().accessibilityLabel("Loop playback volume")
         }
     }
 }

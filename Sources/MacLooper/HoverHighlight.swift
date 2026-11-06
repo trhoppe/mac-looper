@@ -175,7 +175,7 @@ struct WindowSettingsPopup<Content: View>: View {
             let trigger = geo[anchor]
             let width = min(430, max(0, geo.size.width - 16))
             let y = min(trigger.maxY + 6, max(8, geo.size.height - 48))
-            let height = min(548, max(0, geo.size.height - y - 8))
+            let height = max(0, geo.size.height * 0.9 - y)
             let x = min(max(8, trigger.midX - width / 2), max(8, geo.size.width - width - 8))
             ZStack(alignment: .topLeading) {
                 Color.black.opacity(0.001).contentShape(Rectangle()).onTapGesture(perform: close)
