@@ -61,8 +61,8 @@ struct ContentView: View, Equatable {
     }
     private let accent = Color(red: 0.259, green: 0.788, blue: 0.961)
     static func == (lhs: Self, rhs: Self) -> Bool { lhs.model === rhs.model && lhs.files === rhs.files && lhs.library === rhs.library && lhs.remote === rhs.remote }
-    private enum ImportKind { case libraryFolder, audioFolder }
-    private var types: [UTType] { [.folder] }
+    private enum ImportKind { case libraryFolder, audioFolder, audioFile }
+    private var types: [UTType] { importKind == .audioFile ? [.audio] : [.folder] }
     private var settingsContent: some View {
         AudioSettingsView(model: model, library: library, dismiss: { showingSettings = false },
                           chooseFolder: { beginImport(.libraryFolder) }, recoverDraft: { draft in
@@ -163,6 +163,7 @@ struct ContentView: View, Equatable {
                 switch importKind {
                 case .libraryFolder: library.setFolder(url)
                 case .audioFolder: files.openFolder(url)
+                case .audioFile: files.selectFile(url, autoplay: true)
                 }
             case .failure(let error):
                 if (error as NSError).code != NSUserCancelledError { files.error = error.localizedDescription }
@@ -174,6 +175,8 @@ struct ContentView: View, Equatable {
         .onReceive(model.$inputUID.removeDuplicates().dropFirst().receive(on: RunLoop.main)) { _ in model.inputChannel = 0; model.routeDidChange() }
         .onReceive(model.$inputChannel.removeDuplicates().dropFirst().receive(on: RunLoop.main)) { _ in model.routeDidChange() }
         .onReceive(files.$requestingFolder.filter { $0 }.receive(on: RunLoop.main)) { _ in files.requestingFolder = false; beginImport(.audioFolder) }
+        .onReceive(files.$requestingFile.filter { $0 }.receive(on: RunLoop.main)) { _ in files.requestingFile = false; beginImport(.audioFile) }
+        .onReceive(files.$selected.compactMap { $0 }.receive(on: RunLoop.main)) { _ in showingPlayer = true }
         .onChange(of: library.selectedSongID) { _, _ in
             if library.selectedSong != nil { revealChords() }
         }
@@ -193,10 +196,13 @@ struct ContentView: View, Equatable {
             }
             #endif
         }
+        #if os(iOS)
         .onOpenURL { url in
+            guard url.isFileURL else { return }
             if url.pathExtension.lowercased() == "json" { library.openLibrary(url) }
-            else if AudioLibrary.isAudio(url) { files.selectFile(url) }
+            else if AudioLibrary.isAudio(url) { files.selectFile(url, autoplay: true) }
         }
+        #endif
     }
     private func panelButton(_ title: String, icon: String, visible: Bool, compact: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
@@ -225,24 +231,27 @@ struct ContentView: View, Equatable {
     }
     private func chartAndPlayer(windowWidth: Double) -> some View {
         let chordsVisible = showingChords, showsRail = railVisible, looperInRail = railHasLooper
+        // Read the selection outside GeometryReader: a captured model reference
+        // alone does not invalidate its content when only the song changes.
+        let selectedSong = library.selectedSong
         let compactMinimum = railMinimumHeight(compact: true)
         return GeometryReader { geo in
             if chordsVisible && showsRail {
                 if windowWidth >= 1000 && geo.size.width >= 660 {
                     ResizableSplit(axis: .horizontal, side: .trailing, size: $audioWidth, defaultSize: 340,
                                    minimumLeading: 300, minimumTrailing: looperInRail ? 340 : 320, label: "Resize right rail") {
-                        ChordChartView(song: library.selectedSong, edit: beginEditing)
+                        ChordChartView(song: selectedSong, edit: beginEditing)
                     } trailing: { rightRail(compact: false) }
                 } else {
                     ResizableSplit(axis: .vertical, side: .trailing, size: $compactRailHeight, defaultSize: compactMinimum,
                                    minimumLeading: 140, minimumTrailing: compactMinimum, label: "Resize compact player and drummer") {
-                        ChordChartView(song: library.selectedSong, edit: beginEditing)
+                        ChordChartView(song: selectedSong, edit: beginEditing)
                     } trailing: {
                         rightRail(compact: true)
                     }
                 }
             } else if chordsVisible {
-                ChordChartView(song: library.selectedSong, edit: beginEditing)
+                ChordChartView(song: selectedSong, edit: beginEditing)
             } else if showsRail {
                 rightRail(compact: windowWidth < 1000)
             }
@@ -282,7 +291,7 @@ struct ContentView: View, Equatable {
                     ScrollView { AudioFileRail(model: files, accent: accent, compact: true) }
                 } trailing: { lowerRail(hasLooper: looperInRail, hasDrummer: drummerVisible, compactDrummer: compactDrummer) }
             } else if playerVisible {
-                ScrollView { AudioFileRail(model: files, accent: accent, compact: true) }
+                ScrollView { AudioFileRail(model: files, accent: accent, compact: true, minimumHeight: geo.size.height) }
             } else {
                 lowerRail(hasLooper: looperInRail, hasDrummer: drummerVisible, compactDrummer: compactDrummer)
             }

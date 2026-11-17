@@ -41,6 +41,7 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 <key>NSPrincipalClass</key><string>NSApplication</string>
 </dict></plist>
 PLIST
+/usr/libexec/PlistBuddy -c 'Merge MacLooper-Mac-Info.plist' "$APP/Contents/Info.plist"
 # Stable local identity avoids asking for microphone permission on every rebuild.
 codesign --force --sign - --identifier local.thoppe.maclooper \
     --requirements '=designated => identifier "local.thoppe.maclooper"' "$APP"

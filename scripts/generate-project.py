@@ -53,7 +53,7 @@ def app(name, platform):
                          'CODE_SIGN_ENTITLEMENTS':'MacLooper-iPad.entitlements','INFOPLIST_FILE':'MacLooper-iPad-Info.plist','INFOPLIST_KEY_UIApplicationSceneManifest_Generation':'YES','INFOPLIST_KEY_UILaunchScreen_Generation':'YES','INFOPLIST_KEY_UIFileSharingEnabled':'YES','INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace':'YES',
                          'INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad':'UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight'})
     else:
-        settings.update({'SDKROOT':'macosx','MACOSX_DEPLOYMENT_TARGET':'14.0','SUPPORTED_PLATFORMS':'macosx','PRODUCT_BUNDLE_IDENTIFIER':'local.thoppe.maclooper','ENABLE_APP_SANDBOX':'NO','CODE_SIGN_IDENTITY':'-','LD_RUNPATH_SEARCH_PATHS':'$(inherited) @executable_path/../Frameworks'})
+        settings.update({'SDKROOT':'macosx','MACOSX_DEPLOYMENT_TARGET':'14.0','SUPPORTED_PLATFORMS':'macosx','PRODUCT_BUNDLE_IDENTIFIER':'local.thoppe.maclooper','INFOPLIST_FILE':'MacLooper-Mac-Info.plist','ENABLE_APP_SANDBOX':'NO','CODE_SIGN_IDENTITY':'-','LD_RUNPATH_SEARCH_PATHS':'$(inherited) @executable_path/../Frameworks'})
     return obj(name,'PBXNativeTarget',buildConfigurationList=configs(name,settings),buildPhases=phases,buildRules=[],dependencies=[],name=name,packageProductDependencies=deps,productName='Mac Jams',productReference=ref,productType='com.apple.product-type.application')
 mac=app('MacLooper-macOS','mac');ipad=app('MacLooper-iPad','ios')
 # Host-independent DSP/library tests also run inside the iPad test host.

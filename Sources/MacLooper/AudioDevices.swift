@@ -64,6 +64,13 @@ enum AudioDevices {
             .map(device).filter { !$0.uid.hasPrefix("local.maclooper.route.") && !$0.uid.isEmpty }
             .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
+    static func systemOutput() -> AudioDevice? {
+        let id = number(AudioObjectID(kAudioObjectSystemObject), kAudioHardwarePropertyDefaultOutputDevice,
+                        fallback: AudioDeviceID(kAudioObjectUnknown))
+        guard id != kAudioObjectUnknown else { return nil }
+        let output = device(id)
+        return output.outputs > 0 && !output.uid.isEmpty ? output : nil
+    }
     static let bufferFrames: UInt32 = 32
     static func require32Frames(_ id: AudioObjectID, name: String) throws {
         var a = address(kAudioDevicePropertyBufferFrameSizeRange)

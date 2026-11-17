@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct AudioFileRail: View {
     @ObservedObject var model: AudioFilePlayerModel
@@ -6,7 +7,9 @@ struct AudioFileRail: View {
     @State private var browserAnchor: CGRect = .zero
     let accent: Color
     var compact = false
+    var minimumHeight: CGFloat? = nil
     @State private var showingBrowser = false
+    @State private var dropTargeted = false
     @State private var searching = false
     @FocusState private var searchFocused: Bool
     @State private var scrubbing = false
@@ -25,7 +28,30 @@ struct AudioFileRail: View {
         })
     }
     var body: some View {
-        popupRail.onAppear { searching = !model.query.isEmpty }
+        popupRail
+            .onDrop(of: [.fileURL], isTargeted: $dropTargeted, perform: openDroppedFile)
+            .overlay {
+                RoundedRectangle(cornerRadius: 6).strokeBorder(accent, lineWidth: 2)
+                    .background(accent.opacity(0.09), in: RoundedRectangle(cornerRadius: 6))
+                    .opacity(dropTargeted ? 1 : 0).allowsHitTesting(false)
+            }
+            .onAppear { searching = !model.query.isEmpty }
+    }
+    private func openDroppedFile(_ providers: [NSItemProvider]) -> Bool {
+        let type = UTType.fileURL.identifier
+        guard let provider = providers.first(where: { $0.hasItemConformingToTypeIdentifier(type) }) else { return false }
+        provider.loadDataRepresentation(forTypeIdentifier: type) { data, error in
+            let url = data.flatMap { URL(dataRepresentation: $0, relativeTo: nil) }
+            Task { @MainActor in
+                if let url {
+                    model.selectFile(url, autoplay: true)
+                    showingBrowser = false
+                } else {
+                    model.error = error?.localizedDescription ?? "Couldn’t open the dropped file."
+                }
+            }
+        }
+        return true
     }
     private var popupRail: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -49,11 +75,13 @@ struct AudioFileRail: View {
                     .popover(isPresented: $showingBrowser) { popupBrowser }
                     #endif
                 Spacer(minLength: 8)
+                audioOpenButton("Open audio file…", icon: "doc.badge.plus") { model.requestingFile = true }
                 folderButton
             }.padding(.horizontal, 18).padding(.vertical, 10)
             Divider()
             player.padding(18)
-        }.frame(maxWidth: .infinity, maxHeight: compact ? nil : .infinity, alignment: .topLeading)
+            if !showingBrowser, let error = model.error { errorBanner(error) }
+        }.frame(maxWidth: .infinity, minHeight: minimumHeight, maxHeight: compact ? nil : .infinity, alignment: .topLeading)
             .background(Color(red: 0.075, green: 0.085, blue: 0.10)).tint(accent)
     }
     private var popupBrowser: some View {
@@ -68,9 +96,18 @@ struct AudioFileRail: View {
         #endif
     }
     private var folderButton: some View {
-        Button { model.chooseFolder() } label: { Image(systemName: "folder.badge.plus") }
-            .buttonStyle(JamButtonStyle()).help("Open a folder and include all of its subfolders")
-            .accessibilityLabel("Open audio folder")
+        audioOpenButton("Open audio folder…", icon: "folder.badge.plus") { model.chooseFolder() }
+    }
+    private func audioOpenButton(_ title: LocalizedStringKey, icon: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 19, height: 16)
+        }
+        .buttonStyle(JamButtonStyle())
+        .accessibilityLabel(Text(title))
+        .help(Text(title))
     }
     private var browser: some View {
         VStack(spacing: 0) {
@@ -147,16 +184,18 @@ struct AudioFileRail: View {
                 }
             }.frame(maxWidth: .infinity, maxHeight: .infinity)
             if let notice = model.scanNotice { Text(notice).font(.caption).foregroundStyle(.secondary).padding(.horizontal, 16).padding(.bottom, 8) }
-            if let error = model.error {
-                HStack(alignment: .top, spacing: 8) {
-                    Image(systemName: "exclamationmark.circle").foregroundStyle(.orange)
-                    Text(error).font(.caption).textSelection(.enabled)
-                    Spacer(minLength: 0)
-                    Button { model.error = nil } label: { Image(systemName: "xmark") }.buttonStyle(JamPlainButtonStyle())
-                }.padding(12).background(.orange.opacity(0.08))
-            }
+            if let error = model.error { errorBanner(error) }
         }
             .background(Color(red: 0.075, green: 0.085, blue: 0.10)).tint(accent)
+    }
+    private func errorBanner(_ error: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "exclamationmark.circle").foregroundStyle(.orange)
+            Text(error).font(.caption).textSelection(.enabled)
+            Spacer(minLength: 0)
+            Button { model.error = nil } label: { Image(systemName: "xmark") }
+                .buttonStyle(JamPlainButtonStyle()).accessibilityLabel("Dismiss audio file error")
+        }.padding(12).background(.orange.opacity(0.08))
     }
     private func trackRow(_ track: AudioTrack) -> some View {
         HStack(spacing: 9) {
@@ -175,7 +214,7 @@ struct AudioFileRail: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(model.selected?.title ?? "Select an audio file").font(.callout.weight(.medium))
                         .lineLimit(1).truncationMode(.middle)
-                    Text(model.loading ? "Loading…" : model.selected.map { $0.directory.isEmpty ? model.folder?.lastPathComponent ?? "" : $0.directory } ?? "Ready for something to play along with")
+                    Text(model.loading ? "Loading…" : model.selected.map { $0.directory.isEmpty ? model.folder?.lastPathComponent ?? "" : $0.directory } ?? "Drop an audio file here or open one.")
                         .font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
                 }
                 Spacer(minLength: 0)

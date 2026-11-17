@@ -27,6 +27,8 @@ private struct ChartPresentation: View, Equatable {
     let changeFont: (Double) -> Void
     let toggleColumns: () -> Void
     let edit: () -> Void
+    @State private var autoScrolling = false
+    @Environment(\.scenePhase) private var scenePhase
     private let accent = Color(red: 0.259, green: 0.788, blue: 0.961)
     static func == (lhs: Self, rhs: Self) -> Bool { lhs.song == rhs.song && lhs.fontSize == rhs.fontSize && lhs.twoColumns == rhs.twoColumns }
 
@@ -46,6 +48,15 @@ private struct ChartPresentation: View, Equatable {
                         Spacer(minLength: 12)
                         VStack(alignment: .trailing, spacing: 8) {
                             HStack(spacing: 8) {
+                                Button { autoScrolling.toggle() } label: {
+                                    Image(systemName: autoScrolling ? "pause.fill" : "play.fill")
+                                        .foregroundStyle(autoScrolling ? accent : Color.primary)
+                                        .frame(minWidth: 28, minHeight: 18).padding(.horizontal, 3).padding(.vertical, 2)
+                                }.overlay {
+                                    RoundedRectangle(cornerRadius: 6).fill(accent.opacity(autoScrolling ? 0.18 : 0)).allowsHitTesting(false)
+                                }.accessibilityLabel(autoScrolling ? "Pause chart auto-scroll" : "Start chart auto-scroll")
+                                    .accessibilityValue(autoScrolling ? "On" : "Off")
+                                    .help("Scroll chart over " + ChordProDocument.readableDuration(String(Int(ChartScrollTiming.duration(song.duration)))))
                                 Button(action: toggleColumns) {
                                     ChartColumnsIcon(count: twoColumns ? 1 : 2).frame(minWidth: 28, minHeight: 18).padding(.horizontal, 3).padding(.vertical, 2)
                                 }.accessibilityLabel(twoColumns ? "Use one chart column" : "Use two chart columns")
@@ -138,6 +149,10 @@ private struct ChartPresentation: View, Equatable {
                                     .layoutValue(key: ChartSpanKey.self, value: true)
                             }
                         }.lineSpacing(fontSize * 0.1).frame(maxWidth: .infinity, alignment: .leading).padding(20)
+                            .background {
+                                ChartAutoScroll(active: $autoScrolling, duration: ChartScrollTiming.duration(song.duration))
+                                    .allowsHitTesting(false).accessibilityHidden(true)
+                            }
                     }.id(song.id)
                 }
             } else {
@@ -154,6 +169,9 @@ private struct ChartPresentation: View, Equatable {
                 }
             }
         }.frame(maxWidth: .infinity, maxHeight: .infinity).background(.white.opacity(0.015))
+            .onChange(of: song) { _, _ in autoScrolling = false }
+            .onChange(of: scenePhase) { _, phase in if phase != .active { autoScrolling = false } }
+            .onDisappear { autoScrolling = false }
     }
 }
 

@@ -3,6 +3,7 @@ import Combine
 import LooperCore
 #if os(macOS)
 import AppKit
+import UniformTypeIdentifiers
 #endif
 import JamCore
 import AM4RemoteKit
@@ -10,9 +11,31 @@ import AM4RemoteKit
 #if os(macOS)
 @MainActor final class AppDelegate: NSObject, NSApplicationDelegate {
     var model: LooperModel?
-    var files: AudioFilePlayerModel?
+    var files: AudioFilePlayerModel? {
+        didSet {
+            guard files != nil, !pendingOpenURLs.isEmpty else { return }
+            let urls = pendingOpenURLs
+            pendingOpenURLs.removeAll()
+            open(urls)
+        }
+    }
     var library: SongLibraryModel?
     var remote: AM4RemoteSession?
+    private var pendingOpenURLs: [URL] = []
+
+    func application(_ application: NSApplication, open urls: [URL]) { open(urls) }
+
+    private func open(_ urls: [URL]) {
+        guard let files else {
+            // Finder can send an open event before the first window is ready.
+            pendingOpenURLs.append(contentsOf: urls)
+            return
+        }
+        let localURLs = urls.filter(\.isFileURL)
+        for url in localURLs where url.pathExtension.lowercased() == "json" { library?.openLibrary(url) }
+        if let url = localURLs.first(where: AudioLibrary.isAudio) { files.selectFile(url, autoplay: true) }
+    }
+
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
     func applicationWillTerminate(_ notification: Notification) { remote?.stop(); model?.shutdown(); files?.shutdown(); library?.shutdown() }
 }
@@ -61,13 +84,13 @@ import AM4RemoteKit
         }
     }
     var body: some Scene {
-        WindowGroup("Mac Jams") {
+        mainWindow {
             ContentView(model: model, readiness: session.readiness, files: files, remote: session.remote, library: library).equatable()
                 .buttonStyle(JamButtonStyle())
                 .preferredColorScheme(.dark)
                 .task {
                     #if os(macOS)
-                    delegate.model = model; delegate.files = files; delegate.library = library; delegate.remote = session.remote
+                    delegate.model = model; delegate.library = library; delegate.remote = session.remote; delegate.files = files
                     #endif
                     #if DEBUG && os(macOS)
                     if let index = CommandLine.arguments.firstIndex(of: "--render-preview"), CommandLine.arguments.count > index + 1 {
@@ -164,11 +187,18 @@ import AM4RemoteKit
 
                 }
         }
-        #if os(macOS)
-        .defaultSize(width: 1320, height: 860)
-        .windowResizability(.contentMinSize)
-        #endif
         .commands { JamCommands(session: session) }
+    }
+
+    @SceneBuilder private func mainWindow<Content: View>(@ViewBuilder content: () -> Content) -> some Scene {
+        #if os(macOS)
+        // Finder opens another track in the existing player window.
+        Window("Mac Jams", id: "main", content: content)
+            .defaultSize(width: 1320, height: 860)
+            .windowResizability(.contentMinSize)
+        #else
+        WindowGroup("Mac Jams", content: content)
+        #endif
     }
 }
 
@@ -245,10 +275,27 @@ import AM4RemoteKit
     @ObservedObject private var remote: AM4RemoteSession
     init(session: JamSession) { self.session = session; available = session.commands; remote = session.remote }
     var body: some Commands {
-        CommandGroup(replacing: .newItem) { }
+        CommandGroup(replacing: .newItem) {
+            Button("Open Audio File…") { session.files.requestingFile = true }
+                .keyboardShortcut("o").disabled(available.editing || remote.isPresented)
+        }
         CommandMenu("Backing Track") {
             Button("Restart Track") { session.files.restart() }
                 .keyboardShortcut(.leftArrow, modifiers: []).disabled(!available.canRestart || available.editing || remote.isPresented)
+            #if os(macOS)
+            Divider()
+            Button("Make Mac Jams the Default MP3 Player") {
+                Task {
+                    do {
+                        try await NSWorkspace.shared.setDefaultApplication(at: Bundle.main.bundleURL, toOpen: .mp3)
+                    } catch {
+                        let alert = NSAlert(error: error)
+                        alert.messageText = "Couldn’t set Mac Jams as the default MP3 player"
+                        alert.runModal()
+                    }
+                }
+            }
+            #endif
         }
         CommandMenu("Loop") {
             Button("Arm") { Task { await session.model.arm() } }.keyboardShortcut("r", modifiers: []).disabled(!available.canArm || available.editing || remote.isPresented)

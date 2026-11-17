@@ -65,6 +65,12 @@
 			"path" = "Sources/MacLooper/AudioTypes.swift";
 			"sourceTree" = "SOURCE_ROOT";
 		};
+		"B350D656FE6B433AD1CCDB7D" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/MacLooper/ChartAutoScroll.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
 		"6A1BD18AC78FACDEF8AEE07F" = {
 			"isa" = "PBXFileReference";
 			"lastKnownFileType" = "sourcecode.swift";
@@ -294,6 +300,10 @@
 			"isa" = "PBXBuildFile";
 			"fileRef" = "E2CD89D17D1D022B5CF4E6C5";
 		};
+		"8727C03E72A9944EA085B6C2" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "B350D656FE6B433AD1CCDB7D";
+		};
 		"E38D387ABD8F74DEFC889331" = {
 			"isa" = "PBXBuildFile";
 			"fileRef" = "6A1BD18AC78FACDEF8AEE07F";
@@ -396,6 +406,7 @@
 				"74687B90D060A3E4DB79D208",
 				"FD83501EAA6EE9A8360FFD0C",
 				"774D441B64155B46D11C80B9",
+				"8727C03E72A9944EA085B6C2",
 				"E38D387ABD8F74DEFC889331",
 				"2BBAEB87AE2D336A759C6C6B",
 				"EFB627AF251D4EFDA5AE15A7",
@@ -468,6 +479,7 @@
 				"MACOSX_DEPLOYMENT_TARGET" = "14.0";
 				"SUPPORTED_PLATFORMS" = "macosx";
 				"PRODUCT_BUNDLE_IDENTIFIER" = "local.thoppe.maclooper";
+				"INFOPLIST_FILE" = "MacLooper-Mac-Info.plist";
 				"ENABLE_APP_SANDBOX" = "NO";
 				"CODE_SIGN_IDENTITY" = "-";
 				"SWIFT_OPTIMIZATION_LEVEL" = "-Onone";
@@ -502,6 +514,7 @@
 				"MACOSX_DEPLOYMENT_TARGET" = "14.0";
 				"SUPPORTED_PLATFORMS" = "macosx";
 				"PRODUCT_BUNDLE_IDENTIFIER" = "local.thoppe.maclooper";
+				"INFOPLIST_FILE" = "MacLooper-Mac-Info.plist";
 				"ENABLE_APP_SANDBOX" = "NO";
 				"CODE_SIGN_IDENTITY" = "-";
 				"SWIFT_OPTIMIZATION_LEVEL" = "-O";
@@ -624,6 +637,10 @@
 			"isa" = "PBXBuildFile";
 			"fileRef" = "E2CD89D17D1D022B5CF4E6C5";
 		};
+		"33CF6D57B6637BC1DAE60B9A" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "B350D656FE6B433AD1CCDB7D";
+		};
 		"9E4AEE76A7EF625FB1725E32" = {
 			"isa" = "PBXBuildFile";
 			"fileRef" = "6A1BD18AC78FACDEF8AEE07F";
@@ -726,6 +743,7 @@
 				"E9143E4CBEF07A6E113F0BE7",
 				"DD78964ACF5B85CCD8FB9C16",
 				"000035ED34357047421299A6",
+				"33CF6D57B6637BC1DAE60B9A",
 				"9E4AEE76A7EF625FB1725E32",
 				"8976DDAC4AD592D69BB58770",
 				"F583BF9727266127F098504F",
@@ -895,6 +913,12 @@
 			"isa" = "PBXFileReference";
 			"lastKnownFileType" = "sourcecode.swift";
 			"path" = "Tests/JamCoreTests/ChartColumnPlanTests.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"BE69AE6413A5D0CAF6C74519" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Tests/JamCoreTests/ChartScrollTimingTests.swift";
 			"sourceTree" = "SOURCE_ROOT";
 		};
 		"4DB826298CC87F844A97B12D" = {
@@ -1159,6 +1183,10 @@
 			"isa" = "PBXBuildFile";
 			"fileRef" = "7BC37BC6E9B6CE96E7E2103C";
 		};
+		"3BE09CE595AAB22F6F1497DA" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "BE69AE6413A5D0CAF6C74519";
+		};
 		"E4F063198B09E6529FDC75B8" = {
 			"isa" = "PBXBuildFile";
 			"fileRef" = "4DB826298CC87F844A97B12D";
@@ -1257,6 +1285,7 @@
 			"files" = (
 				"E2B95CF020C2068E96BFB51F",
 				"B09FF33B431CCEB39406D91B",
+				"3BE09CE595AAB22F6F1497DA",
 				"E4F063198B09E6529FDC75B8",
 				"4CBFC3188FA1922B32FC07A6",
 				"9B086B244A27E009D7B0ED59",
@@ -1330,6 +1359,7 @@
 				"3DBF5D0D5E5691D6836D7649",
 				"119CA3B65B4C59F4FF8D3BB1",
 				"E2CD89D17D1D022B5CF4E6C5",
+				"B350D656FE6B433AD1CCDB7D",
 				"6A1BD18AC78FACDEF8AEE07F",
 				"9B62DE784FBA37E11323F308",
 				"7F3B570D2D70C19D0E9CD6AB",
@@ -1361,6 +1391,7 @@
 			"children" = (
 				"63BA6C8219917075814FDD8B",
 				"7BC37BC6E9B6CE96E7E2103C",
+				"BE69AE6413A5D0CAF6C74519",
 				"4DB826298CC87F844A97B12D",
 				"63012F0B233A6A686096AF30",
 				"11413520F336346DAB475C75",

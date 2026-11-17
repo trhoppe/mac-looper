@@ -201,7 +201,7 @@ import CoreAudio
         #endif
     }
     private func trace(_ value: String) { if CommandLine.arguments.contains("--smoke-test") { print("Audio: " + value) } }
-    private func rebuild(capture: Bool) async throws {
+    private func rebuild(capture: Bool, useSystemBuffer: Bool = false) async throws {
         trace("rebuild capture=\(capture)")
         let token = lifecycle, session = fileSession, intent = fileIntent
         let resume = filePlaying
@@ -239,7 +239,7 @@ import CoreAudio
                 actualBufferFrames = Int(AudioDevices.number(route.device, kAudioDevicePropertyBufferFrameSize, fallback: UInt32(0)))
             } else {
                 guard AudioDevices.alive(output.id) else { throw AudioFailure(message: "The output device is disconnected.") }
-                try AudioDevices.require32Frames(output.id, name: output.name)
+                if !useSystemBuffer { try AudioDevices.require32Frames(output.id, name: output.name) }
                 sampleRate = output.rate
                 try e.outputNode.auAudioUnit.setDeviceID(output.id)
                 actualBufferFrames = Int(AudioDevices.number(output.id, kAudioDevicePropertyBufferFrameSize, fallback: UInt32(0)))
@@ -392,7 +392,7 @@ import CoreAudio
         guard !suspended, fileSession == session, file != nil else { return nil }
         fileIntent = UUID(); return fileIntent
     }
-    func playFile(session: UUID, output: AudioDevice, requestedIntent: UUID? = nil) async throws {
+    func playFile(session: UUID, output: AudioDevice, requestedIntent: UUID? = nil, useSystemBuffer: Bool = false) async throws {
         guard !suspended, fileSession == session, file != nil else { return }
         if let requestedIntent { guard fileIntent == requestedIntent else { return } }
         else { fileIntent = UUID() }
@@ -410,7 +410,7 @@ import CoreAudio
             #endif
             if self.output?.uid != output.uid || engine == nil {
                 self.output = output; filePlaying = false
-                try await rebuild(capture: false)
+                try await rebuild(capture: false, useSystemBuffer: useSystemBuffer)
                 guard current() else { return }
             }
             guard let engine, let player, let file else { throw AudioFailure(message: "The audio player could not start.") }

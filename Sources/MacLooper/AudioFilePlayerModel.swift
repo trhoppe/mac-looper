@@ -17,6 +17,7 @@ import AppKit
     private var playRequest = UUID()
     @Published var query = "" { didSet { visibleGroups = AudioLibrary.filter(groups, query: query) } }
     @Published var requestingFolder = false
+    @Published var requestingFile = false
     @Published var error: String?
     @Published private(set) var scanNotice: String?
     @Published var volume = 1.0 { didSet { configure() } }
@@ -92,12 +93,18 @@ import AppKit
             if scanGeneration == generation { scanning = false; worker = nil }
         }
     }
-    func selectFile(_ url: URL) {
-        select(AudioTrack(url: url, directory: ""))
+    func selectFile(_ url: URL, autoplay: Bool = false) {
+        guard url.isFileURL, AudioLibrary.isAudio(url) else {
+            error = "Choose an audio file such as an MP3."
+            return
+        }
+        let track = tracks.first { $0.url.standardizedFileURL == url.standardizedFileURL }
+        select(AudioTrack(url: url, directory: track?.directory ?? url.deletingLastPathComponent().lastPathComponent), autoplay: autoplay)
     }
-    func select(_ track: AudioTrack) {
-        guard selected?.id != track.id else { return }
+    func select(_ track: AudioTrack, autoplay: Bool = false) {
+        guard autoplay || selected?.id != track.id else { return }
         pauseForInterruption()
+        let autoplayRequest = playRequest
         loadTask?.cancel()
         let previousScope = scopedFile
         scopedFile = track.url.startAccessingSecurityScopedResource() ? track.url : nil
@@ -109,6 +116,7 @@ import AppKit
                 let result = try await playback.load(track.url, session: token, volume: Float(volume), repeating: repeatTrack)
                 guard session == token, !Task.isCancelled else { return }
                 duration = result.duration; loading = false
+                if autoplay, playRequest == autoplayRequest { startPlayback() }
             } catch {
                 guard session == token, !Task.isCancelled else { return }
                 loading = false; self.error = "Cannot open \(track.fileName): \(error.localizedDescription)"
@@ -117,23 +125,34 @@ import AppKit
     }
     func togglePlay() {
         guard selected != nil, !loading, duration > 0 else { return }
-        let token = session
         if playing || startingPlayback {
             pauseForInterruption()
         } else {
-            guard let output else { error = "Choose an output device in Audio Settings before playing a file."; return }
-            guard let request = AudioEngineHost.shared.requestFilePlay(session: token) else { return }
-            playRequest = request; startingPlayback = true
-            Task {
-                do {
-                    guard session == token, playRequest == request else { return }
-                    try await playback.play(session: token, output: output, requestedIntent: request)
-                    guard session == token, playRequest == request else { return }
-                    startingPlayback = false
-                    await poll()
-                } catch {
-                    if session == token, playRequest == request { startingPlayback = false; playing = false; self.error = error.localizedDescription }
-                }
+            startPlayback()
+        }
+    }
+    private func startPlayback() {
+        let token = session
+        #if os(macOS)
+        let device = output ?? AudioDevices.systemOutput()
+        let useSystemBuffer = output == nil
+        #else
+        let device = output
+        let useSystemBuffer = false
+        #endif
+        guard let device else { error = "Choose an output device in Audio Settings before playing a file."; return }
+        guard let request = AudioEngineHost.shared.requestFilePlay(session: token) else { return }
+        playRequest = request; startingPlayback = true; error = nil
+        Task {
+            do {
+                guard session == token, playRequest == request else { return }
+                try await playback.play(session: token, output: device, requestedIntent: request, useSystemBuffer: useSystemBuffer)
+                guard session == token, playRequest == request else { return }
+                startingPlayback = false
+                await poll()
+            } catch {
+                guard session == token, playRequest == request else { return }
+                startingPlayback = false; playing = false; self.error = error.localizedDescription
             }
         }
     }
