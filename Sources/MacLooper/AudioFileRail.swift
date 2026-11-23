@@ -14,11 +14,6 @@ struct AudioFileRail: View {
     @FocusState private var searchFocused: Bool
     @State private var scrubbing = false
     @State private var scrubPosition = 0.0
-    private var percent: Binding<Double> {
-        Binding(get: { (model.volume * 100).rounded() }, set: {
-            if $0.isFinite { model.volume = min(100, max(0, $0)) / 100 }
-        })
-    }
     private var selection: Binding<URL?> {
         Binding(get: { model.selected?.id }, set: { id in
             if let track = model.tracks.first(where: { $0.id == id }) {
@@ -252,14 +247,7 @@ struct AudioFileRail: View {
                 }.help(model.repeatTrack ? "Repeat this file: on" : "Repeat this file: off")
                     .accessibilityLabel("Repeat file").accessibilityValue(model.repeatTrack ? "On" : "Off")
             }.buttonStyle(JamPlainButtonStyle())
-            HStack(spacing: 6) {
-                Image(systemName: "speaker.wave.2").foregroundStyle(.secondary)
-                TextField("Volume", value: percent, format: .number.precision(.fractionLength(0)))
-                    .textFieldStyle(.plain).jamNumberField(width: 36, fontSize: 12).multilineTextAlignment(.trailing)
-                    .accessibilityLabel("File player volume percentage")
-                Text("%").font(.caption).foregroundStyle(.secondary)
-                Slider(value: $model.volume, in: 0...1).hoverHighlight().accessibilityLabel("File player volume")
-            }
+            VolumeControl(volume: $model.volume, name: "File player")
         }
     }
     private func playerIcon(_ name: String, primary: Bool = false) -> some View {

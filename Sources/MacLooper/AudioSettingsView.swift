@@ -81,8 +81,6 @@ struct AudioSettingsView: View {
                         Button("Recover: " + recovery.draft.title) { recoverDraft(recovery.draft) }
                     }
                 }
-                Text("Mac Jams edits library.json in this folder. JustChords syncing is off. Each save keeps the previous JSON in Library Backups.")
-                    .font(.caption).foregroundStyle(.secondary)
                 if let error = library.error { Text(error).font(.caption).foregroundStyle(.orange) }
             }.padding(20)
         }.tint(accent)

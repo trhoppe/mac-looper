@@ -55,4 +55,55 @@ final class AM4KnobEditingTests: XCTestCase {
         XCTAssertEqual(gain.position(afterDragging: -1000, from: 0.5), 0, accuracy: 0.00001)
         XCTAssertEqual(gain.position(afterDragging: 24, from: 0.5), 0.6, accuracy: 0.00001)
     }
+
+    func testInlineValueCommitsOnlyOnceAndUnchangedValuesDoNotWrite() {
+        let gain = catalog.definition("58:11")!
+        var unchanged = AM4ParameterNumberDraft(definition: gain, position: 0.5, identity: "preset-a")
+        XCTAssertEqual(unchanged.commit(definition: gain, identity: "preset-a"), .unchanged)
+        var edit = AM4ParameterNumberDraft(definition: gain, position: 0.5, identity: "preset-a")
+        edit.text = "8.5"
+        assertApplied(edit.commit(definition: gain, identity: "preset-a"), equals: 0.85)
+        XCTAssertEqual(edit.commit(definition: gain, identity: "preset-a"), .cancelled)
+    }
+
+    func testEscapeAndControlContextChangeCancelInlineValue() {
+        let gain = catalog.definition("58:11")!
+        var edit = AM4ParameterNumberDraft(definition: gain, position: 0.5, identity: "preset-a")
+        edit.text = "8.5"
+        edit.cancel()
+        XCTAssertEqual(edit.commit(definition: gain, identity: "preset-a"), .cancelled)
+        var moved = AM4ParameterNumberDraft(definition: gain, position: 0.5, identity: "preset-a")
+        moved.text = "8.5"
+        XCTAssertEqual(moved.commit(definition: gain, identity: "preset-b"), .cancelled)
+    }
+
+    func testInvalidInlineValueCanBeCorrectedWithoutApplying() {
+        let gain = catalog.definition("58:11")!
+        var edit = AM4ParameterNumberDraft(definition: gain, position: 0.5, identity: "preset-a")
+        for text in ["", "word", "nan", "inf", "10.01", "-1"] {
+            edit.text = text
+            XCTAssertEqual(edit.commit(definition: gain, identity: "preset-a"), .invalid, text)
+            XCTAssertTrue(edit.active)
+        }
+        edit.text = "4.004"
+        assertApplied(edit.commit(definition: gain, identity: "preset-a"), equals: 0.4)
+    }
+
+    func testInlineValueUsesLocaleAndLogarithmicDisplayUnits() {
+        let gain = catalog.definition("58:11")!
+        let locale = Locale(identifier: "de_DE")
+        var edit = AM4ParameterNumberDraft(definition: gain, position: 0.55, identity: "gain", locale: locale)
+        XCTAssertEqual(edit.text, "5,5")
+        edit.text = " 8,5 "
+        assertApplied(edit.commit(definition: gain, identity: "gain", locale: locale), equals: 0.85)
+        let frequency = catalog.definition("58:79")!
+        var logarithmic = AM4ParameterNumberDraft(definition: frequency, position: 0, identity: "frequency")
+        logarithmic.text = "1000"
+        XCTAssertEqual(logarithmic.commit(definition: frequency, identity: "frequency"), .apply(0.5))
+    }
+
+    private func assertApplied(_ outcome: AM4ParameterNumberDraft.Outcome, equals expected: Double, file: StaticString = #filePath, line: UInt = #line) {
+        guard case .apply(let value) = outcome else { return XCTFail("Expected an applied value, got \(outcome)", file: file, line: line) }
+        XCTAssertEqual(value, expected, accuracy: 0.000001, file: file, line: line)
+    }
 }

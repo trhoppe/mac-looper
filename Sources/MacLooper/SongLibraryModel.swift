@@ -182,6 +182,14 @@ import JamCore
             throw error
         }
     }
+    func saveChordVoicing(_ shape: GuitarChordShape, chord: String, songID: String) async throws {
+        guard !editing, let song = library?.songs.first(where: { $0.id == songID }) else {
+            throw SongEditError.validation("Finish editing before changing chord fingerings.")
+        }
+        var draft = SongDraft(song: song)
+        draft.chordVoicings[chord] = shape
+        try await save(draft)
+    }
     func resolveConflict(using copy: LibraryConflictCopy) async throws {
         guard !reading && !saving && !editing else { throw SongEditError.validation("Finish editing before choosing a library version.") }
         saving = true

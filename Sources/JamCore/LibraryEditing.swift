@@ -16,6 +16,16 @@ public extension JustChordsLibrary {
             let merged = try ChordProSongSource.merging(base: SongDraft(song: draft.original).chordPro,
                 edited: draft.chordPro, latest: SongDraft(song: current).chordPro)
             var mergedDraft = SongDraft(song: current); mergedDraft.chordPro = merged
+            let baseVoicings = draft.original.chordVoicings
+            let touched = Set(baseVoicings.keys).union(draft.chordVoicings.keys).filter {
+                baseVoicings[$0] != draft.chordVoicings[$0]
+            }
+            for chord in touched {
+                let latest = current.chordVoicings[chord]
+                let edited = draft.chordVoicings[chord]
+                guard latest == baseVoicings[chord] || latest == edited else { throw SongEditError.conflict }
+                mergedDraft.chordVoicings[chord] = edited
+            }
             let edits = try mergedDraft.changes()
             if !edits.isEmpty {
                 try Self.patch(edits, into: &entries[index])

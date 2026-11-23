@@ -5,6 +5,7 @@ public struct SongDraft: Identifiable, Equatable, Sendable {
     public let isNew: Bool
     public let originalPlaylistIDs: Set<String>?
     public var playlistIDs: Set<String>
+    public var chordVoicings: [String: GuitarChordShape]
     private let initialPlaylistIDs: Set<String>
     public var id: String { original.id }
     private let initialSource: String
@@ -21,6 +22,7 @@ public struct SongDraft: Identifiable, Equatable, Sendable {
     }
     public init(song: LibrarySong, playlistIDs: Set<String>? = nil) {
         original = song; isNew = false
+        chordVoicings = song.chordVoicings
         originalPlaylistIDs = playlistIDs; self.playlistIDs = playlistIDs ?? []
         initialPlaylistIDs = playlistIDs ?? []
         let source = song.isChordProNative ? song.chordPro : ChordProSongSource.seeded(from: song)
@@ -28,14 +30,20 @@ public struct SongDraft: Identifiable, Equatable, Sendable {
     }
     public init(newSongID: String = UUID().uuidString, playlistIDs: Set<String> = []) {
         original = LibrarySong(fields: ["id": .string(newSongID), "rawData": .string(""), "macJamsChordProVersion": .number(1)])
+        chordVoicings = [:]
         isNew = true; originalPlaylistIDs = []; self.playlistIDs = playlistIDs; initialPlaylistIDs = playlistIDs
         initialSource = ""; chordPro = ""; metadata = ChordProSongSource("")
     }
-    public var hasChanges: Bool { chordPro != initialSource || playlistIDs != initialPlaylistIDs }
+    public var hasChanges: Bool { chordPro != initialSource || playlistIDs != initialPlaylistIDs || chordVoicings != original.chordVoicings }
     public var validationError: String? {
         do { _ = try changes(); return nil } catch { return error.localizedDescription }
     }
     public func changes() throws -> [String: JSONValue] {
+        let voicingsChanged = chordVoicings != original.chordVoicings
+        let voicingEdits: [String: JSONValue] = voicingsChanged ?
+            ["macJamsChordVoicings": .object(chordVoicings.mapValues(\.json))] : [:]
+        // Diagram choices must not rewrite or migrate the ChordPro source.
+        if !isNew && chordPro == initialSource { return voicingEdits }
         guard !title.trimmingCharacters(in: .whitespaces).isEmpty else { throw SongEditError.validation("Enter a song name or a {title: ...} directive.") }
         if !key.isEmpty && key.range(of: #"^[A-Ga-g](?:#|b|♯|♭)?m?$"#, options: .regularExpression) == nil {
             throw SongEditError.validation("Use a key such as C, F# or Am.")
@@ -65,6 +73,7 @@ public struct SongDraft: Identifiable, Equatable, Sendable {
         }
         guard hasChanges else { return [:] }
         var edits = Self.compatibilityFields(source: metadata, original: original)
+        edits.merge(voicingEdits) { _, new in new }
         edits["rawData"] = .string(chordPro)
         edits["macJamsChordProVersion"] = .number(1)
         if key != SongDraft(song: original).key, original.fields["transpose"] != nil { edits["transpose"] = .null }

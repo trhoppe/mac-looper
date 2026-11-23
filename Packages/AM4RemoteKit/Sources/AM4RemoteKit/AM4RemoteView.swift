@@ -307,7 +307,7 @@ private enum BlockLabel {
         [0: "Empty", 0x2E: "Compressor", 0x32: "Graphic EQ", 0x36: "Parametric EQ",
          0x3A: "Amp", 0x42: "Reverb", 0x46: "Delay", 0x4E: "Chorus", 0x52: "Flanger",
          0x56: "Rotary", 0x5A: "Phaser", 0x5E: "Wah", 0x66: "Volume/Pan",
-         0x6A: "Tremolo", 0x72: "Filter", 0x76: "Drive", 0x77: "Drive 2", 0x7A: "Enhancer", 0x92: "Gate"][type]
+         0x6A: "Tremolo", 0x6E: "Pitch", 0x72: "Filter", 0x76: "Drive", 0x77: "Drive 2", 0x7A: "Enhancer", 0x92: "Gate", 0xD1: "NAM"][type]
             ?? "Block 0x" + String(type, radix: 16).uppercased()
     }
 }
@@ -411,7 +411,7 @@ private struct BlockPanel: View {
                 HStack(spacing: 12) {
                     Text(midi.gainStatus).font(.caption).foregroundStyle(.secondary)
                     Spacer()
-                    Text("Drag to adjust · Tap a number to type · Double-tap to reset")
+                    Text(AM4InlineParameterValue.instructions)
                         .font(.caption2).foregroundStyle(.tertiary)
                     Button {
                         Task { await midi.showAmpPage(page) }
@@ -419,7 +419,7 @@ private struct BlockPanel: View {
                         .buttonStyle(AM4NativeButtonStyle()).accessibilityLabel("Refresh Amp controls").disabled(midi.isApplyingGain)
                 }.padding(.horizontal, 20).padding(.vertical, 8)
             } else {
-                Text("Loaded in the current preset. Controls are available in the Amp block.")
+                Text("This block does not support editing.")
                     .foregroundStyle(.secondary).padding(28)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
@@ -553,24 +553,16 @@ private struct AmpParameterRow: View {
                     .accessibilityAction(named: "Reset to default") {
                         submit(state.edit(key: definition.key, expected: actual, resetToDefault: true))
                     }
-                Button {
-                    expected = actual; expectedState = state; failure = nil; numberEditor = true
-                } label: {
-                    Text(editing ? definition.preview(normalized) : actual.text)
-                        .font(.system(isEQFader ? .caption : .title3, design: .monospaced).weight(.semibold))
-                        .lineLimit(1).minimumScaleFactor(0.55)
-                        .frame(maxWidth: .infinity, minHeight: 38)
-                        .background(.black.opacity(0.6), in: RoundedRectangle(cornerRadius: 5))
-                }.buttonStyle(AM4ButtonStyle()).accessibilityLabel("Type \(control.label) value")
-                    .popover(isPresented: $numberEditor) {
-                        ParameterNumberEditor(definition: definition, label: control.label,
-                                              initialPosition: expected?.normalized ?? actual.normalized) { value in
-                            guard let expected, let origin = expectedState else { return }
-                            numberEditor = false
-                            normalized = value
-                            submit(origin.edit(key: definition.key, expected: expected, normalized: value))
-                        }.presentationCompactAdaptation(.popover)
-                    }
+                    .disabled(numberEditor).allowsHitTesting(!numberEditor)
+                AM4InlineParameterValue(definition: definition, label: control.label,
+                    actual: editing ? AM4ParameterValue(raw: actual.raw, normalized: normalized, text: definition.preview(normalized)) : actual,
+                    identity: state.menuIdentity + ":" + definition.key, compact: isEQFader, editing: $numberEditor,
+                    begin: { expected = actual; expectedState = state; failure = nil },
+                    apply: { value in
+                        guard let expected, let origin = expectedState else { return }
+                        normalized = value
+                        submit(origin.edit(key: definition.key, expected: expected, normalized: value))
+                    }, cancel: { expected = nil; expectedState = nil })
             }
             if let failure { Text(failure).font(.caption2).foregroundStyle(.red).multilineTextAlignment(.center) }
         }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -764,57 +756,6 @@ private struct RotaryKnob: View {
     }
 }
 
-private struct ParameterNumberEditor: View {
-    let definition: AM4ParameterDefinition
-    let label: String
-    let initialPosition: Double
-    let apply: (Double) -> Void
-    @Environment(\.dismiss) private var dismiss
-    @FocusState private var focused: Bool
-    @State private var text = ""
-    @State private var error: String?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            Text(label.replacingOccurrences(of: "\n", with: " ")).font(.headline)
-            HStack {
-                TextField("Value", text: $text).textFieldStyle(.roundedBorder).am4ControlHover()
-                    .font(.system(.title2, design: .monospaced)).focused($focused)
-                    .onSubmit(commit)
-                    #if os(iOS)
-                    .keyboardType(.numbersAndPunctuation).submitLabel(.done)
-                    #endif
-                if !definition.unit.isEmpty { Text(definition.unit).foregroundStyle(.secondary) }
-            }
-            Text("\(definition.preview(0)) – \(definition.preview(1))")
-                .font(.caption).foregroundStyle(.secondary)
-            if let error { Text(error).font(.caption).foregroundStyle(.red) }
-            HStack {
-                Button("Cancel") { dismiss() }.buttonStyle(AM4NativeButtonStyle())
-                Spacer()
-                Button("Apply", action: commit).buttonStyle(AM4NativeButtonStyle(prominent: true)).tint(AM4Appearance.accent)
-                    .keyboardShortcut(.defaultAction)
-            }
-        }.padding(22).frame(width: 300)
-            .onAppear {
-                text = String(format: "%.6f", definition.displayValue(initialPosition))
-                    .replacingOccurrences(of: "0+$", with: "", options: .regularExpression)
-                    .replacingOccurrences(of: "\\.$", with: "", options: .regularExpression)
-                focused = true
-            }
-    }
-    private func commit() {
-        let decimal = Locale.current.decimalSeparator ?? "."
-        let input = text.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: decimal, with: ".")
-        guard let value = Double(input), let position = definition.normalizedValue(forDisplay: value) else {
-            error = "Enter a number within the range above."
-            return
-        }
-        apply(position)
-    }
-}
-
-
 private enum ParameterEditorEdit {
     case amp(AM4AmpEdit)
     case effect(AM4EffectEdit)
@@ -938,7 +879,7 @@ private struct EffectPanel: View {
             HStack {
                 Text(midi.gainStatus).font(.caption).foregroundStyle(.secondary)
                 Spacer()
-                Text("Drag to adjust · Tap a number to type · Double-tap to reset").font(.caption2).foregroundStyle(.tertiary)
+                Text(AM4InlineParameterValue.instructions).font(.caption2).foregroundStyle(.tertiary)
                 Button { loadPage() } label: { Label("Refresh", systemImage: "arrow.clockwise") }
                     .buttonStyle(AM4NativeButtonStyle()).accessibilityLabel("Refresh controls").disabled(busy)
             }.padding(.horizontal, 20).padding(.vertical, 8)

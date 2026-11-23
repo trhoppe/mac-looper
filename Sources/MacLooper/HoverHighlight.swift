@@ -68,8 +68,8 @@ private struct JamFilledButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 14, weight: .medium)).foregroundStyle(Color.primary)
-            .padding(.horizontal, size == .large ? 12 : 10)
-            .padding(.vertical, size == .large ? 7 : 5)
+            .padding(.horizontal, size == .large ? 12 : size == .small || size == .mini ? 7 : 10)
+            .padding(.vertical, size == .large ? 7 : size == .small || size == .mini ? 4 : 5)
             .background(Color(white: configuration.isPressed ? 0.22 : prominent ? 0.34 : 0.29), in: RoundedRectangle(cornerRadius: 6))
             .overlay { RoundedRectangle(cornerRadius: 6).strokeBorder(.white.opacity(0.10)) }
             .opacity(enabled ? 1 : 0.4)
@@ -78,9 +78,9 @@ private struct JamFilledButtonStyle: ButtonStyle {
 }
 
 extension View {
-    func jamNumberField(width: CGFloat, height: CGFloat = 28, fontSize: CGFloat = 14) -> some View {
+    func jamNumberField(width: CGFloat, height: CGFloat = 28, fontSize: CGFloat = 14, horizontalPadding: CGFloat = 6) -> some View {
         self.font(.system(size: fontSize, weight: .medium).monospacedDigit())
-            .padding(.horizontal, 6).frame(width: width, height: height)
+            .padding(.horizontal, horizontalPadding).frame(width: width, height: height)
             .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 6))
             .overlay { RoundedRectangle(cornerRadius: 6).strokeBorder(.white.opacity(0.12)) }
             .hoverHighlight()

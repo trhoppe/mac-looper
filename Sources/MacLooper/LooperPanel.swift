@@ -3,16 +3,12 @@ import LooperCore
 
 struct LooperPanel: View {
     @ObservedObject var model: LooperModel
-    var compact = false
     var availableHeight: Double = 208
-    var volumeWidth: Double = 260
     var minimumHeightChanged: (Double) -> Void = { _ in }
     @State private var controlsHeight = 133.0
     private let accent = Color(red: 0.259, green: 0.788, blue: 0.961)
-    private var bpm: Binding<Double> { Binding(get: { model.bpm }, set: { if $0.isFinite { model.bpm = min(240, max(30, $0)) } }) }
     private var bars: Binding<Double> { Binding(get: { Double(model.bars) }, set: { if $0.isFinite { model.bars = Int(min(8, max(1, $0.rounded()))) } }) }
     private var threshold: Binding<Double> { Binding(get: { model.thresholdDB }, set: { if $0.isFinite { model.thresholdDB = min(0, max(-72, $0)) } }) }
-    private var percent: Binding<Double> { Binding(get: { (model.volume * 100).rounded() }, set: { if $0.isFinite { model.volume = min(100, max(0, $0)) / 100 } }) }
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             controls.onGeometryChange(for: Double.self) { $0.size.height } action: {
@@ -25,17 +21,9 @@ struct LooperPanel: View {
     }
     private var controls: some View {
         VStack(alignment: .leading, spacing: 10) {
-            title
+            HStack { title; Spacer(minLength: 8); volume }
             VStack(alignment: .leading, spacing: 14) {
-                if compact {
-                    VStack(alignment: .leading, spacing: 10) { timing; volume }
-                } else {
-                    HStack(alignment: .top, spacing: 12) {
-                        timing
-                        Spacer(minLength: 8)
-                        volume.frame(width: volumeWidth)
-                    }
-                }
+                timing
                 transport
             }.padding(.bottom, 6)
             if model.busy || model.hasLoop {
@@ -93,10 +81,11 @@ struct LooperPanel: View {
         }
     }
     private var bpmControl: some View {
-        TimingControl(label: "BPM", value: bpm, bounds: 30...240).disabled(!model.canEditTiming).fixedSize()
+        TempoControl(model: model, context: "Loop").fixedSize()
     }
     private var barsControl: some View {
-        TimingControl(label: "Bars", value: bars, bounds: 1...8).disabled(!model.canEditTiming).fixedSize()
+        TimingControl(label: "Bars", value: bars, bounds: 1...8, accessibilityName: "Loop bars")
+            .disabled(!model.canEditTiming).fixedSize()
     }
     private var timingDivider: some View {
         Rectangle().fill(.white.opacity(0.14)).frame(width: 1, height: 24).accessibilityHidden(true)
@@ -106,42 +95,49 @@ struct LooperPanel: View {
             .font(.system(size: 13, weight: .regular).monospacedDigit()).foregroundStyle(.secondary).fixedSize()
     }
     private var transport: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 8) { armButton; recordButton; playButton; clearButton }
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 8) { armButton; recordButton }
-                HStack(spacing: 8) { playButton; clearButton }
-            }
-        }.buttonStyle(JamButtonStyle()).controlSize(.large)
+        HStack(spacing: 10) { armButton; recordButton; playButton; clearButton }
+            .buttonStyle(JamPlainButtonStyle())
     }
     private var armButton: some View {
-        Button { Task { await model.arm() } } label: { Label("Arm", systemImage: "record.circle").frame(minWidth: 55) }
-                .buttonStyle(JamButtonStyle(prominent: true)).tint(accent).foregroundStyle(.black)
+        Button { Task { await model.arm() } } label: {
+            transportIcon("record.circle").foregroundStyle(model.state == TL_ARMED ? accent : .primary)
+        }
                 .disabled(!model.canEditTiming || model.input == nil || model.output == nil)
+                .help("Arm loop: start recording at the input threshold")
+                .accessibilityLabel("Arm loop")
     }
     private var recordButton: some View {
         Button { Task { await model.record() } } label: {
-                Label("Record", systemImage: model.state == TL_RECORDING ? "stop.circle" : "record.circle.fill")
+                transportIcon(model.state == TL_RECORDING ? "stop.circle" : "record.circle.fill")
+                    .foregroundStyle(model.state == TL_RECORDING ? .red : .primary)
             }.disabled(!model.canRecord || model.input == nil || model.output == nil)
                 .help(model.state == TL_RECORDING ? "Finish recording and loop now" : "Record immediately without waiting for a strum")
                 .accessibilityLabel(model.state == TL_RECORDING ? "Finish recording" : "Record")
     }
     private var playButton: some View {
         Button { model.playStop() } label: {
-                Label(model.state == TL_PLAYING || model.busy ? "Stop" : "Play", systemImage: model.state == TL_PLAYING || model.busy ? "stop.fill" : "play.fill").frame(minWidth: 50)
+                transportIcon(model.state == TL_PLAYING || model.busy ? "stop.fill" : "play.fill")
             }.disabled(!model.hasLoop && !model.busy)
+                .help(model.state == TL_PLAYING || model.busy ? "Stop loop" : "Play loop")
+                .accessibilityLabel(model.state == TL_PLAYING || model.busy ? "Stop loop" : "Play loop")
     }
     private var clearButton: some View {
-        Button { model.clear() } label: { Label("Clear", systemImage: "trash") }.disabled((!model.running && !model.audioPaused) || model.state == TL_EMPTY)
+        Button { model.clear() } label: { transportIcon("trash") }.disabled((!model.running && !model.audioPaused) || model.state == TL_EMPTY)
+            .help("Clear loop").accessibilityLabel("Clear loop")
     }
-    private var volume: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "speaker.wave.2").foregroundStyle(.secondary)
-            TextField("Volume", value: percent, format: .number.precision(.fractionLength(0)))
-                .textFieldStyle(.plain).jamNumberField(width: 36, fontSize: 12).multilineTextAlignment(.trailing).accessibilityLabel("Loop volume percentage")
-            Text("%").font(.caption).foregroundStyle(.secondary)
-            Slider(value: $model.volume, in: 0...1).frame(minWidth: 80, maxWidth: .infinity).hoverHighlight().accessibilityLabel("Loop playback volume")
-        }
+    private func transportIcon(_ name: String) -> some View {
+        Image(systemName: name).font(.system(size: 20)).frame(width: 36, height: 36).contentShape(Rectangle())
+    }
+    private var volume: some View { VolumeControl(volume: $model.volume, name: "Loop") }
+}
+
+struct TempoControl: View {
+    @ObservedObject var model: LooperModel
+    let context: String
+
+    var body: some View {
+        TimingControl(label: "BPM", value: $model.bpm, bounds: 30...240, accessibilityName: "\(context) tempo")
+            .disabled(!model.canEditTiming)
     }
 }
 
@@ -149,19 +145,75 @@ private struct TimingControl: View {
     let label: String
     @Binding var value: Double
     let bounds: ClosedRange<Double>
+    let accessibilityName: String
+    @State private var draft: String
+    @FocusState private var focused: Bool
+    @Environment(\.isEnabled) private var enabled
     @State private var stepButtonHeight: CGFloat?
+
+    init(label: String, value: Binding<Double>, bounds: ClosedRange<Double>, accessibilityName: String) {
+        self.label = label
+        self._value = value
+        self.bounds = bounds
+        self.accessibilityName = accessibilityName
+        self._draft = State(initialValue: value.wrappedValue.formatted(.number.precision(.fractionLength(0))))
+    }
+
     var body: some View {
-        HStack(spacing: 8) {
-            TextField(label, value: $value, format: .number.precision(.fractionLength(0)))
+        HStack(spacing: 6) {
+            TextField(label, text: $draft)
                 .textFieldStyle(.plain).multilineTextAlignment(.center)
-                .jamNumberField(width: label == "BPM" ? 60 : 42, height: stepButtonHeight ?? 30, fontSize: 15)
-                .accessibilityLabel(label == "BPM" ? "Loop tempo" : "Loop bars")
-            Text(label).font(.system(size: 14, weight: .medium)).foregroundStyle(.secondary)
-            Button { value = max(bounds.lowerBound, value.rounded() - 1) } label: { Image(systemName: "minus").font(.system(size: 14, weight: .semibold)).frame(width: 14, height: 16) }
+                .jamNumberField(width: label == "BPM" ? 48 : 32, height: stepButtonHeight ?? 26, fontSize: 14, horizontalPadding: 4)
+                .focused($focused)
+                .accessibilityLabel(accessibilityName)
+                .onSubmit { commit() }
+                .onChange(of: focused) { _, isFocused in
+                    if !isFocused { commit() }
+                }
+                .onChange(of: draft) { _, _ in
+                    // Keep empty/partial text local while replacing a number.
+                    // Only complete, valid values update the shared timing.
+                    guard enabled, focused, let parsed, bounds.contains(parsed), value != parsed else { return }
+                    value = parsed
+                }
+                .onChange(of: value) { _, next in
+                    // Reflect the other tempo control and song selection without
+                    // rewriting the text/caret during this field's own edit.
+                    if !focused || parsed != next { draft = formatted(next) }
+                }
+                .onChange(of: enabled) { _, isEnabled in
+                    if !isEnabled { draft = formatted(value); focused = false }
+                }
+                .onKeyPress(keys: [.upArrow, .downArrow]) { key in
+                    guard enabled, focused else { return .ignored }
+                    step(key.key == .upArrow ? 1 : -1)
+                    return .handled
+                }
+            Text(label).font(.system(size: 13, weight: .medium)).foregroundStyle(.secondary)
+            Button { step(-1) } label: { Image(systemName: "minus").font(.system(size: 12, weight: .semibold)).frame(width: 14, height: 18) }
                 .disabled(value <= bounds.lowerBound).accessibilityLabel("Decrease \(label)")
+                .help("Decrease \(label)")
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { stepButtonHeight = $0 }
-            Button { value = min(bounds.upperBound, value.rounded() + 1) } label: { Image(systemName: "plus").font(.system(size: 14, weight: .semibold)).frame(width: 14, height: 16) }
+            Button { step(1) } label: { Image(systemName: "plus").font(.system(size: 12, weight: .semibold)).frame(width: 14, height: 18) }
                 .disabled(value >= bounds.upperBound).accessibilityLabel("Increase \(label)")
-        }.buttonStyle(JamButtonStyle()).controlSize(.large)
+                .help("Increase \(label)")
+        }.buttonStyle(JamButtonStyle()).controlSize(.small)
+    }
+
+    private var parsed: Double? {
+        guard let number = try? Double(draft, format: .number), number.isFinite else { return nil }
+        return number
+    }
+    private func formatted(_ number: Double) -> String {
+        number.formatted(.number.precision(.fractionLength(0)))
+    }
+    private func commit() {
+        if enabled, let parsed { value = min(bounds.upperBound, max(bounds.lowerBound, parsed)) }
+        draft = formatted(value)
+    }
+    private func step(_ delta: Double) {
+        guard enabled else { return }
+        value = min(bounds.upperBound, max(bounds.lowerBound, value.rounded() + delta))
+        draft = formatted(value)
     }
 }
