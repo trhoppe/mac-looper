@@ -1,5 +1,7 @@
 # Mac Jams
 
+Planned work: [post-redesign backlog](BACKLOG.md).
+
 A native Mac and iPad guitar-jamming app. Chord charts and backing playback share
 one SwiftUI workspace. A full-app AM4 Remote controls the connected amp over USB MIDI. Header controls show or hide Songs, Chords, Looper, Drummer and
 Player; the chart expands into the available space.
@@ -180,26 +182,26 @@ swift test --package-path Packages/AM4RemoteKit
 "build/Mac Jams.app/Contents/MacOS/MacLooper" --am4-resources-check
 ```
 
-## Resizable panels
+## Workspace and controls
 
-Drag the small grip on a border to resize:
+The chart sits beside fixed-size Player, Drummer, and Looper cards on desktop.
+Drag the right-column divider to change its width; that width is remembered.
+Double-click the grip, or choose **Reset size** from its context menu, to reset it.
+Card heights follow their contents, and the column scrolls in short windows.
 
-- Songs sidebar width and audio-files panel width.
-- File-list/player height split inside the audio-files panel.
-- Chart/jam-controls height split.
-- Looper/Drummer widths, or their heights when stacked on a narrower screen.
-- Compact backing-player height beneath the chart on a narrow screen.
+On iPad landscape, Player, a compact Drummer strip, and Looper share the right
+column beside the full-height chart. In portrait, a slim Drummer row sits below
+the chart, with Player and Looper side by side beneath it. Songs, More, Settings,
+and Audio Files use one bounded popup presenter and shared dropdown triggers.
+Hiding a panel leaves its playback running and frees space for the others.
 
-Sizes are remembered on each device. Minimum sizes keep neighboring controls
-usable; smaller windows temporarily clamp the layout without replacing the saved
-wide-window sizes. The compact player and jam panels scroll when space is tight.
-The looper waveform grows as its panel becomes taller. Hiding a panel still leaves
-its playback running and lets the remaining panels expand.
+The toolbar has one shared BPM control for Drummer and Looper. **Mix** opens
+all three existing volume controls together. Each card also keeps its speaker
+popup and editable percentage; typing or moving either control updates the same
+volume. The Player retains its seek bar and existing transport behavior.
 
-Double-click a grip to reset that split, or use its **Reset size** context menu.
-Mac grips show the resize cursor and a cyan hover highlight; iPad grips have a
-larger touch target. Songs remains a popover in the compact layout.
-
+Shared palette, surfaces, button styles, hover feedback, and screen headers live
+in `Packages/JamDesignKit`, used by Mac Jams and AM4 Remote.
 
 ## Jam
 
@@ -245,9 +247,13 @@ before using the plugin, as described in [Lumbeat’s AUv3 setup guidance](https
 
 - **Play/Stop** controls the plugin independently of backing playback and threshold
   capture. It follows the looper’s BPM and a sample-based 4/4 host transport.
-- **Open…** shows the plugin’s full editor in a separate Mac window or an iPad sheet.
-  Choose rhythms, kits and Jam settings there. Plugin settings are saved locally
-  when the editor closes and when the app shuts down; drums never autoplay on launch.
+- The **rhythm dropdown** beside Play selects saved rhythms directly. Name them
+  `User - Hat Beat`, for example, in Pop Drummer; only `User - ` entries appear,
+  displayed as `Hat Beat`. Selection and plugin state are saved locally and
+  recalled on launch; drums never autoplay. Names come from the installed plugin.
+- The right-aligned **plugin button** opens the full editor in a separate Mac
+  window or iPad sheet for rhythms, kits, and Jam settings. Settings are also
+  saved when the editor closes and when the app shuts down.
 - Its own volume slider and editable percentage balance drums against the backing
   player and guitar loop. A 3 ms gain ramp avoids clicks. The instrument continues
   to render at zero gain so it can see transport changes and restart reliably.

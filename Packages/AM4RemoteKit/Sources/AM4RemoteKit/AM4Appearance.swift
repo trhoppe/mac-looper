@@ -1,9 +1,10 @@
+import JamDesignKit
 import SwiftUI
 
 enum AM4Appearance {
-    static let accent = Color(red: 0.259, green: 0.788, blue: 0.961)
-    static let background = Color(red: 0.065, green: 0.075, blue: 0.085)
-    static let panel = Color(red: 0.075, green: 0.085, blue: 0.10)
+    static let accent = JamDesign.accent
+    static let background = JamDesign.ground
+    static let panel = JamDesign.card
 }
 
 /// Match the song/file rows. Hover state stays local, independent of MIDI updates.
@@ -142,7 +143,7 @@ private struct AM4PresetRowHighlight: ViewModifier {
     @State private var hovering = false
     func body(content: Content) -> some View {
         content
-            .background(selected || (enabled && hovering) ? Color(white: 0.19) : AM4Appearance.background)
+            .background(selected || (enabled && hovering) ? JamDesign.selection : AM4Appearance.background)
             .contentShape(Rectangle())
             .onHover { hovering = $0 }
             .animation(.easeOut(duration: 0.12), value: selected || (enabled && hovering))
@@ -175,9 +176,6 @@ extension View {
 struct AM4NativeButtonStyle: PrimitiveButtonStyle {
     var prominent = false
     func makeBody(configuration: Configuration) -> some View {
-        Group {
-            if prominent { Button(configuration).buttonStyle(.borderedProminent) }
-            else { Button(configuration).buttonStyle(.bordered) }
-        }.am4ControlHover()
+        Button(configuration).buttonStyle(JamControlStyle(active: prominent))
     }
 }

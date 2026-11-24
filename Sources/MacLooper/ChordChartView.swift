@@ -1,3 +1,4 @@
+import JamDesignKit
 import SwiftUI
 import JamCore
 
@@ -12,7 +13,7 @@ struct ChordChartView: View {
     private let document: ChordProDocument?
     init(song: LibrarySong?, library: SongLibraryModel, edit: @escaping () -> Void = {}) {
         self.song = song; self.library = library; self.edit = edit
-        document = song.map { ChordProDocument(source: $0.chordPro, transpose: $0.transposition, flats: $0.displayKey?.contains("b") == true) }
+        document = song.map { ChordProDocument(source: $0.chordPro, transpose: $0.chartTransposition, flats: $0.chartKey?.contains("b") == true) }
     }
     var body: some View {
         ChartPresentation(song: song, library: library, document: document, fontSize: fontSize, twoColumns: twoColumns,
@@ -32,7 +33,7 @@ private struct ChartPresentation: View, Equatable {
     @AppStorage("showChordDiagrams") private var showingDiagrams = true
     @State private var autoScrolling = false
     @Environment(\.scenePhase) private var scenePhase
-    private let accent = Color(red: 0.259, green: 0.788, blue: 0.961)
+    private let accent = JamDesign.accent
     static func == (lhs: Self, rhs: Self) -> Bool { lhs.song == rhs.song && lhs.fontSize == rhs.fontSize && lhs.twoColumns == rhs.twoColumns }
 
     var body: some View {
@@ -48,22 +49,19 @@ private struct ChartPresentation: View, Equatable {
                         songTitle(song, document: document)
                         HStack { Spacer(minLength: 0); chartControls(song) }
                     }
-                }.padding(.horizontal, 18).padding(.top, 14).padding(.bottom, 6)
-                if !document.guitarChords.isEmpty {
+                }.padding(.horizontal, 20).padding(.top, 18).padding(.bottom, showingDiagrams ? 14 : 2)
+                if showingDiagrams && !document.guitarChords.isEmpty {
                     HStack(alignment: .top, spacing: 0) {
-                        if showingDiagrams {
-                            GuitarChordStrip(library: library, song: song, chords: document.guitarChords)
-                        } else { Spacer(minLength: 0) }
-                        Button { withAnimation(.easeInOut(duration: 0.18)) { showingDiagrams.toggle() } } label: {
-                            Image(systemName: showingDiagrams ? "chevron.up" : "chevron.down")
-                                .font(.system(size: 10, weight: .semibold)).frame(width: 20, height: 20)
-                        }.buttonStyle(JamPlainButtonStyle())
-                            .accessibilityLabel(showingDiagrams ? "Hide chord diagrams" : "Show chord diagrams")
-                            .help(showingDiagrams ? "Hide chord diagrams" : "Show chord diagrams")
-                            .padding(.top, 2).padding(.trailing, 18).padding(.bottom, 6)
-                    }
+                        GuitarChordStrip(library: library, song: song, chords: document.guitarChords)
+                        Button { toggleDiagrams() } label: {
+                            Image(systemName: "chevron.up").font(.system(size: 10, weight: .semibold))
+                                .frame(width: 24, height: 24)
+                        }.buttonStyle(JamPlainButtonStyle()).accessibilityLabel("Hide chord diagrams").help("Hide chord diagrams")
+                            .padding(.trailing, 12)
+                    }.padding(.top, 8).padding(.bottom, 4).jamSurface(padding: 0)
+                        .padding(.horizontal, 20).padding(.bottom, 8)
+                        .transition(.scale(scale: 0.85, anchor: .topTrailing).combined(with: .opacity))
                 }
-                Divider()
                 GeometryReader { geo in
                     ScrollView {
                         // Measured, eager rows preserve stable scrolling and left-to-right reading.
@@ -84,7 +82,7 @@ private struct ChartPresentation: View, Equatable {
                                     } else if let line = block.lines.first {
                                         switch line.kind {
                                         case .blank: Color.clear.frame(height: fontSize * 0.55)
-                                        case .section: Text(line.text).font(.system(size: fontSize * 0.88, weight: .bold, design: .monospaced)).foregroundStyle(Color(white: 0.78)).padding(.top, fontSize * 0.4)
+                                        case .section: Text(line.text).font(.system(size: fontSize * 0.88, weight: .bold, design: .monospaced)).foregroundStyle(JamDesign.secondary).padding(.top, fontSize * 0.4)
                                         case .comment:
                                             Text(line.text).font(.system(size: fontSize * 0.82, design: .monospaced))
                                                 .italic(line.commentStyle == .italic).foregroundStyle(.secondary)
@@ -127,7 +125,8 @@ private struct ChartPresentation: View, Equatable {
                                 Text(warning).font(.caption).foregroundStyle(.secondary)
                                     .layoutValue(key: ChartSpanKey.self, value: true)
                             }
-                        }.lineSpacing(fontSize * 0.1).frame(maxWidth: .infinity, alignment: .leading).padding(20)
+                        }.lineSpacing(fontSize * 0.1).frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 20).padding(.top, showingDiagrams ? 8 : 0).padding(.bottom, 20)
                             .background {
                                 ChartAutoScroll(active: $autoScrolling, duration: ChartScrollTiming.duration(song.duration))
                                     .allowsHitTesting(false).accessibilityHidden(true)
@@ -147,7 +146,7 @@ private struct ChartPresentation: View, Equatable {
                     }.frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
-        }.frame(maxWidth: .infinity, maxHeight: .infinity).background(.white.opacity(0.015))
+        }.frame(maxWidth: .infinity, maxHeight: .infinity).background(JamDesign.ground)
             .onChange(of: song?.id) { _, _ in autoScrolling = false }
             .onChange(of: song?.chordPro) { _, _ in autoScrolling = false }
             .onChange(of: scenePhase) { _, phase in if phase != .active { autoScrolling = false } }
@@ -155,12 +154,15 @@ private struct ChartPresentation: View, Equatable {
     }
     private func songTitle(_ song: LibrarySong, document: ChordProDocument) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(song.title).font(.title2.weight(.semibold)).textSelection(.enabled)
+            Text(song.title).font(.system(size: 27, weight: .bold)).textSelection(.enabled)
             if !song.artist.isEmpty { Text(song.artist).foregroundStyle(.secondary) }
             if let subtitle = document.metadataValues["subtitle"]?.joined(separator: " · "), !subtitle.isEmpty {
                 Text(subtitle).font(.callout).foregroundStyle(.secondary)
             }
         }
+    }
+    private func toggleDiagrams() {
+        withAnimation(.easeInOut(duration: 0.2)) { showingDiagrams.toggle() }
     }
     private func chartControls(_ song: LibrarySong) -> some View {
         VStack(alignment: .trailing, spacing: 8) {
@@ -179,27 +181,44 @@ private struct ChartPresentation: View, Equatable {
                 }.accessibilityLabel(twoColumns ? "Use one chart column" : "Use two chart columns")
                     .accessibilityValue(twoColumns ? "Two columns" : "One column")
                     .help(twoColumns ? "Switch to one column" : "Switch to two columns when space allows")
-                Button { changeFont(max(12, fontSize - 1)) } label: {
-                    Text("A−").font(.system(size: 12, weight: .medium)).frame(width: 18, height: 14)
-                }.disabled(fontSize <= 12).accessibilityLabel("Smaller chart text").help("Smaller chart text and tighter lines")
-                Button { changeFont(min(36, fontSize + 1)) } label: {
-                    Text("A+").font(.system(size: 12, weight: .medium)).frame(width: 18, height: 14)
-                }.disabled(fontSize >= 36).accessibilityLabel("Larger chart text").help("Larger chart text and wider lines")
+                HStack(spacing: 0) {
+                    Button { changeFont(max(12, fontSize - 1)) } label: {
+                        Text("A").font(.system(size: 12, weight: .medium)).frame(width: JamDesign.target, height: JamDesign.target)
+                    }.disabled(fontSize <= 12).accessibilityLabel("Smaller chart text").help("Smaller chart text and tighter lines")
+                    Rectangle().fill(JamDesign.border).frame(width: 1, height: JamDesign.target - 12)
+                    Button { changeFont(min(36, fontSize + 1)) } label: {
+                        Text("A").font(.system(size: 17, weight: .medium)).frame(width: JamDesign.target, height: JamDesign.target)
+                    }.disabled(fontSize >= 36).accessibilityLabel("Larger chart text").help("Larger chart text and wider lines")
+                }.buttonStyle(JamPlainButtonStyle()).background(JamDesign.control, in: RoundedRectangle(cornerRadius: 8))
                 Button(action: edit) {
                     Image(systemName: "square.and.pencil").frame(width: 18, height: 14)
                 }.accessibilityLabel("Edit song").help("Edit song")
-            }.buttonStyle(JamButtonStyle()).controlSize(.regular)
-            Text(songMetadata(song)).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+            }.buttonStyle(JamIconStyle()).controlSize(.regular)
+            songMetadata(song).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+            if !showingDiagrams && document?.guitarChords.isEmpty == false {
+                Button { toggleDiagrams() } label: {
+                    HStack(spacing: 6) {
+                        Text("Chord charts").font(.system(size: 12, weight: .medium))
+                        Image(systemName: "chevron.down").font(.system(size: 10, weight: .medium))
+                    }.foregroundStyle(JamDesign.secondary).padding(.horizontal, 8).frame(height: 28)
+                }.buttonStyle(JamPlainButtonStyle())
+                    .background(JamDesign.control, in: RoundedRectangle(cornerRadius: 8))
+                    .accessibilityLabel("Show chord diagrams").help("Show chord diagrams")
+                    .padding(.top, -4)
+            }
         }.fixedSize(horizontal: true, vertical: false)
     }
-    private func songMetadata(_ song: LibrarySong) -> String {
+    private func songMetadata(_ song: LibrarySong) -> Text {
         var values: [String] = []
-        if let key = song.displayKey { values.append("Key " + key) }
-        if let capo = song.capo, capo != "0" { values.append("Capo " + capo) }
-        if let tempo = song.tempo, tempo.isFinite { values.append("\(Int(tempo)) BPM") }
+        if let key = song.chartKey { values.append("Key " + key) }
         if let meter = song.timeSignature { values.append(meter) }
         if let duration = song.duration, !duration.isEmpty { values.append(ChordProDocument.readableDuration(duration)) }
-        return values.joined(separator: " · ")
+        let metadata = Text(values.joined(separator: " · "))
+        if let capo = song.capo, !capo.isEmpty, Int(capo.trimmingCharacters(in: .whitespacesAndNewlines)) != 0 {
+            return Text("Capo " + capo).bold().foregroundColor(JamDesign.armed)
+                + Text(values.isEmpty ? "" : " · ") + metadata
+        }
+        return metadata
     }
 
 }

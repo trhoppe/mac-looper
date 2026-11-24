@@ -10,7 +10,7 @@ let package = Package(
         .library(name: "LooperCore", targets: ["LooperCore"]),
         .library(name: "LooperAudioUnit", targets: ["LooperAudioUnit"])
     ],
-    dependencies: [.package(path: "Packages/AM4RemoteKit")],
+    dependencies: [.package(path: "Packages/AM4RemoteKit"), .package(path: "Packages/JamDesignKit")],
     targets: [
         .target(name: "LooperCore", publicHeadersPath: "include", linkerSettings: [
             .linkedFramework("AudioToolbox"), .linkedFramework("CoreAudio", .when(platforms: [.macOS]))
@@ -18,7 +18,7 @@ let package = Package(
         .target(name: "JamCore", resources: [.process("Resources")]),
         .target(name: "LooperAudioUnit", dependencies: ["LooperCore"], publicHeadersPath: "include", cSettings: [.unsafeFlags(["-fobjc-arc"])],
                 linkerSettings: [.linkedFramework("AVFoundation"), .linkedFramework("AudioToolbox")]),
-        .executableTarget(name: "MacLooper", dependencies: ["LooperCore", "LooperAudioUnit", "JamCore", .product(name: "AM4RemoteKit", package: "AM4RemoteKit")], linkerSettings: [
+        .executableTarget(name: "MacLooper", dependencies: ["LooperCore", "LooperAudioUnit", "JamCore", .product(name: "AM4RemoteKit", package: "AM4RemoteKit"), .product(name: "JamDesignKit", package: "JamDesignKit")], linkerSettings: [
             .linkedFramework("SwiftUI"), .linkedFramework("AVFoundation"), .linkedFramework("CoreAudioKit"), .linkedFramework("CoreMIDI")
         ]),
         .testTarget(name: "LooperCoreTests", dependencies: ["LooperCore", "LooperAudioUnit"]),

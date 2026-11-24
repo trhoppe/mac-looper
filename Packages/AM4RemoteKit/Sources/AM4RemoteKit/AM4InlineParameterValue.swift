@@ -1,3 +1,4 @@
+import JamDesignKit
 import SwiftUI
 #if os(macOS)
 import AppKit
@@ -36,8 +37,8 @@ struct AM4InlineParameterValue: View {
                     TextField(label, text: Binding(get: { draft?.text ?? "" }, set: { draft?.text = $0; invalid = false }))
                         .textFieldStyle(.plain).font(font).multilineTextAlignment(.center)
                         .padding(.horizontal, 5).frame(maxWidth: .infinity, minHeight: 38)
-                        .background(.black.opacity(0.6), in: RoundedRectangle(cornerRadius: 5))
-                        .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(invalid ? Color.red : AM4Appearance.accent))
+                        .background(JamDesign.control, in: RoundedRectangle(cornerRadius: 8))
+                        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(invalid ? Color.red : AM4Appearance.accent))
                         .focused($focused).accessibilityLabel("\(label) value")
                         .onSubmit(commit)
                         .onKeyPress(.escape) { abandon(); return .handled }
@@ -89,7 +90,7 @@ struct AM4InlineParameterValue: View {
     private var valueLabel: some View {
         Text(actual.text).font(font).lineLimit(1).minimumScaleFactor(0.55)
             .frame(maxWidth: .infinity, minHeight: 38)
-            .background(.black.opacity(0.6), in: RoundedRectangle(cornerRadius: 5))
+            .background(JamDesign.control, in: RoundedRectangle(cornerRadius: 8))
     }
     private func start() {
         guard enabled, draft == nil else { return }

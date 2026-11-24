@@ -1,3 +1,4 @@
+import JamDesignKit
 import SwiftUI
 import JamCore
 import UniformTypeIdentifiers
@@ -19,7 +20,7 @@ struct SongEditorView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Text(draft.isNew ? "New song" : "Edit song").font(.headline)
+                Text(draft.isNew ? "New song" : "Edit song").font(.system(size: 17, weight: .semibold))
                 Spacer()
                 Button("Export ChordPro…") { exporting = true }.disabled(saving)
                 Button("Cancel") {
@@ -33,7 +34,7 @@ struct SongEditorView: View {
                     }
                 }.buttonStyle(JamButtonStyle(prominent: true)).keyboardShortcut("s", modifiers: .command)
                     .disabled(saving || !draft.hasChanges || draft.validationError != nil)
-            }.padding(18)
+            }.padding(18).background(JamDesign.card)
             VStack(spacing: 12) {
                     HStack(spacing: 14) {
                         field("Song name", text: $editor.draft.title, prompt: "Song name")
@@ -62,7 +63,7 @@ struct SongEditorView: View {
         }
         .disabled(editor.recovering)
         .task { await editor.restore() }
-        .background(Color(red: 0.065, green: 0.075, blue: 0.085))
+        .background(JamDesign.ground)
         .fileExporter(isPresented: $exporting, document: ChordProExport(text: draft.chordPro), contentType: .plainText,
                       defaultFilename: String(draft.title.map { $0 == "/" || $0 == ":" ? "-" : $0 }) + ".cho") { result in
             if case .failure(let error) = result { saveError = error.localizedDescription }

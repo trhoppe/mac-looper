@@ -1,3 +1,4 @@
+import JamDesignKit
 import SwiftUI
 import JamCore
 
@@ -13,7 +14,7 @@ struct ChordLibraryView: View {
     private let catalogue = GuitarChordCatalogue.shared
     private let notes = ["C", "C#", "Db", "D", "D#", "Eb", "E", "F", "F#", "Gb", "G", "G#", "Ab", "A", "A#", "Bb", "B"]
     private let diagramScale = 1.2
-    private var columns: [GridItem] { [GridItem(.adaptive(minimum: 112 * diagramScale), spacing: 20)] }
+    private var columns: [GridItem] { [GridItem(.adaptive(minimum: 112 * diagramScale + 24), spacing: 20)] }
 
     private struct Voicing: Identifiable {
         let group: GuitarChordCatalogue.Group
@@ -28,12 +29,7 @@ struct ChordLibraryView: View {
                                         includeSlashChords: bass != "hide")
         let voicings = groups.flatMap { group in group.shapes.map { Voicing(group: group, shape: $0) } }
         VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Label("Chord Library", systemImage: "guitars").font(.headline)
-                Spacer()
-                Button("Close", action: close).buttonStyle(JamButtonStyle())
-                    .keyboardShortcut(.cancelAction)
-            }.padding(.horizontal, 18).padding(.vertical, 14)
+            JamScreenHeader("Chord Library", icon: "guitars", close: close)
             Divider()
             VStack(alignment: .leading, spacing: 14) {
                 Picker("Chord library mode", selection: $showingTriads) {
@@ -59,24 +55,23 @@ struct ChordLibraryView: View {
                 } else {
                     LazyVGrid(columns: columns, alignment: .leading, spacing: 24) {
                         ForEach(voicings) { voicing in
-                            VStack(spacing: 5) {
+                            VStack(spacing: 8) {
                                 Text(displayName(voicing.group)).font(.callout.weight(.semibold)).lineLimit(1)
-                                    .foregroundStyle(Color(red: 0.259, green: 0.788, blue: 0.961))
-                                    .offset(x: 6 * diagramScale)
+                                    .foregroundStyle(JamDesign.accent)
                                 GuitarChordDiagram(shape: voicing.shape).frame(width: 112, height: 134)
                                     .scaleEffect(diagramScale)
                                     .frame(width: 112 * diagramScale, height: 134 * diagramScale)
-                            }.padding(.vertical, 6).frame(maxWidth: .infinity).hoverHighlight()
+                        .offset(x: -6 * diagramScale)
+                            }.frame(maxWidth: .infinity).jamSurface(padding: 12).hoverHighlight()
                                 .accessibilityElement(children: .ignore)
                                 .accessibilityLabel("\(displayName(voicing.group)), base fret \(voicing.shape.baseFret), frets \(voicing.shape.frets.map(String.init).joined(separator: ", "))")
                         }
                     }
-                    // Balance the fret-label inset at the library's diagram scale.
-                    .padding(.vertical, 18).padding(.trailing, 12 * diagramScale)
+                    .padding(18)
                 }
             }.frame(maxWidth: .infinity, maxHeight: .infinity)
         }.frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color(red: 0.065, green: 0.075, blue: 0.085))
+            .background(JamDesign.ground)
             .accessibilityAddTraits(.isModal)
     }
     @ViewBuilder private var filters: some View {
@@ -125,20 +120,20 @@ struct ChordLibraryView: View {
                 VStack(spacing: 5) {
                     VStack(spacing: 3) {
                         Text(triad.chordName).font(.callout.weight(.semibold))
-                            .foregroundStyle(Color(red: 0.259, green: 0.788, blue: 0.961))
+                            .foregroundStyle(JamDesign.accent)
                         Text(triad.inversion.title).font(.caption).foregroundStyle(.secondary)
                         Text(triad.stringSet.title).font(.caption2).foregroundStyle(.secondary)
-                    }.offset(x: 6 * diagramScale)
+                    }
                     GuitarChordDiagram(shape: triad.shape, degreeLabels: triad.degrees, rootStrings: triad.rootStrings)
                         .frame(width: 112, height: 134).scaleEffect(diagramScale)
                         .frame(width: 112 * diagramScale, height: 134 * diagramScale)
+                        .offset(x: -6 * diagramScale)
                     Text(triad.notes.joined(separator: " · ")).font(.caption).foregroundStyle(.secondary)
-                        .offset(x: 6 * diagramScale)
-                }.padding(.vertical, 6).frame(maxWidth: .infinity).hoverHighlight()
+                }.frame(maxWidth: .infinity).jamSurface(padding: 12).hoverHighlight()
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel("\(triad.chordName), \(triad.inversion.title), \(triad.stringSet.title), notes \(triad.notes.joined(separator: ", ")), frets \(triad.absoluteFrets.map(String.init).joined(separator: ", "))")
             }
-        }.padding(.vertical, 18).padding(.trailing, 12 * diagramScale)
+        }.padding(18)
     }
     private func filter(_ label: String, selection: Binding<String>, values: [String], allowsHidingSlashChords: Bool = false) -> some View {
         HStack(spacing: 8) {

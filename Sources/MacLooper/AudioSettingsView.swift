@@ -1,3 +1,4 @@
+import JamDesignKit
 import SwiftUI
 import JamCore
 
@@ -8,10 +9,7 @@ struct AudioSettingsView: View {
     let chooseFolder: () -> Void
     let recoverDraft: (SongDraft) -> Void
     @State private var reviewingConflicts = false
-    #if os(macOS)
-    @AppStorage("desktopLooperInRightRail") private var desktopLooperInRightRail = false
-    #endif
-    private let accent = Color(red: 0.259, green: 0.788, blue: 0.961)
+    private let accent = JamDesign.accent
     private var bufferSummary: String {
         #if os(macOS)
         return "32 samples"
@@ -27,15 +25,6 @@ struct AudioSettingsView: View {
                     Spacer()
                     Button { dismiss() } label: { Image(systemName: "xmark") }.buttonStyle(JamPlainButtonStyle())
                 }
-                #if os(macOS)
-                Text("Layout").font(.subheadline.weight(.semibold))
-                Picker("Looper position", selection: $desktopLooperInRightRail) {
-                    Text("Bottom (full width)").tag(false)
-                    Text("Right rail").tag(true)
-                }.pickerStyle(.menu).hoverHighlight()
-                    .accessibilityLabel("Looper position")
-                Divider()
-                #endif
                 Text("Audio").font(.subheadline.weight(.semibold))
                 VStack(spacing: 12) {
                     Picker("Input", selection: $model.inputUID) {
@@ -83,7 +72,7 @@ struct AudioSettingsView: View {
                 }
                 if let error = library.error { Text(error).font(.caption).foregroundStyle(.orange) }
             }.padding(20)
-        }.tint(accent)
+        }.background(JamDesign.card).foregroundStyle(JamDesign.text).tint(accent)
         .sheet(isPresented: $reviewingConflicts) { LibraryConflictView(library: library) }
         .task { await library.refreshRecoveredDrafts() }
     }

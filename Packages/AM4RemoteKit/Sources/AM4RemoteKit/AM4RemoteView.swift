@@ -1,3 +1,4 @@
+import JamDesignKit
 import SwiftUI
 
 struct AM4RemoteView: View {
@@ -99,7 +100,7 @@ struct AM4RemoteView: View {
                 }.padding(28).frame(maxWidth: 1000, alignment: .leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .background(AM4Appearance.panel)
+            .background(AM4Appearance.background)
         }
         .tint(accent)
         .preferredColorScheme(.dark)
@@ -129,8 +130,8 @@ struct AM4RemoteView: View {
                             BlockPanel(midi: midi, blockID: block.type, close: { selectedBlock = nil })
                         }
                         }
-                            .clipShape(RoundedRectangle(cornerRadius: 20))
-                            .overlay { RoundedRectangle(cornerRadius: 20).stroke(.white.opacity(0.12), lineWidth: 1) }
+                            .clipShape(RoundedRectangle(cornerRadius: JamDesign.radius))
+                            .overlay { RoundedRectangle(cornerRadius: JamDesign.radius).stroke(.white.opacity(0.12), lineWidth: 1) }
                             .shadow(color: .black.opacity(0.6), radius: 24)
                             .padding(.horizontal, max(12, geometry.size.width * 0.015))
                             .padding(.vertical, max(12, geometry.size.height * 0.02))
@@ -230,9 +231,9 @@ struct AM4RemoteView: View {
                                     Text(type == 0 ? "Empty" : (state == nil ? "Reading status…" : ((type == 0x3A || AM4EffectsCatalog.shared.effect(Int(type)) != nil) ? "Edit controls" : "View block")))
                                         .font(.caption).foregroundStyle(.secondary)
                                 }.frame(maxWidth: .infinity, minHeight: 64, alignment: .leading).padding(12)
-                                    .background(.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 6))
+                                    .background(JamDesign.control, in: RoundedRectangle(cornerRadius: 8))
                                     .overlay {
-                                        RoundedRectangle(cornerRadius: 6)
+                                        RoundedRectangle(cornerRadius: 8)
                                             .strokeBorder(active ? accent : .clear, lineWidth: 1 / displayScale)
                                     }.contentShape(RoundedRectangle(cornerRadius: 6))
                             }.buttonStyle(AM4ButtonStyle())
@@ -279,7 +280,7 @@ struct AM4RemoteView: View {
                             }
                         }.frame(maxWidth: .infinity, minHeight: 36, alignment: .leading)
                             .padding(.horizontal, 12).padding(.vertical, 6)
-                            .background(.white.opacity(index == snapshot.scene ? 0.112 : 0.04), in: RoundedRectangle(cornerRadius: 6))
+                            .background(index == snapshot.scene ? JamDesign.selection : JamDesign.card, in: RoundedRectangle(cornerRadius: 8))
                             .contentShape(RoundedRectangle(cornerRadius: 6))
                         }.buttonStyle(AM4ButtonStyle(isSelected: index == snapshot.scene))
                             .disabled(midi.isNavigating || midi.isApplyingGain || midi.isLoadingPresets)
@@ -682,7 +683,7 @@ private struct EQBandStrip: View {
                         ForEach(0..<5) { index in
                             let value = definition.displayValue(1 - Double(index) / 4)
                             Text(value > 0 ? String(format: "+%g", value) : String(format: "%g", value))
-                                .font(.system(.caption2, design: .monospaced)).foregroundStyle(index == 2 ? .cyan : .secondary)
+                                .font(.system(.caption2, design: .monospaced)).foregroundStyle(index == 2 ? JamDesign.accent : JamDesign.secondary)
                                 .position(x: geometry.size.width / 2, y: 12 + EQFader.travel * Double(index) / 4)
                         }
                     }.frame(height: EQFader.height)
@@ -695,9 +696,7 @@ private struct EQBandStrip: View {
                         .id("\(identity):\(control.id)")
                 }
             }
-        }.padding(16)
-            .background(.black.opacity(0.18), in: RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.white.opacity(0.07)))
+        }.jamSurface()
     }
 }
 
@@ -719,14 +718,13 @@ private struct EQFader: View {
                         .frame(height: 1)
                         .position(x: center, y: 12 + Self.travel * Double(index) / 8)
                 }
-                RoundedRectangle(cornerRadius: 3).fill(.black.opacity(0.65))
+                RoundedRectangle(cornerRadius: 3).fill(JamDesign.ground)
                     .frame(width: 6, height: Self.travel).position(x: center, y: Self.height / 2)
                 Capsule().fill(accent.opacity(0.8))
                     .frame(width: 3, height: max(2, abs(y - zeroY))).position(x: center, y: (y + zeroY) / 2)
                 Rectangle().fill(accent.opacity(0.6)).frame(height: 1).position(x: center, y: zeroY)
                 RoundedRectangle(cornerRadius: 5)
-                    .fill(LinearGradient(colors: [Color(white: 0.4), Color(white: 0.19)], startPoint: .top, endPoint: .bottom))
-                    .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(.white.opacity(0.2)))
+                    .fill(JamDesign.text)
                     .overlay { Capsule().fill(accent).frame(height: 2).padding(.horizontal, 5) }
                     .shadow(color: .black.opacity(0.5), radius: 3, y: 2)
                     .frame(width: min(44, max(28, geometry.size.width - 8)), height: 24)
@@ -741,14 +739,14 @@ private struct RotaryKnob: View {
     let accent: Color
     var body: some View {
         ZStack {
-            Circle().fill(.black).shadow(color: .black.opacity(0.5), radius: 5, y: 3)
-            Circle().trim(from: 0, to: 0.75).stroke(.white.opacity(0.12), style: StrokeStyle(lineWidth: 5, lineCap: .butt))
+            Circle().fill(JamDesign.ground)
+            Circle().trim(from: 0, to: 0.75).stroke(JamDesign.control, style: StrokeStyle(lineWidth: 4, lineCap: .round))
                 .rotationEffect(.degrees(135)).padding(3)
             Circle().trim(from: 0, to: max(0.001, min(1, position)) * 0.75)
-                .stroke(accent, style: StrokeStyle(lineWidth: 5, lineCap: .butt))
+                .stroke(accent, style: StrokeStyle(lineWidth: 4, lineCap: .round))
                 .rotationEffect(.degrees(135)).padding(3)
-            Circle().fill(LinearGradient(colors: [Color(white: 0.31), Color(white: 0.11)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                .padding(11).overlay { Circle().stroke(.white.opacity(0.12), lineWidth: 1).padding(12) }
+            Circle().fill(JamDesign.control)
+                .padding(11).overlay { Circle().stroke(JamDesign.border, lineWidth: 1).padding(11) }
             Capsule().fill(accent).frame(width: 3, height: 24).offset(y: -25)
                 .rotationEffect(.degrees(-135 + min(1, max(0, position)) * 270))
             Circle().stroke(.white.opacity(0.15), lineWidth: 1).frame(width: 7, height: 7)
@@ -884,8 +882,8 @@ private struct EffectPanel: View {
                     .buttonStyle(AM4NativeButtonStyle()).accessibilityLabel("Refresh controls").disabled(busy)
             }.padding(.horizontal, 20).padding(.vertical, 8)
         }.background(AM4Appearance.panel)
-            .clipShape(RoundedRectangle(cornerRadius: 22))
-            .overlay(RoundedRectangle(cornerRadius: 22).strokeBorder(.white.opacity(0.12)))
+            .clipShape(RoundedRectangle(cornerRadius: JamDesign.radius))
+            .overlay(RoundedRectangle(cornerRadius: JamDesign.radius).strokeBorder(.white.opacity(0.12)))
             .onAppear(perform: loadPage).onChange(of: page) { _, _ in loadPage() }
             .onDisappear { Task { try? await midi.showEffectPage(AM4EffectPageSelection(slot: slot, block: blockID, page: nil)) } }
             .alert("\(effect.name) update failed", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {

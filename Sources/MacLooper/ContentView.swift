@@ -1,3 +1,4 @@
+import JamDesignKit
 import SwiftUI
 import UniformTypeIdentifiers
 import JamCore
@@ -16,53 +17,18 @@ struct ContentView: View, Equatable {
     @State private var showingChordLibrary = false
     @State private var showingScaleLibrary = false
     @State private var navigationHeight = 60.0
-    @State private var measuredLooperMinimum = 208.0
-    @State private var measuredRailLooperMinimum = 360.0
-    #if os(macOS)
-    @AppStorage("desktopLooperInRightRail") private var desktopLooperInRightRail = false
-    #endif
+    @State private var showingMix = false
+    @State private var showingMore = false
     @AppStorage("showChords") private var showingChords = true
     @AppStorage("showLooper") private var showingLooper = true
     @AppStorage("showDrummer") private var showingDrummer = true
     @AppStorage("showPlayer") private var showingPlayer = true
-    @AppStorage("audioPaneWidth") private var audioWidth = 340.0
-    @AppStorage("jamFooterHeight") private var footerHeight = 230.0
-    @AppStorage("rightRailPlayerHeight") private var railPlayerHeight = 280.0
-    @AppStorage("rightRailLooperHeight") private var railLooperHeight = 380.0
-    @AppStorage("compactPlayerDrummerHeight") private var compactRailHeight = 450.0
-    @AppStorage("portraitPlayerDrummerHeight") private var portraitPlayerDrummerHeight = 280.0
-    @AppStorage("portraitPlayerWidth") private var portraitPlayerWidth = 360.0
+    @AppStorage("audioPaneWidth") private var audioWidth = 380.0
     @State private var drumOutput: AudioDevice?
     @State private var importing = false
     @State private var importKind = ImportKind.libraryFolder
     @State private var editingDraft: SongDraft?
-    private var compactPlayerMinimumHeight: Double {
-        280
-    }
-    private var railHasLooper: Bool {
-        #if os(macOS)
-        desktopLooperInRightRail && showingLooper
-        #else
-        false
-        #endif
-    }
-    private var bottomLooperVisible: Bool { showingLooper && !railHasLooper }
-    private var railVisible: Bool { showingPlayer || railHasLooper || showingDrummer }
-    private var splitThickness: Double {
-        #if os(macOS)
-        8
-        #else
-        16
-        #endif
-    }
-    private func railMinimumHeight(compact: Bool) -> Double {
-        let count = [showingPlayer, railHasLooper, showingDrummer].filter { $0 }.count
-        return (showingPlayer ? compactPlayerMinimumHeight : 0) +
-        (railHasLooper ? measuredRailLooperMinimum : 0) +
-        (showingDrummer ? (compact || railHasLooper ? 130 : 180) : 0) +
-        Double(max(0, count - 1)) * splitThickness
-    }
-    private let accent = Color(red: 0.259, green: 0.788, blue: 0.961)
+    private let accent = JamDesign.accent
     static func == (lhs: Self, rhs: Self) -> Bool { lhs.model === rhs.model && lhs.files === rhs.files && lhs.library === rhs.library && lhs.remote === rhs.remote }
     private enum ImportKind { case libraryFolder, audioFolder, audioFile }
     private var types: [UTType] { importKind == .audioFile ? [.audio] : [.folder] }
@@ -75,94 +41,74 @@ struct ContentView: View, Equatable {
 
     var body: some View {
         GeometryReader { geo in
-            let compactHeader = geo.size.width < 1000
+            let compactHeader = geo.size.width < 1180
             VStack(spacing: 0) {
-                HStack(spacing: compactHeader ? 8 : 12) {
+                HStack(spacing: 6) {
                     ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: compactHeader ? 8 : 12) {
-                    panelButton("Songs", icon: "sidebar.left", visible: showingSongs, compact: compactHeader) {
-                        showingSongs.toggle()
-                    }
-                    #if os(iOS)
-                    .popover(isPresented: $showingSongs) { SongBrowserView(library: library, onSelectSong: revealChords, onAddSong: beginAdding)
-                        .frame(width: 310, height: max(0, geo.size.height * 0.9 - navigationHeight - 8)) }
-                    #endif
-                    panelButton("Chords", icon: "text.alignleft", visible: showingChords, compact: compactHeader) { showingChords.toggle() }
-                    panelButton("Looper", icon: "arrow.triangle.2.circlepath", visible: showingLooper, compact: compactHeader) { showingLooper.toggle() }
-                    panelButton("Drummer", icon: "square.grid.2x2", visible: showingDrummer, compact: compactHeader) { showingDrummer.toggle() }
-                    panelButton("Player", icon: "music.note.list", visible: showingPlayer, compact: compactHeader) { showingPlayer.toggle() }
-                    #if os(macOS)
-                    MacMoreMenuButton(compact: compactHeader,
-                                      openRemote: { remote.present() },
-                                      openChords: { showingChordLibrary = true },
-                                      openScales: { showingScaleLibrary = true })
-                    #else
-                    Menu {
-                        Button { remote.present() } label: { Label("AM4 Remote", systemImage: "slider.horizontal.3") }
-                        Button { showingChordLibrary = true } label: { Label("Chord Library", systemImage: "guitars") }
-                        Button { showingScaleLibrary = true } label: { Label("Scales", systemImage: "music.note.list") }
-                    } label: {
-                        HStack(spacing: compactHeader ? 5 : 8) {
-                            Text("More")
-                            Image(systemName: "chevron.down").font(.caption)
-                        }.font(compactHeader ? .callout : .body).foregroundStyle(.secondary)
-                            .padding(.horizontal, compactHeader ? 4 : 9).padding(.vertical, 6)
-                    }.menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
-                        .buttonStyle(JamPlainButtonStyle()).accessibilityLabel("More")
-                    #endif
+                        HStack(spacing: 6) {
+                    Button { showingSongs.toggle() } label: {
+                        JamDropdownLabel("Songs", icon: "music.note.list", compact: compactHeader, active: showingSongs)
+                    }.buttonStyle(JamPlainButtonStyle()).accessibilityLabel("Show or hide songs").help("Songs")
+                        .accessibilityValue(showingSongs ? "Shown" : "Hidden")
+                        .anchorPreference(key: JamDropdownPopupKey.self, value: .bounds) { anchor in
+                            showingSongs ? JamDropdownRequest(anchor: anchor, title: "Songs",
+                                content: AnyView(SongBrowserView(library: library, onSelectSong: revealChords, onAddSong: beginAdding)),
+                                close: { showingSongs = false }, width: 310, alignLeading: true) : nil
                         }
-                    }.frame(height: 32)
-                    AppReadinessBadge(model: readiness).fixedSize()
-                    Button { showingSettings.toggle() } label: { Image(systemName: "gearshape").font(.title3).frame(width: 30, height: 30) }
-                        .buttonStyle(JamPlainButtonStyle()).accessibilityLabel("Settings")
+                    panelButton("Chart", icon: "text.alignleft", visible: showingChords, compact: compactHeader) { showingChords.toggle() }
+                    panelButton("Player", icon: "waveform", visible: showingPlayer, compact: compactHeader) { showingPlayer.toggle() }
+                    panelButton("Drummer", icon: "square.grid.2x2", visible: showingDrummer, compact: compactHeader) { showingDrummer.toggle() }
+                    panelButton("Looper", icon: "arrow.triangle.2.circlepath", visible: showingLooper, compact: compactHeader) { showingLooper.toggle() }
+                    Button { showingMore.toggle() } label: {
+                        JamDropdownLabel("More", icon: compactHeader ? "ellipsis" : nil, compact: compactHeader, active: showingMore)
+                    }.buttonStyle(JamPlainButtonStyle()).accessibilityLabel("More").help("More")
+                        .anchorPreference(key: JamDropdownPopupKey.self, value: .bounds) { anchor in
+                            showingMore ? JamDropdownRequest(anchor: anchor, title: "More", content: AnyView(moreContent),
+                                close: { showingMore = false }, width: 230, height: JamDesign.target * 3 + 24, alignLeading: true) : nil
+                        }
+                        }
+                    }.frame(height: JamDesign.target)
+                    AppReadinessBadge(model: readiness, compact: compactHeader).fixedSize().padding(.trailing, 4)
+                    TempoControl(model: model, context: "Global").fixedSize().padding(.trailing, 4)
+                    Button { showingMix.toggle() } label: {
+                        Image(systemName: "slider.vertical.3")
+                    }.buttonStyle(JamIconStyle(active: showingMix)).accessibilityLabel("Mix").help("Mix Player, Drummer, and Looper volumes")
                         #if os(macOS)
-                        .anchorPreference(key: SettingsPopupAnchorKey.self, value: .bounds) { showingSettings ? $0 : nil }
+                        .anchorPreference(key: VolumePopupKey.self, value: .bounds) { anchor in
+                            showingMix ? VolumePopupRequest(anchor: anchor,
+                                content: AnyView(JamMixView(looper: model, files: files, drums: AudioEngineHost.shared.drums)),
+                                close: { showingMix = false }, width: 376, height: 320) : nil
+                        }
                         #else
-                        .popover(isPresented: $showingSettings, arrowEdge: .top) {
-                            settingsContent
-                                .frame(width: min(430, max(0, geo.size.width - 32)),
-                                       height: max(0, geo.size.height * 0.9 - navigationHeight - 8))
+                        .popover(isPresented: $showingMix, arrowEdge: .top) {
+                            JamMixView(looper: model, files: files, drums: AudioEngineHost.shared.drums)
                                 .presentationCompactAdaptation(.popover)
                         }
                         #endif
-                }.padding(.horizontal, compactHeader ? 14 : 18).padding(.vertical, 14)
+                    Button { showingSettings.toggle() } label: { JamDropdownLabel("Settings", icon: "gearshape", compact: true, active: showingSettings) }
+                        .buttonStyle(JamPlainButtonStyle()).accessibilityLabel("Settings").help("Settings")
+                        .anchorPreference(key: JamDropdownPopupKey.self, value: .bounds) { anchor in
+                            showingSettings ? JamDropdownRequest(anchor: anchor, title: "Settings", content: AnyView(settingsContent),
+                                close: { showingSettings = false }, width: 430) : nil
+                        }
+                }.padding(.horizontal, compactHeader ? 14 : 18).padding(.vertical, 12)
+                    .background(JamDesign.card)
                     .onGeometryChange(for: Double.self) { $0.size.height } action: { navigationHeight = $0 }
                 Divider()
                 panes(width: geo.size.width, height: geo.size.height)
-                    .environment(\.jamBrowserBounds, geo.frame(in: .global))
 
             }
+            .overlayPreferenceValue(JamDropdownPopupKey.self) { request in
+                if let request { JamDropdownPopup(request: request, top: navigationHeight) }
+            }
             #if os(macOS)
-            .overlayPreferenceValue(AudioBrowserPopupKey.self) { request in
-                if let request { WindowAudioBrowserPopup(request: request, top: navigationHeight) }
-            }
-            .overlay(alignment: .topLeading) {
-                if showingSongs {
-                    ZStack(alignment: .topLeading) {
-                        Color.black.opacity(0.001).contentShape(Rectangle())
-                            .onTapGesture { showingSongs = false }
-                        JamPopupSurface(edge: .top, pointer: compactHeader ? 34 : 42) {
-                            SongBrowserView(library: library, onSelectSong: revealChords, onAddSong: beginAdding)
-                        }
-                            .frame(width: min(310, max(0, geo.size.width - 28)),
-                                   height: max(0, geo.size.height * 0.9 - navigationHeight + 2))
-                            .padding(.leading, 14).padding(.top, navigationHeight - 2)
-                        // The popup can open before its list owns keyboard focus.
-                        Button("Close Songs") { showingSongs = false }
-                            .keyboardShortcut(.cancelAction)
-                            .frame(width: 0, height: 0).opacity(0).accessibilityHidden(true)
-                    }
-                }
-            }
-            .overlayPreferenceValue(SettingsPopupAnchorKey.self) { anchor in
-                if let anchor {
-                    WindowSettingsPopup(anchor: anchor, close: { showingSettings = false }) { settingsContent }
-                }
-            }
             .overlayPreferenceValue(VolumePopupKey.self) { request in
                 if let request { WindowVolumePopup(request: request) }
             }
             #endif
+            .onChange(of: showingSongs) { _, showing in if showing { showingMore = false; showingSettings = false } }
+            .onChange(of: showingMore) { _, showing in if showing { showingSongs = false; showingSettings = false } }
+            .onChange(of: showingSettings) { _, showing in if showing { showingSongs = false; showingMore = false } }
             .allowsHitTesting(editingDraft == nil && !remote.isPresented && !showingChordLibrary && !showingScaleLibrary)
             .accessibilityHidden(editingDraft != nil || remote.isPresented || showingChordLibrary || showingScaleLibrary)
             .overlay {
@@ -187,7 +133,7 @@ struct ContentView: View, Equatable {
                 }
             }
         }
-        .background(Color(red: 0.065, green: 0.075, blue: 0.085)).tint(accent)
+        .background(JamDesign.ground).foregroundStyle(JamDesign.text).tint(accent)
         .modifier(DrummerEditorPresentation(drums: AudioEngineHost.shared.drums))
         .fileImporter(isPresented: $importing, allowedContentTypes: types) { result in
             switch result {
@@ -236,150 +182,103 @@ struct ContentView: View, Equatable {
         }
         #endif
     }
+    private var moreContent: some View {
+        VStack(spacing: 0) {
+            moreItem("AM4 Remote", icon: "slider.horizontal.3") { remote.present() }
+            moreItem("Chord Library", icon: "guitars") { showingChordLibrary = true }
+            moreItem("Scales", icon: "music.note.list") { showingScaleLibrary = true }
+        }.padding(8).frame(maxWidth: .infinity).background(JamDesign.card)
+    }
+    private func moreItem(_ title: String, icon: String, action: @escaping () -> Void) -> some View {
+        Button { showingMore = false; action() } label: {
+            Label(title, systemImage: icon).font(.system(size: 14, weight: .medium))
+                .frame(maxWidth: .infinity, minHeight: JamDesign.target, alignment: .leading).padding(.horizontal, 10)
+        }.buttonStyle(JamPlainButtonStyle()).accessibilityLabel(title)
+    }
     private func panelButton(_ title: String, icon: String, visible: Bool, compact: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack(spacing: compact ? 5 : 8) {
-                Image(systemName: icon)
-                Text(title)
-            }.font(compact ? .callout : .body).foregroundStyle(visible ? accent : .secondary)
-                .padding(.horizontal, compact ? 4 : 9).padding(.vertical, 6)
-        }
-            .buttonStyle(JamPlainButtonStyle()).accessibilityLabel("Show or hide \(title.lowercased())")
+            HStack(spacing: 7) {
+                Image(systemName: icon).font(.system(size: 17, weight: .regular))
+                if !compact { Text(title).font(.system(size: 14, weight: .semibold)) }
+            }.foregroundStyle(visible ? JamDesign.accent : JamDesign.secondary)
+                .padding(.horizontal, compact ? 0 : 11)
+                .frame(minWidth: JamDesign.target, minHeight: JamDesign.target)
+                .background(visible ? JamDesign.accent.opacity(0.13) : .clear, in: RoundedRectangle(cornerRadius: 8))
+        }.buttonStyle(JamPlainButtonStyle()).help(title)
+            .accessibilityLabel("Show or hide \(title == "Chart" ? "chords" : title.lowercased())")
             .accessibilityValue(visible ? "Shown" : "Hidden")
     }
+
     @ViewBuilder private func panes(width: Double, height: Double) -> some View {
-        let workspaceVisible = showingChords || railVisible
-        #if os(iOS)
-        let pairedPortrait = height > width && width >= 656
+        // Capture the song before layout closures so selections update immediately.
+        let song = library.selectedSong
+        #if os(macOS)
+        desktopWorkspace(song: song)
         #else
-        let pairedPortrait = false
-        #endif
-        if workspaceVisible && bottomLooperVisible {
-            ResizableSplit(axis: .vertical, side: .trailing, size: $footerHeight, defaultSize: 230,
-                           minimumLeading: 200, minimumTrailing: measuredLooperMinimum,
-                           label: "Resize chart and jam controls") {
-                chartAndPlayer(windowWidth: width, pairedPortrait: pairedPortrait)
-            } trailing: { looperPane }
-        } else if workspaceVisible {
-            chartAndPlayer(windowWidth: width, pairedPortrait: pairedPortrait)
-        } else if bottomLooperVisible {
-            looperPane
-        } else { Color.clear.frame(maxWidth: .infinity, maxHeight: .infinity) }
-    }
-    @ViewBuilder private var portraitPlayerAndDrummer: some View {
-        if showingPlayer && showingDrummer {
-            ResizableSplit(axis: .horizontal, side: .leading, size: $portraitPlayerWidth, defaultSize: 360,
-                           minimumLeading: 320, minimumTrailing: 240, label: "Resize portrait Player and Drummer") {
-                ScrollView { AudioFileRail(model: files, accent: accent, compact: true) }
-                    .background(Color(red: 0.075, green: 0.085, blue: 0.10))
-            } trailing: { drummerPane(compact: true) }
-        } else { rightRail(compact: true) }
-    }
-    private func chartAndPlayer(windowWidth: Double, pairedPortrait: Bool = false) -> some View {
-        let chordsVisible = showingChords, showsRail = railVisible, looperInRail = railHasLooper
-        // Read the selection outside GeometryReader: a captured model reference
-        // alone does not invalidate its content when only the song changes.
-        let selectedSong = library.selectedSong
-        let compactMinimum = pairedPortrait ? (showingPlayer ? compactPlayerMinimumHeight : 130) : railMinimumHeight(compact: true)
-        return GeometryReader { geo in
-            if chordsVisible && showsRail {
-                if !pairedPortrait && windowWidth >= 1000 && geo.size.width >= 660 {
-                    ResizableSplit(axis: .horizontal, side: .trailing, size: $audioWidth, defaultSize: 340,
-                                   minimumLeading: 300, minimumTrailing: looperInRail ? 340 : 320, label: "Resize right rail") {
-                        ChordChartView(song: selectedSong, library: library, edit: beginEditing)
-                    } trailing: { rightRail(compact: false) }
-                } else {
-                    ResizableSplit(axis: .vertical, side: .trailing,
-                                   size: pairedPortrait ? $portraitPlayerDrummerHeight : $compactRailHeight, defaultSize: compactMinimum,
-                                   minimumLeading: 140, minimumTrailing: compactMinimum, label: "Resize compact player and drummer") {
-                        ChordChartView(song: selectedSong, library: library, edit: beginEditing)
-                    } trailing: {
-                        if pairedPortrait { portraitPlayerAndDrummer }
-                        else { rightRail(compact: true) }
+        if height > width && width >= 656 {
+            VStack(spacing: JamDesign.gap) {
+                if showingChords { ChordChartView(song: song, library: library, edit: beginEditing).frame(maxHeight: .infinity) }
+                if showingDrummer { DrummerPanel(drums: AudioEngineHost.shared.drums, output: drumOutput, compact: true) }
+                if showingPlayer || showingLooper {
+                    EqualHeightCardRow(spacing: JamDesign.gap) {
+                        if showingPlayer { AudioFileRail(model: files, accent: accent, compact: true, fillsHeight: true) }
+                        if showingLooper { LooperPanel(model: model, fillsHeight: true) }
                     }
                 }
-            } else if chordsVisible {
-                ChordChartView(song: selectedSong, library: library, edit: beginEditing)
-            } else if showsRail {
-                if pairedPortrait { portraitPlayerAndDrummer }
-                else { rightRail(compact: windowWidth < 1000) }
-            }
-        }
-    }
-    private func rightRail(compact: Bool) -> some View {
-        // Capture values before the geometry closure so AppStorage visibility
-        // changes invalidate its content even when the rail's size is unchanged.
-        let playerVisible = showingPlayer, looperInRail = railHasLooper, drummerVisible = showingDrummer
-        let compactDrummer = compact || looperInRail
-        let count = [playerVisible, looperInRail, drummerVisible].filter { $0 }.count
-        let minimum = railMinimumHeight(compact: compact)
-        return GeometryReader { geo in
-            if count > 1 && geo.size.height < minimum {
-                // A short window can scroll the rail without squeezing out controls.
-                ScrollView {
-                    VStack(spacing: 0) {
-                        if playerVisible {
-                            AudioFileRail(model: files, accent: accent, compact: true)
-                            Divider()
-                        }
-                        if drummerVisible {
-                            DrummerPanel(drums: AudioEngineHost.shared.drums, timing: model, output: drumOutput, compact: compactDrummer)
-                                .frame(minHeight: compactDrummer ? 130 : 180)
-                            if looperInRail { Divider() }
-                        }
-                        if looperInRail {
-                            loopPane(compact: true).frame(height: measuredRailLooperMinimum)
-                        }
-                    }
-                }
-            } else if playerVisible && (looperInRail || drummerVisible) {
-                ResizableSplit(axis: .vertical, side: .leading, size: $railPlayerHeight, defaultSize: compactPlayerMinimumHeight,
-                               minimumLeading: compactPlayerMinimumHeight,
-                               minimumTrailing: minimum - compactPlayerMinimumHeight - splitThickness,
-                               label: drummerVisible ? "Resize Player and Drummer" : "Resize Player and Looper") {
-                    ScrollView { AudioFileRail(model: files, accent: accent, compact: true) }
-                } trailing: { lowerRail(hasLooper: looperInRail, hasDrummer: drummerVisible, compactDrummer: compactDrummer) }
-            } else if playerVisible {
-                ScrollView { AudioFileRail(model: files, accent: accent, compact: true, minimumHeight: geo.size.height) }
-            } else {
-                lowerRail(hasLooper: looperInRail, hasDrummer: drummerVisible, compactDrummer: compactDrummer)
-            }
-        }.background(Color(red: 0.075, green: 0.085, blue: 0.10))
-    }
-    @ViewBuilder private func lowerRail(hasLooper: Bool, hasDrummer: Bool, compactDrummer: Bool) -> some View {
-        if hasLooper && hasDrummer {
-            ResizableSplit(axis: .vertical, side: .trailing, size: $railLooperHeight, defaultSize: 380,
-                           minimumLeading: compactDrummer ? 130 : 180, minimumTrailing: measuredRailLooperMinimum,
-                           label: "Resize Drummer and Looper") {
-                drummerPane(compact: compactDrummer)
-            } trailing: { loopPane(compact: true) }
-        } else if hasLooper {
-            loopPane(compact: true)
+                if !showingChords { Spacer(minLength: 0) }
+            }.padding(12)
+        } else if width >= 656 {
+            horizontalWorkspace(song: song, includesLooper: true).padding(12)
         } else {
-            drummerPane(compact: compactDrummer)
+            VStack(spacing: JamDesign.gap) {
+                if showingChords { ChordChartView(song: song, library: library, edit: beginEditing).frame(maxHeight: .infinity) }
+                if showingPlayer || showingDrummer || showingLooper {
+                    cardRail(includesLooper: true)
+                        .frame(maxHeight: showingChords ? max(200, height * 0.52) : .infinity)
+                }
+            }.padding(12)
+        }
+        #endif
+    }
+    private func desktopWorkspace(song: LibrarySong?) -> some View {
+        horizontalWorkspace(song: song, includesLooper: true).padding(16)
+    }
+    @ViewBuilder private func horizontalWorkspace(song: LibrarySong?, includesLooper: Bool) -> some View {
+        let hasCards = showingPlayer || showingDrummer || (includesLooper && showingLooper)
+        if showingChords && hasCards {
+            ResizableSplit(axis: .horizontal, side: .trailing, size: $audioWidth, defaultSize: 380,
+                           minimumLeading: 280, minimumTrailing: 328, label: "Resize right rail") {
+                ChordChartView(song: song, library: library, edit: beginEditing)
+            } trailing: { cardRail(includesLooper: includesLooper).padding(.leading, 8) }
+        } else if showingChords {
+            ChordChartView(song: song, library: library, edit: beginEditing)
+        } else if hasCards {
+            cardRail(includesLooper: includesLooper).frame(maxWidth: 620)
+                .frame(maxWidth: .infinity, alignment: .center)
+        } else { Color.clear }
+    }
+    private func cardRail(includesLooper: Bool) -> some View {
+        ScrollView {
+            VStack(spacing: JamDesign.gap) {
+                if showingPlayer { playerCard }
+                if showingDrummer { drummerCard }
+                if includesLooper && showingLooper { looperCard }
+            }.padding(.bottom, 4)
         }
     }
-    private var looperPane: some View { loopPane(compact: false) }
-    private func loopPane(compact: Bool) -> some View {
-        GeometryReader { geo in
-            ScrollView {
-                LooperPanel(model: model, availableHeight: geo.size.height,
-                            minimumHeightChanged: {
-                    if compact { measuredRailLooperMinimum = max(320, $0) }
-                    else { measuredLooperMinimum = max(208, $0) }
-                })
-                    .frame(maxWidth: .infinity, minHeight: geo.size.height, alignment: .topLeading)
-            }
-        }.background(Color(red: 0.075, green: 0.085, blue: 0.10))
+    private var playerCard: some View { AudioFileRail(model: files, accent: accent, compact: true) }
+    private var drummerCard: some View {
+        DrummerPanel(drums: AudioEngineHost.shared.drums, output: drumOutput,
+                     compact: isIPad)
     }
-    private func drummerPane(compact: Bool) -> some View {
-        GeometryReader { geo in
-            ScrollView {
-                DrummerPanel(drums: AudioEngineHost.shared.drums, timing: model, output: drumOutput, compact: compact)
-                    .frame(maxWidth: .infinity, minHeight: geo.size.height, idealHeight: geo.size.height, alignment: .topLeading)
-            }
-        }.background(Color(red: 0.075, green: 0.085, blue: 0.10))
+    private var isIPad: Bool {
+        #if os(iOS)
+        true
+        #else
+        false
+        #endif
     }
+    private var looperCard: some View { LooperPanel(model: model) }
     private func endEditing() {
         editingDraft = nil; library.editing = false
         Task { await library.refresh() }
@@ -395,4 +294,27 @@ struct ContentView: View, Equatable {
     }
     private func revealChords() { showingChords = true; showingSongs = false }
     private func beginImport(_ kind: ImportKind) { showingSettings = false; importKind = kind; importing = true }
+}
+
+/// Match sibling card heights to the taller content, without a stored fixed size.
+private struct EqualHeightCardRow: Layout {
+    let spacing: CGFloat
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard !subviews.isEmpty else { return .zero }
+        let count = CGFloat(subviews.count)
+        let gap = spacing * max(0, count - 1)
+        let idealWidth = subviews.map { $0.sizeThatFits(.unspecified).width }.max() ?? 0
+        let width = proposal.width ?? (idealWidth * count + gap)
+        let cardWidth = max(0, (width - gap) / count)
+        let height = subviews.map { $0.sizeThatFits(ProposedViewSize(width: cardWidth, height: nil)).height }.max() ?? 0
+        return CGSize(width: width, height: height)
+    }
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard !subviews.isEmpty else { return }
+        let width = max(0, (bounds.width - spacing * CGFloat(subviews.count - 1)) / CGFloat(subviews.count))
+        for (index, subview) in subviews.enumerated() {
+            subview.place(at: CGPoint(x: bounds.minX + CGFloat(index) * (width + spacing), y: bounds.minY),
+                          anchor: .topLeading, proposal: ProposedViewSize(width: width, height: bounds.height))
+        }
+    }
 }

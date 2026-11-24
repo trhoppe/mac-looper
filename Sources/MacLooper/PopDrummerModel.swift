@@ -21,6 +21,11 @@ typealias PluginEditorController = UIViewController
 }
 
 @MainActor final class PopDrummerModel: ObservableObject {
+    struct Rhythm: Identifiable, Equatable {
+        let id: Int
+        let name: String
+        var displayName: String { PopDrummerModel.rhythmDisplayName(name) ?? name }
+    }
     // Current full audio instrument. Never select the old or MIDI-only component.
     static let component = AudioComponentDescription(componentType: kAudioUnitType_MusicDevice,
         componentSubType: 0x706f7064, componentManufacturer: 0x4c6d4274, componentFlags: 0, componentFlagsMask: 0)
@@ -29,6 +34,10 @@ typealias PluginEditorController = UIViewController
     @Published private(set) var playing = false
     @Published var error: String?
     @Published var showingEditor = false
+    @Published private(set) var rhythms: [Rhythm] = []
+    @Published private(set) var selectedRhythmID: Int?
+    @Published private(set) var selectingRhythm = false
+    @Published private(set) var selectedRhythmName: String?
     @Published private(set) var editor: PluginEditorController?
     @Published var tempo = 120.0 { didSet { transport.tempo = tempo } }
     @Published var volume = 1.0 {
@@ -47,6 +56,9 @@ typealias PluginEditorController = UIViewController
     private var transportIntent = UUID()
     private var registrationObserver: NSObjectProtocol?
     private let instrumentLoader: (() async throws -> AVAudioUnit)?
+    private var rhythmTree: AUParameterTree?
+    private var rhythmObserver: AUParameterObserverToken?
+    private var rhythmSaveTask: Task<Void, Never>?
     init(instrumentLoader: (() async throws -> AVAudioUnit)? = nil) {
         self.instrumentLoader = instrumentLoader
         registrationObserver = NotificationCenter.default.addObserver(
@@ -55,6 +67,8 @@ typealias PluginEditorController = UIViewController
             }
     }
     deinit {
+        rhythmSaveTask?.cancel()
+        if let rhythmObserver { rhythmTree?.removeParameterObserver(rhythmObserver) }
         // Detach while AVAudioUnit still owns its underlying unit. In particular,
         // an AUv2 bridge must not be left with callbacks during wrapper teardown.
         transport.detach()
@@ -114,6 +128,7 @@ typealias PluginEditorController = UIViewController
                 self.transport.tempo = self.tempo
                 self.transport.attach(to: node.auAudioUnit)
                 self.node = node; self.ready = true
+                self.observeRhythms()
             } catch {
                 if generation == loadGeneration { self.failureCached = true; self.error = error.localizedDescription }
             }
@@ -123,6 +138,9 @@ typealias PluginEditorController = UIViewController
         if generation == loadGeneration { loadTask = nil }
     }
     func resetAfterAudioServiceReset() {
+        rhythmSaveTask?.cancel()
+        if let rhythmObserver { rhythmTree?.removeParameterObserver(rhythmObserver) }
+        rhythmObserver = nil; rhythmTree = nil; rhythms = []; selectedRhythmID = nil; selectedRhythmName = nil; selectingRhythm = false
         loadGeneration = UUID(); loadTask?.cancel(); loadTask = nil
         setPlaying(false); transport.detach(); node = nil; ready = false; loading = false
         failureCached = false; pendingState = nil; editor = nil; showingEditor = false
@@ -155,6 +173,82 @@ typealias PluginEditorController = UIViewController
         guard let node, node.engine != nil, node.auAudioUnit.renderResourcesAllocated, let state = pendingState else { return }
         node.auAudioUnit.fullState = state
         pendingState = nil
+        refreshRhythms()
+    }
+    private func observeRhythms() {
+        if let rhythmObserver { rhythmTree?.removeParameterObserver(rhythmObserver) }
+        rhythmTree = node?.auAudioUnit.parameterTree
+        rhythmObserver = rhythmTree?.token(byAddingParameterObserver: { [weak self] _, _ in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.refreshRhythms()
+                self.rhythmSaveTask?.cancel()
+                self.rhythmSaveTask = Task { @MainActor [weak self] in
+                    do { try await Task.sleep(for: .milliseconds(300)) } catch { return }
+                    self?.saveState()
+                }
+            }
+        })
+        refreshRhythms()
+    }
+    nonisolated static func rhythmDisplayName(_ name: String) -> String? {
+        let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let prefix = "User - "
+        guard name.lowercased().hasPrefix(prefix.lowercased()) else { return nil }
+        let display = String(name.dropFirst(prefix.count)).trimmingCharacters(in: .whitespacesAndNewlines)
+        return display.isEmpty ? nil : display
+    }
+    static func rhythmChoices(_ parameter: AUParameter) -> [Rhythm] {
+        (parameter.valueStrings ?? []).enumerated().compactMap { index, name -> Rhythm? in
+            guard rhythmDisplayName(name) != nil,
+                  Float(index) >= parameter.minValue, Float(index) <= parameter.maxValue else { return nil }
+            return Rhythm(id: index, name: name)
+        }.sorted {
+            let order = $0.displayName.localizedStandardCompare($1.displayName)
+            return order == .orderedSame ? $0.id < $1.id : order == .orderedAscending
+        }
+    }
+    func refreshRhythms() {
+        guard let parameter = node?.auAudioUnit.parameterTree?.allParameters.first(where: { $0.identifier == "Param_Groove" }) else {
+            rhythms = []; selectedRhythmID = nil; selectedRhythmName = nil; return
+        }
+        let choices = Self.rhythmChoices(parameter)
+        if rhythms != choices { rhythms = choices }
+        let value = parameter.value
+        let id = value.isFinite ? Int(value.rounded()) : -1
+        selectedRhythmID = choices.contains { $0.id == id } ? id : nil
+        selectedRhythmName = choices.first { $0.id == id }?.displayName
+    }
+    /// Load names and restore the saved setup without opening the editor or starting transport.
+    func loadRhythms(output: AudioDevice?) async {
+        await prepare()
+        guard ready else { return }
+        if let output {
+            do { try await AudioEngineHost.shared.startDrummer(output: output); error = nil }
+            catch { self.error = error.localizedDescription }
+        }
+        refreshRhythms()
+    }
+    func selectRhythm(_ rhythm: Rhythm, output: AudioDevice?) async {
+        guard !selectingRhythm else { return }
+        let generation = loadGeneration
+        selectingRhythm = true
+        defer { if generation == loadGeneration { selectingRhythm = false } }
+        await loadRhythms(output: output)
+        guard generation == loadGeneration else { return }
+        guard let node, node.auAudioUnit.renderResourcesAllocated, pendingState == nil,
+              let parameter = node.auAudioUnit.parameterTree?.allParameters.first(where: { $0.identifier == "Param_Groove" }) else { return }
+        // Re-resolve the name after loading; user-library edits can change indices.
+        let choices = Self.rhythmChoices(parameter)
+        guard let current = choices.first(where: { $0 == rhythm }) ?? choices.first(where: { $0.name == rhythm.name }) else {
+            error = "That rhythm is no longer available. Choose another rhythm."; refreshRhythms(); return
+        }
+        parameter.value = Float(current.id)
+        refreshRhythms()
+        // Allow the instrument to finish applying its groove before capturing state.
+        do { try await Task.sleep(for: .milliseconds(200)) } catch { return }
+        guard self.node === node else { return }
+        refreshRhythms(); saveState()
     }
     func setPlaying(_ value: Bool) {
         if !value { transportIntent = UUID() }
@@ -203,6 +297,7 @@ typealias PluginEditorController = UIViewController
         #endif
     }
     func saveState() {
+        refreshRhythms()
         guard instrumentLoader == nil, pendingState == nil, node?.auAudioUnit.renderResourcesAllocated == true,
               let state = node?.auAudioUnit.fullState,
               PropertyListSerialization.propertyList(state, isValidFor: .binary) else { return }

@@ -1,3 +1,4 @@
+import JamDesignKit
 import SwiftUI
 import JamCore
 
@@ -24,7 +25,7 @@ struct GuitarChordStrip: View {
                             }
                         }
                     }
-                }.padding(.horizontal, 18).padding(.top, 2).padding(.bottom, 14)
+                }.padding(.horizontal, 8).padding(.top, 2).padding(.bottom, 6)
             }
             if let saveError {
                 Text(saveError).font(.caption).foregroundStyle(.orange).padding(.horizontal, 18).padding(.bottom, 8)
@@ -46,7 +47,7 @@ private struct GuitarChordCard: View {
     let enabled: Bool
     let choose: (GuitarChordShape) -> Void
     @State private var hovering = false
-    private let accent = Color(red: 0.259, green: 0.788, blue: 0.961)
+    private let accent = JamDesign.accent
     private var controlsVisible: Bool {
         #if os(macOS)
         hovering
@@ -134,7 +135,7 @@ struct GuitarChordDiagram: View {
             }
             for string in 0..<6 {
                 let fret = shape.frets[string], x = left + Double(string) * stringWidth
-                let color: Color = rootStrings.contains(string) ? Color(red: 0.259, green: 0.788, blue: 0.961) : .white
+                let color: Color = rootStrings.contains(string) ? JamDesign.accent : .white
                 let degree = degreeLabels.flatMap { $0.indices.contains(string) ? $0[string] : nil }
                 if fret <= 0 {
                     if fret == 0, let degree, !degree.isEmpty {

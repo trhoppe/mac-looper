@@ -1,3 +1,4 @@
+import JamDesignKit
 import SwiftUI
 
 /// Publishes presentation changes only. Frequent MIDI state updates are observed
@@ -33,17 +34,13 @@ import SwiftUI
     public init(session: AM4RemoteSession) { self.session = session }
     public var body: some View {
         VStack(spacing: 0) {
-            HStack {
-                Label("AM4 Remote", systemImage: "slider.horizontal.3").font(.headline)
-                Spacer()
-                Button("Close") { session.dismiss() }.buttonStyle(AM4NativeButtonStyle())
-                    .accessibilityLabel("Close AM4 Remote")
-            }.padding(18)
+            JamScreenHeader("AM4 Remote", icon: "slider.horizontal.3", closeOnEscape: false, close: { session.dismiss() })
             Divider()
             AM4RemoteView(midi: session.connection)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(red: 0.065, green: 0.075, blue: 0.085))
+        .background(JamDesign.ground)
+        .foregroundStyle(JamDesign.text).tint(JamDesign.accent)
         .preferredColorScheme(.dark)
     }
 }

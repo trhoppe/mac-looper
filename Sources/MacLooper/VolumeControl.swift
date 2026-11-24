@@ -1,3 +1,4 @@
+import JamDesignKit
 import SwiftUI
 #if os(macOS)
 import AppKit
@@ -38,13 +39,13 @@ struct VolumeControl: View {
         Slider(value: $volume, in: 0...1).hoverHighlight()
             .accessibilityLabel("\(name) volume")
             .padding(.horizontal, 16).padding(.vertical, 12).frame(width: 236)
-            .background(Color(red: 0.075, green: 0.085, blue: 0.10))
+            .background(JamDesign.card)
     }
 }
 
 // Keep partial input local. Typing replaces the selected percentage rather than
 // having a formatter rewrite the number or caret after every keystroke.
-private struct VolumeNumberField {
+struct VolumeNumberField {
     @Binding var value: Double
     let label: String
     func accept(_ text: String, finishing: Bool) -> Double? {
@@ -117,6 +118,8 @@ struct VolumePopupRequest {
     let anchor: Anchor<CGRect>
     let content: AnyView
     let close: () -> Void
+    var width: CGFloat = 236
+    var height: CGFloat = 64
 }
 struct VolumePopupKey: PreferenceKey {
     static var defaultValue: VolumePopupRequest? { nil }
@@ -129,9 +132,9 @@ struct WindowVolumePopup: View {
     var body: some View {
         GeometryReader { geo in
             let trigger = geo[request.anchor]
-            let width = min(236.0, max(0, geo.size.width - 16))
+            let width = min(request.width, max(0, geo.size.width - 16))
             let x = min(max(8, trigger.midX - width / 2), max(8, geo.size.width - width - 8))
-            let y = min(trigger.maxY + 4, max(8, geo.size.height - 64))
+            let y = min(trigger.maxY + 4, max(8, geo.size.height - request.height - 8))
             ZStack(alignment: .topLeading) {
                 Color.black.opacity(0.001).contentShape(Rectangle()).onTapGesture(perform: request.close)
                 JamPopupSurface(edge: .top, pointer: trigger.midX - x) { request.content }

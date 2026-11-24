@@ -143,6 +143,12 @@
 			"path" = "Sources/MacLooper/JamMIDIInput.swift";
 			"sourceTree" = "SOURCE_ROOT";
 		};
+		"EC3015B057A741DDF0B82491" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/MacLooper/JamMixView.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
 		"B1F36E505DF74661F0D91FE8" = {
 			"isa" = "PBXFileReference";
 			"lastKnownFileType" = "sourcecode.swift";
@@ -165,12 +171,6 @@
 			"isa" = "PBXFileReference";
 			"lastKnownFileType" = "sourcecode.swift";
 			"path" = "Sources/MacLooper/MacLooperApp.swift";
-			"sourceTree" = "SOURCE_ROOT";
-		};
-		"E4F41D9F9B447279DB4A7A09" = {
-			"isa" = "PBXFileReference";
-			"lastKnownFileType" = "sourcecode.swift";
-			"path" = "Sources/MacLooper/MacMoreMenuButton.swift";
 			"sourceTree" = "SOURCE_ROOT";
 		};
 		"1763C05D4FB09C7459AD520D" = {
@@ -247,6 +247,10 @@
 			"isa" = "XCLocalSwiftPackageReference";
 			"relativePath" = "Packages/AM4RemoteKit";
 		};
+		"A58CA6ED6528C44D5CB4ACD4" = {
+			"isa" = "XCLocalSwiftPackageReference";
+			"relativePath" = "Packages/JamDesignKit";
+		};
 		"347C5000B9C2D8FA065C16E9" = {
 			"isa" = "PBXFileReference";
 			"explicitFileType" = "wrapper.application";
@@ -289,6 +293,15 @@
 		"2307A89F24113CEF89F002A4" = {
 			"isa" = "PBXBuildFile";
 			"productRef" = "BC673CD61FE16E60FE816EA8";
+		};
+		"332BC7C9937B8FF8B54F167C" = {
+			"isa" = "XCSwiftPackageProductDependency";
+			"package" = "A58CA6ED6528C44D5CB4ACD4";
+			"productName" = "JamDesignKit";
+		};
+		"59A68A51A3CC300256EF11F5" = {
+			"isa" = "PBXBuildFile";
+			"productRef" = "332BC7C9937B8FF8B54F167C";
 		};
 		"AA865ED4AC983DE909866580" = {
 			"isa" = "PBXBuildFile";
@@ -382,6 +395,10 @@
 			"isa" = "PBXBuildFile";
 			"fileRef" = "B5A944299A6AD753BE5A5F0C";
 		};
+		"6F12CFE93D5B1160CF23A919" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "EC3015B057A741DDF0B82491";
+		};
 		"FBC9948C6864BB7B3EBA9820" = {
 			"isa" = "PBXBuildFile";
 			"fileRef" = "B1F36E505DF74661F0D91FE8";
@@ -397,10 +414,6 @@
 		"2D1F663B78A05CD4557BA704" = {
 			"isa" = "PBXBuildFile";
 			"fileRef" = "798871092DAD7073641FF444";
-		};
-		"103B5B8300B1EE5525AE4424" = {
-			"isa" = "PBXBuildFile";
-			"fileRef" = "E4F41D9F9B447279DB4A7A09";
 		};
 		"1F222D8300114981C375476C" = {
 			"isa" = "PBXBuildFile";
@@ -469,11 +482,11 @@
 				"2614A94B4BC4434ABF2DDE22",
 				"390B6C565BAF33A0DB40CA1A",
 				"AAD2004C151997FB9023EEEA",
+				"6F12CFE93D5B1160CF23A919",
 				"FBC9948C6864BB7B3EBA9820",
 				"D5E428B19E85E7CAF6F17B6D",
 				"0962DF64D73C3C7D335DD27E",
 				"2D1F663B78A05CD4557BA704",
-				"103B5B8300B1EE5525AE4424",
 				"1F222D8300114981C375476C",
 				"9D117CEB0DF4702CD504E814",
 				"5C25A58EF9926AD3F20104E2",
@@ -495,6 +508,7 @@
 				"1F77C1BD194B31E3C007EB75",
 				"36D8BF34E6EAE2F74C237376",
 				"2307A89F24113CEF89F002A4",
+				"59A68A51A3CC300256EF11F5",
 			);
 			"runOnlyForDeploymentPostprocessing" = "0";
 		};
@@ -604,6 +618,7 @@
 				"28B15BFCD6A4F660833177B6",
 				"34FCA638CE1984F052CA1CEE",
 				"BC673CD61FE16E60FE816EA8",
+				"332BC7C9937B8FF8B54F167C",
 			);
 			"productName" = "Mac Jams";
 			"productReference" = "347C5000B9C2D8FA065C16E9";
@@ -651,6 +666,15 @@
 		"748A489AF0B127053AB582FF" = {
 			"isa" = "PBXBuildFile";
 			"productRef" = "B0A018D82C1C8DD029DB8EF0";
+		};
+		"76D39E316E24D62ADE121E29" = {
+			"isa" = "XCSwiftPackageProductDependency";
+			"package" = "A58CA6ED6528C44D5CB4ACD4";
+			"productName" = "JamDesignKit";
+		};
+		"C1D99BE269F063BB1722A142" = {
+			"isa" = "PBXBuildFile";
+			"productRef" = "76D39E316E24D62ADE121E29";
 		};
 		"C0AF370DB8ACF5EE07B35234" = {
 			"isa" = "PBXBuildFile";
@@ -744,6 +768,10 @@
 			"isa" = "PBXBuildFile";
 			"fileRef" = "B5A944299A6AD753BE5A5F0C";
 		};
+		"5CA86D5011786EF10BEDA97C" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "EC3015B057A741DDF0B82491";
+		};
 		"D6A82B1FE1B863BFD48342FE" = {
 			"isa" = "PBXBuildFile";
 			"fileRef" = "B1F36E505DF74661F0D91FE8";
@@ -759,10 +787,6 @@
 		"AD0E7A142B22344DC87C8647" = {
 			"isa" = "PBXBuildFile";
 			"fileRef" = "798871092DAD7073641FF444";
-		};
-		"7389AFA38291AB63B625F3D7" = {
-			"isa" = "PBXBuildFile";
-			"fileRef" = "E4F41D9F9B447279DB4A7A09";
 		};
 		"44B1D5AC46EC46B353D849FF" = {
 			"isa" = "PBXBuildFile";
@@ -831,11 +855,11 @@
 				"70E2F95249E52F23F143D825",
 				"CD452A9E3539627F3AF0A042",
 				"3AD9B657139CF95576202072",
+				"5CA86D5011786EF10BEDA97C",
 				"D6A82B1FE1B863BFD48342FE",
 				"6AB030F49145017D0C180E30",
 				"52E5F72E81016648DC9E8F9C",
 				"AD0E7A142B22344DC87C8647",
-				"7389AFA38291AB63B625F3D7",
 				"44B1D5AC46EC46B353D849FF",
 				"D4125D7A77E56526B72A0D7E",
 				"E4360BCAB646D950F7C01D52",
@@ -857,6 +881,7 @@
 				"D75F13A104430A494A6DC55E",
 				"E1710DAE914DCC379DA260BB",
 				"748A489AF0B127053AB582FF",
+				"C1D99BE269F063BB1722A142",
 			);
 			"runOnlyForDeploymentPostprocessing" = "0";
 		};
@@ -978,6 +1003,7 @@
 				"3261A8089BF489128FB150E4",
 				"06381130393C9D8DABA352E2",
 				"B0A018D82C1C8DD029DB8EF0",
+				"76D39E316E24D62ADE121E29",
 			);
 			"productName" = "Mac Jams";
 			"productReference" = "2D7F403A62505FBF2C0EC577";
@@ -1198,6 +1224,15 @@
 		"1E95AE014C14DCFEA1D0B2AD" = {
 			"isa" = "PBXBuildFile";
 			"productRef" = "FAF6224AE19E951CF7192A9D";
+		};
+		"45162F632010AD4D745CBA0C" = {
+			"isa" = "XCSwiftPackageProductDependency";
+			"package" = "A58CA6ED6528C44D5CB4ACD4";
+			"productName" = "JamDesignKit";
+		};
+		"122B54338694359786069C45" = {
+			"isa" = "PBXBuildFile";
+			"productRef" = "45162F632010AD4D745CBA0C";
 		};
 		"3B07A601889A5C98A1E12C74" = {
 			"isa" = "PBXContainerItemProxy";
@@ -1433,6 +1468,7 @@
 				"4CE1AA7A36254C58D37D6EE3",
 				"64F309353B714873BAF20606",
 				"1E95AE014C14DCFEA1D0B2AD",
+				"122B54338694359786069C45",
 			);
 			"runOnlyForDeploymentPostprocessing" = "0";
 		};
@@ -1454,6 +1490,7 @@
 				"3FCCD81FE33E706D292E9921",
 				"D601B9979E7CF966D0517889",
 				"FAF6224AE19E951CF7192A9D",
+				"45162F632010AD4D745CBA0C",
 			);
 			"productName" = "MacLooper-iPadTests";
 			"productReference" = "AD5D520508EF8024D25C00BA";
@@ -1485,11 +1522,11 @@
 				"929A2F5E1AA2D2C76959A31D",
 				"2817A93A08B3E06104BE2E20",
 				"B5A944299A6AD753BE5A5F0C",
+				"EC3015B057A741DDF0B82491",
 				"B1F36E505DF74661F0D91FE8",
 				"D5649EC117D750B78D6E05D4",
 				"3D30A083AE83ADD69EFF4337",
 				"798871092DAD7073641FF444",
-				"E4F41D9F9B447279DB4A7A09",
 				"1763C05D4FB09C7459AD520D",
 				"183F606E5344C95BDC450A54",
 				"C715C22B94B3452DEA9E0D74",
@@ -1637,6 +1674,7 @@
 			"packageReferences" = (
 				"582681C2EAE02B3F3D399C0C",
 				"4FB48BD27BAF6CE73641699F",
+				"A58CA6ED6528C44D5CB4ACD4",
 			);
 			"targets" = (
 				"62B4A2F1E0B5C3F1EE0C65C9",

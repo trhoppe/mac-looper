@@ -20,6 +20,7 @@ for p in sources:
 asset=obj('assetcatalog','PBXFileReference',lastKnownFileType='folder.assetcatalog',path='Assets/Shared.xcassets',sourceTree='SOURCE_ROOT');resource_refs.append(asset)
 package=obj('package','XCLocalSwiftPackageReference',relativePath='.')
 remote_package=obj('remote-package','XCLocalSwiftPackageReference',relativePath='Packages/AM4RemoteKit')
+design_package=obj('design-package','XCLocalSwiftPackageReference',relativePath='Packages/JamDesignKit')
 base={'SWIFT_VERSION':'5.0','CLANG_ENABLE_MODULES':'YES','CLANG_ENABLE_OBJC_ARC':'YES','SWIFT_STRICT_CONCURRENCY':'minimal','ENABLE_USER_SCRIPT_SANDBOXING':'YES','LD_RUNPATH_SEARCH_PATHS':'$(inherited) @executable_path/Frameworks @loader_path/Frameworks'}
 def configs(name,settings):
     refs=[]
@@ -31,8 +32,8 @@ def configs(name,settings):
 
 def package_dependencies(name):
     deps=[];build=[]
-    for product in ['JamCore','LooperCore','LooperAudioUnit','AM4RemoteKit']:
-        dep=obj(name+product+'dep','XCSwiftPackageProductDependency',package=remote_package if product == 'AM4RemoteKit' else package,productName=product);deps.append(dep)
+    for product in ['JamCore','LooperCore','LooperAudioUnit','AM4RemoteKit','JamDesignKit']:
+        dep=obj(name+product+'dep','XCSwiftPackageProductDependency',package=remote_package if product == 'AM4RemoteKit' else design_package if product == 'JamDesignKit' else package,productName=product);deps.append(dep)
         build.append(obj(name+product+'link','PBXBuildFile',productRef=dep))
     return deps,build
 
@@ -71,7 +72,7 @@ test_group=obj('testgroup','PBXGroup',children=testrefs,name='Shared Tests',sour
 resource_group=obj('resourcegroup','PBXGroup',children=resource_refs,name='Resources',sourceTree='<group>')
 product_group=obj('productgroup','PBXGroup',children=products,name='Products',sourceTree='<group>')
 obj('root','PBXGroup',children=[source_group,test_group,resource_group,product_group],sourceTree='<group>')
-obj('project','PBXProject',attributes={'LastUpgradeCheck':'2720','TargetAttributes':{ipad:{'DevelopmentTeam':'S37ZVC89JW'},tests:{'TestTargetID':ipad,'DevelopmentTeam':'S37ZVC89JW'}}},buildConfigurationList=configs('project',{}),compatibilityVersion='Xcode 14.0',developmentRegion='en',hasScannedForEncodings='0',knownRegions=['en','Base'],mainGroup=root,productRefGroup=product_group,projectDirPath='',projectRoot='',packageReferences=[package,remote_package],targets=[mac,ipad,tests])
+obj('project','PBXProject',attributes={'LastUpgradeCheck':'2720','TargetAttributes':{ipad:{'DevelopmentTeam':'S37ZVC89JW'},tests:{'TestTargetID':ipad,'DevelopmentTeam':'S37ZVC89JW'}}},buildConfigurationList=configs('project',{}),compatibilityVersion='Xcode 14.0',developmentRegion='en',hasScannedForEncodings='0',knownRegions=['en','Base'],mainGroup=root,productRefGroup=product_group,projectDirPath='',projectRoot='',packageReferences=[package,remote_package,design_package],targets=[mac,ipad,tests])
 OUT.mkdir(exist_ok=True)
 (OUT/'project.pbxproj').write_text('// !$*UTF8*$!\n'+encode({'archiveVersion':'1','classes':{},'objectVersion':'56','objects':objects,'rootObject':project})+'\n')
 schemes=OUT/'xcshareddata/xcschemes';schemes.mkdir(parents=True,exist_ok=True)

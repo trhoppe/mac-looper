@@ -1,12 +1,12 @@
+import JamDesignKit
 import SwiftUI
 import UniformTypeIdentifiers
 
 struct AudioFileRail: View {
     @ObservedObject var model: AudioFilePlayerModel
-    @Environment(\.jamBrowserBounds) private var browserBounds
-    @State private var browserAnchor: CGRect = .zero
     let accent: Color
     var compact = false
+    var fillsHeight = false
     var minimumHeight: CGFloat? = nil
     @State private var showingBrowser = false
     @State private var dropTargeted = false
@@ -50,45 +50,26 @@ struct AudioFileRail: View {
     }
     private var popupRail: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack {
+            HStack(spacing: 6) {
                 Button { showingBrowser.toggle() } label: {
-                    HStack(spacing: 8) {
-                        Text("Audio Files").font(.title3.weight(.semibold))
-                        Image(systemName: "chevron.down").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                    }.padding(.horizontal, 8).padding(.vertical, 6)
+                    JamDropdownLabel("Player", icon: "waveform", active: showingBrowser, moduleTitle: true)
                 }.buttonStyle(JamPlainButtonStyle())
                     .padding(.leading, -8)
-                    .accessibilityLabel("Browse audio files")
+                    .accessibilityLabel("Browse audio files").help("Browse audio files")
                     .accessibilityValue(showingBrowser ? "Shown" : "Hidden")
-                    #if os(macOS)
-                    .anchorPreference(key: AudioBrowserPopupKey.self, value: .bounds) { anchor in
-                        showingBrowser ? AudioBrowserPopupRequest(anchor: anchor, content: AnyView(browser),
-                            close: { showingBrowser = false }) : nil
+                    .anchorPreference(key: JamDropdownPopupKey.self, value: .bounds) { anchor in
+                        showingBrowser ? JamDropdownRequest(anchor: anchor, title: "Audio Files", content: AnyView(browser),
+                            close: { showingBrowser = false }, opensBeside: true) : nil
                     }
-                    #else
-                    .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { browserAnchor = $0 }
-                    .popover(isPresented: $showingBrowser) { popupBrowser }
-                    #endif
-                Spacer(minLength: 8)
                 audioOpenButton("Open audio file…", icon: "doc.badge.plus") { model.requestingFile = true }
                 folderButton
-            }.padding(.horizontal, 18).padding(.vertical, 10)
-            Divider()
-            player.padding(18)
+                Spacer(minLength: 0)
+                VolumeControl(volume: $model.volume, name: "File player")
+            }.padding(.horizontal, 16).padding(.top, 16).padding(.bottom, 18)
+            player.padding(.horizontal, 16).padding(.bottom, 16)
             if !showingBrowser, let error = model.error { errorBanner(error) }
-        }.frame(maxWidth: .infinity, minHeight: minimumHeight, maxHeight: compact ? nil : .infinity, alignment: .topLeading)
-            .background(Color(red: 0.075, green: 0.085, blue: 0.10)).tint(accent)
-    }
-    private var popupBrowser: some View {
-        // Portrait places this header midway down the app. A side-opening popup
-        // can use the whole app height instead of only the space below the header.
-        let opensBeside = browserAnchor.maxX + 356 <= browserBounds.maxX - 8
-        let height = opensBeside ? browserBounds.height * 0.9 - 8 :
-            browserBounds.minY + browserBounds.height * 0.9 - browserAnchor.maxY - 12
-        return browser.frame(width: 340, height: max(0, height))
-        #if os(iOS)
-            .presentationCompactAdaptation(.popover)
-        #endif
+        }.frame(maxWidth: .infinity, minHeight: minimumHeight, maxHeight: fillsHeight || !compact ? .infinity : nil, alignment: .topLeading)
+            .jamSurface(padding: 0).tint(accent)
     }
     private var folderButton: some View {
         audioOpenButton("Open audio folder…", icon: "folder.badge.plus") { model.chooseFolder() }
@@ -100,7 +81,7 @@ struct AudioFileRail: View {
                 .scaledToFit()
                 .frame(width: 19, height: 16)
         }
-        .buttonStyle(JamButtonStyle())
+        .buttonStyle(JamIconStyle())
         .accessibilityLabel(Text(title))
         .help(Text(title))
     }
@@ -181,7 +162,7 @@ struct AudioFileRail: View {
             if let notice = model.scanNotice { Text(notice).font(.caption).foregroundStyle(.secondary).padding(.horizontal, 16).padding(.bottom, 8) }
             if let error = model.error { errorBanner(error) }
         }
-            .background(Color(red: 0.075, green: 0.085, blue: 0.10)).tint(accent)
+            .background(JamDesign.card).tint(accent)
     }
     private func errorBanner(_ error: String) -> some View {
         HStack(alignment: .top, spacing: 8) {
@@ -200,10 +181,10 @@ struct AudioFileRail: View {
             Text(track.title).font(.callout).lineLimit(1).truncationMode(.middle)
             Spacer(minLength: 4)
         }.padding(.leading, 4).padding(.trailing, 10).padding(.vertical, 8).frame(minHeight: 32)
-            .browserRowHighlight(selected: model.selected?.id == track.id, background: Color(red: 0.075, green: 0.085, blue: 0.10))
+            .browserRowHighlight(selected: model.selected?.id == track.id, background: JamDesign.card)
     }
     private var player: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 16) {
             HStack(spacing: 10) {
                 Image(systemName: "waveform.path").foregroundStyle(accent).font(.title2)
                 VStack(alignment: .leading, spacing: 3) {
@@ -214,6 +195,7 @@ struct AudioFileRail: View {
                 }
                 Spacer(minLength: 0)
             }
+            if fillsHeight { Spacer(minLength: 0) }
             VStack(spacing: 3) {
                 Slider(value: Binding(get: { scrubbing ? scrubPosition : min(model.position, max(model.duration, 0.01)) },
                                       set: { scrubPosition = $0; if !scrubbing { model.seek($0) } }), in: 0...max(model.duration, 0.01),
@@ -227,6 +209,7 @@ struct AudioFileRail: View {
                     Text(Self.time(model.duration))
                 }.font(.caption.monospacedDigit()).foregroundStyle(.secondary)
             }
+            if fillsHeight { Spacer(minLength: 0) }
             HStack(spacing: 4) {
                 Button { model.restart() } label: { playerIcon("backward.end.fill") }
                     .disabled(model.duration <= 0 || model.loading).accessibilityLabel("Restart current song")
@@ -234,8 +217,8 @@ struct AudioFileRail: View {
                 Button { model.skip(-10) } label: { playerIcon("gobackward.10") }
                     .disabled(model.duration <= 0 || model.loading).accessibilityLabel("Back 10 seconds")
                 Button { model.togglePlay() } label: {
-                    playerIcon((model.playing || model.startingPlayback) ? "pause.fill" : "play.fill", primary: true)
-                }.disabled(model.duration <= 0 || model.loading).accessibilityLabel((model.playing || model.startingPlayback) ? "Pause file" : "Play file")
+                    Image(systemName: (model.playing || model.startingPlayback) ? "pause.fill" : "play.fill")
+                }.buttonStyle(JamIconStyle()).disabled(model.duration <= 0 || model.loading).accessibilityLabel((model.playing || model.startingPlayback) ? "Pause file" : "Play file")
                 Button { model.stop() } label: { playerIcon("stop.fill") }
                     .disabled(model.selected == nil || model.loading).accessibilityLabel("Stop file")
                 Button { model.skip(10) } label: { playerIcon("goforward.10") }
@@ -247,12 +230,11 @@ struct AudioFileRail: View {
                 }.help(model.repeatTrack ? "Repeat this file: on" : "Repeat this file: off")
                     .accessibilityLabel("Repeat file").accessibilityValue(model.repeatTrack ? "On" : "Off")
             }.buttonStyle(JamPlainButtonStyle())
-            VolumeControl(volume: $model.volume, name: "File player")
         }
     }
-    private func playerIcon(_ name: String, primary: Bool = false) -> some View {
-        Image(systemName: name).font(.system(size: primary ? 25 : 20))
-            .frame(minWidth: 32, maxWidth: .infinity, minHeight: 40).contentShape(Rectangle())
+    private func playerIcon(_ name: String) -> some View {
+        Image(systemName: name).font(.system(size: 20))
+            .frame(minWidth: 24, maxWidth: .infinity, minHeight: 36).contentShape(Rectangle())
     }
     static func time(_ value: Double) -> String {
         let n = value.isFinite ? max(0, Int(value)) : 0

@@ -1,3 +1,4 @@
+import JamDesignKit
 import SwiftUI
 import Combine
 
@@ -29,10 +30,11 @@ struct AppReadiness: Equatable {
 
 struct AppReadinessBadge: View {
     @ObservedObject var model: AppReadinessModel
+    var compact = false
     var body: some View {
         HStack(spacing: 6) {
-            Circle().fill(model.value.ready ? Color.cyan : model.value.warning ? .orange : .secondary).frame(width: 7, height: 7)
-            Text(model.value.title).font(.caption.weight(.medium)).foregroundStyle(.secondary)
+            Circle().fill(model.value.ready ? JamDesign.accent : model.value.warning ? JamDesign.armed : JamDesign.secondary).frame(width: 7, height: 7)
+            if !compact { Text(model.value.title).font(.caption.weight(.medium)).foregroundStyle(JamDesign.secondary) }
         }.help(model.value.detail).accessibilityLabel("App status: \(model.value.title)")
     }
 }

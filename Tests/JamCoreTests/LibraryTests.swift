@@ -16,6 +16,23 @@ final class LibraryTests: XCTestCase {
         XCTAssertThrowsError(try JustChordsLibrary(data: Data("{}".utf8)))
         XCTAssertThrowsError(try JustChordsLibrary(data: Data(#"{"songs":[{"id":"a","rawData":"x"},{"id":"a","rawData":"y"}],"playlists":[]}"#.utf8)))
     }
+    func testChartKeyUsesCapoWithoutChangingStoredKeyOrChords() {
+        let song = LibrarySong(fields: ["rawData": .string("{key: Dm}\n{capo: 5}\n[Dm]Hello [F/A]there")])
+        XCTAssertEqual(song.chartKey, "Am")
+        XCTAssertEqual(song.displayKey, "Dm")
+        XCTAssertEqual(song.transposition, 0)
+        XCTAssertEqual(song.chordPro, "{key: Dm}\n{capo: 5}\n[Dm]Hello [F/A]there")
+        XCTAssertEqual(song.chartTransposition, -5)
+        XCTAssertEqual(ChordProDocument(source: song.chordPro, transpose: song.chartTransposition).guitarChords, ["Am", "C/E"])
+        let transposed = song.applying(["transpose": .string("Em")])
+        XCTAssertEqual(transposed.chartKey, "Bm")
+        XCTAssertEqual(transposed.chartTransposition, -3)
+        let legacy = LibrarySong(fields: ["keyChord": .object(["key": .string("Bb")]), "capo": .number(3)])
+        XCTAssertEqual(legacy.chartKey, "G")
+        for capo in ["0", "-1", "25", "unknown"] {
+            XCTAssertEqual(song.applying(["capo": .string(capo)]).chartKey, "Dm")
+        }
+    }
     func testMirrorIsLosslessAndNeverOverwritesSource() async throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)

@@ -5,6 +5,22 @@ import LooperAudioUnit
 @testable import MacLooper
 
 final class DrummerLoadingTests: XCTestCase {
+    @MainActor func testRhythmChoicesPreservePluginIndicesAndSkipPlaceholders() {
+        let groove = AUParameterTree.createParameter(withIdentifier: "Param_Groove", name: "Groove", address: 0,
+            min: 0, max: 5, unit: .indexed, unitName: nil, flags: [.flag_IsReadable, .flag_IsWritable],
+            valueStrings: ["Backbeat", "", "User - Latin Groove", "User - Hat Beat", "...", "…"], dependentParameters: nil)
+        XCTAssertEqual(PopDrummerModel.rhythmChoices(groove), [
+            .init(id: 3, name: "User - Hat Beat"), .init(id: 2, name: "User - Latin Groove")
+        ])
+        XCTAssertEqual(PopDrummerModel.rhythmChoices(groove).map(\.displayName), ["Hat Beat", "Latin Groove"])
+        XCTAssertEqual(PopDrummerModel.rhythmDisplayName(" user -  Hat Beat  "), "Hat Beat")
+        XCTAssertNil(PopDrummerModel.rhythmDisplayName("User - "))
+        XCTAssertNil(PopDrummerModel.rhythmDisplayName("Not User - Hat Beat"))
+        let limited = AUParameterTree.createParameter(withIdentifier: "Param_Groove", name: "Groove", address: 0,
+            min: 1, max: 2, unit: .indexed, unitName: nil, flags: [.flag_IsReadable],
+            valueStrings: ["User - Outside", "User - Same name", "User - Same name", "User - Outside"], dependentParameters: nil)
+        XCTAssertEqual(PopDrummerModel.rhythmChoices(limited).map(\.id), [1, 2])
+    }
     @MainActor func testFailedPluginIsCachedUntilRetryOrRegistrationChange() async {
         var attempts = 0
         let model = PopDrummerModel(instrumentLoader: {

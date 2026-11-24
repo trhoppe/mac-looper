@@ -1,3 +1,4 @@
+import JamDesignKit
 import SwiftUI
 import JamCore
 
@@ -70,7 +71,7 @@ struct SongBrowserView: View {
                 .padding(.horizontal, 16).padding(.vertical, 12).accessibilityLabel("Library status: \(library.status)")
         }.frame(maxHeight: .infinity)
             #if os(iOS)
-            .background(Color(red: 0.075, green: 0.085, blue: 0.10))
+            .background(JamDesign.card)
             #endif
             .onAppear { searching = !library.query.isEmpty }
             .onChange(of: library.playlistID) { _, _ in

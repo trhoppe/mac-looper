@@ -67,6 +67,17 @@ public struct LibrarySong: Identifiable, Equatable, Sendable {
         let root = fields["transpose"]?.text ?? originalKey
         return root.map { $0 + (sourceKey?.hasSuffix("m") == true && !$0.hasSuffix("m") ? "m" : "") }
     }
+    /// The chord-shape key shown to the player, below the sounding key by the capo fret.
+    public var chartKey: String? {
+        guard let key = displayKey else { return nil }
+        return ChordTransposition.transpose(key, semitones: -capoFret, flats: key.contains("b"))
+    }
+    public var chartTransposition: Int { transposition - capoFret }
+    private var capoFret: Int {
+        guard let capo, let fret = Int(capo.trimmingCharacters(in: .whitespacesAndNewlines)),
+              (1...24).contains(fret) else { return 0 }
+        return fret
+    }
     public var transposition: Int {
         guard let base = originalKey, let target = fields["transpose"]?.text,
               let a = ChordTransposition.pitch(base), let b = ChordTransposition.pitch(target) else { return 0 }

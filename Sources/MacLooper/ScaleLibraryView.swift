@@ -1,3 +1,4 @@
+import JamDesignKit
 import SwiftUI
 import JamCore
 
@@ -10,11 +11,7 @@ struct ScaleLibraryView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Label("Scales", systemImage: "music.note.list").font(.headline)
-                Spacer()
-                Button("Close", action: close).buttonStyle(JamButtonStyle()).keyboardShortcut(.cancelAction)
-            }.padding(.horizontal, 18).padding(.vertical, 14)
+            JamScreenHeader("Scales", icon: "music.note.list", close: close)
             Divider()
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: 18) { filters }
@@ -29,7 +26,7 @@ struct ScaleLibraryView: View {
                 }.padding(18)
             }.frame(maxWidth: .infinity, maxHeight: .infinity)
         }.frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color(red: 0.065, green: 0.075, blue: 0.085))
+            .background(JamDesign.ground)
             .accessibilityAddTraits(.isModal)
     }
 
@@ -69,9 +66,7 @@ struct ScaleLibraryView: View {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("\(root) \(kind.title), \(study.title), frets \(pattern.firstFret) to \(pattern.lastFret)")
             .accessibilityValue((regions.map { "Position \($0.position), frets \($0.firstFret) to \($0.lastFret)" } + pattern.tones.map { "string \(6 - $0.string), fret \($0.fret), \($0.note), \($0.degree)\(pattern.extensionIDs.contains($0.id) ? ", connecting note" : "")" }).joined(separator: "; "))
-        }.padding(16).frame(maxWidth: .infinity, alignment: .leading)
-            .background(.white.opacity(0.025), in: RoundedRectangle(cornerRadius: 8))
-            .overlay(RoundedRectangle(cornerRadius: 8).stroke(.white.opacity(0.08)))
+        }.jamSurface()
     }
 }
 
@@ -79,7 +74,7 @@ private struct ScaleFretboard: View {
     let pattern: GuitarScalePattern
     let regions: [GuitarScalePositionRegion]
     let route: [GuitarScaleTone]
-    private let accent = Color(red: 0.259, green: 0.788, blue: 0.961)
+    private let accent = JamDesign.accent
 
     var body: some View {
         Canvas { context, size in

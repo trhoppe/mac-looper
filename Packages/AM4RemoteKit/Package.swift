@@ -5,8 +5,9 @@ let package = Package(
     name: "AM4RemoteKit",
     platforms: [.macOS(.v14), .iOS("18.0")],
     products: [.library(name: "AM4RemoteKit", targets: ["AM4RemoteKit"])],
+    dependencies: [.package(path: "../JamDesignKit")],
     targets: [
-        .target(name: "AM4RemoteKit", resources: [.process("Resources")],
+        .target(name: "AM4RemoteKit", dependencies: [.product(name: "JamDesignKit", package: "JamDesignKit")], resources: [.process("Resources")],
                 linkerSettings: [.linkedFramework("CoreMIDI")]),
         .testTarget(name: "AM4RemoteKitTests", dependencies: ["AM4RemoteKit"], resources: [.process("Fixtures")])
     ]

@@ -1,3 +1,4 @@
+import JamDesignKit
 import SwiftUI
 import JamCore
 #if os(macOS)
@@ -77,7 +78,7 @@ private struct ResizeDivider: View {
     let axis: Axis
     @State private var hovering = false
     @State private var cursorPushed = false
-    private let cyan = Color(red: 0.259, green: 0.788, blue: 0.961)
+    private let cyan = JamDesign.accent
     var body: some View {
         ZStack {
             Rectangle().fill(hovering ? cyan.opacity(0.12) : .white.opacity(0.025))
