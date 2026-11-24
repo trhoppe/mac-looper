@@ -1,4 +1,5 @@
 #import "MLGuitarLoopAudioUnit.h"
+#import "MLPluginTransport.h"
 #include <stdatomic.h>
 #include <math.h>
 
@@ -12,6 +13,7 @@ typedef struct {
     _Atomic BOOL strict;
     _Atomic int error;
     _Atomic UInt64 callbacks;
+    __unsafe_unretained MLPluginTransport *transport;
 } MLRenderContext;
 static void silence(AudioBufferList *list) {
     for (UInt32 i = 0; i < list->mNumberBuffers; i++) if (list->mBuffers[i].mData) memset(list->mBuffers[i].mData, 0, list->mBuffers[i].mDataByteSize);
@@ -22,6 +24,7 @@ static void silence(AudioBufferList *list) {
     AUAudioUnitBus *_inputBus, *_outputBus;
     AUInternalRenderBlock _block;
     MLRenderContext *_context;
+    MLPluginTransport *_syncTransport;
 }
 - (instancetype)initWithComponentDescription:(AudioComponentDescription)d options:(AudioComponentInstantiationOptions)options error:(NSError **)error {
     self = [super initWithComponentDescription:d options:options error:error];
@@ -61,8 +64,10 @@ static void silence(AudioBufferList *list) {
         if (!output->mBuffers[0].mData) output->mBuffers[0].mData = c->left;
         if (!output->mBuffers[1].mData) output->mBuffers[1].mData = c->right;
         output->mBuffers[0].mDataByteSize = output->mBuffers[1].mDataByteSize = n * sizeof(float);
-        tl_process(c->core, c->input->mBuffers[il].mData, c->input->mBuffers[ir].mData,
-                   output->mBuffers[0].mData, output->mBuffers[1].mData, n);
+        int64_t offset = c->transport && time && (time->mFlags & kAudioTimeStampSampleTimeValid)
+            ? [c->transport framesUntilDownbeatAtSampleTime:time->mSampleTime] : -1;
+        tl_process_timed(c->core, c->input->mBuffers[il].mData, c->input->mBuffers[ir].mData,
+                   output->mBuffers[0].mData, output->mBuffers[1].mData, n, offset);
         // The output is loop playback, never live input. Do not propagate an input-silent flag.
         *flags &= ~kAudioUnitRenderAction_OutputIsSilence;
         atomic_fetch_add_explicit(&c->callbacks, 1, memory_order_relaxed);
@@ -114,6 +119,8 @@ static void silence(AudioBufferList *list) {
 - (UInt32)inputRight { return atomic_load(&_context->ir); }
 - (void)setInputRight:(UInt32)v { atomic_store(&_context->ir, v); }
 - (BOOL)require32Frames { return atomic_load(&_context->strict); }
+- (MLPluginTransport *)syncTransport { return _syncTransport; }
+- (void)setSyncTransport:(MLPluginTransport *)transport { _syncTransport = transport; _context->transport = transport; }
 - (void)setRequire32Frames:(BOOL)v { atomic_store(&_context->strict, v); }
 - (OSStatus)renderError { return atomic_load(&_context->error); }
 - (UInt64)callbackCount { return atomic_load(&_context->callbacks); }

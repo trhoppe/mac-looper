@@ -26,12 +26,16 @@ struct ContentView: View, Equatable {
     @AppStorage("audioPaneWidth") private var audioWidth = 380.0
     @State private var drumOutput: AudioDevice?
     @State private var importing = false
+    @State private var exportingLoop = false
+    @State private var loopExport: LoopExport?
+    @State private var confirmingLoopRecall = false
+    @State private var loopFailure: String?
     @State private var importKind = ImportKind.libraryFolder
     @State private var editingDraft: SongDraft?
     private let accent = JamDesign.accent
     static func == (lhs: Self, rhs: Self) -> Bool { lhs.model === rhs.model && lhs.files === rhs.files && lhs.library === rhs.library && lhs.remote === rhs.remote }
-    private enum ImportKind { case libraryFolder, audioFolder, audioFile }
-    private var types: [UTType] { importKind == .audioFile ? [.audio] : [.folder] }
+    private enum ImportKind { case libraryFolder, audioFolder, audioFile, loopFile }
+    private var types: [UTType] { importKind == .loopFile ? [.jamLoop] : importKind == .audioFile ? [.audio] : [.folder] }
     private var settingsContent: some View {
         AudioSettingsView(model: model, library: library, dismiss: { showingSettings = false },
                           chooseFolder: { beginImport(.libraryFolder) }, recoverDraft: { draft in
@@ -142,11 +146,38 @@ struct ContentView: View, Equatable {
                 case .libraryFolder: library.setFolder(url)
                 case .audioFolder: files.openFolder(url)
                 case .audioFile: files.selectFile(url, autoplay: true)
+                case .loopFile: Task { await model.openLoop(url) }
                 }
             case .failure(let error):
-                if (error as NSError).code != NSUserCancelledError { files.error = error.localizedDescription }
+                if (error as NSError).code != NSUserCancelledError {
+                    if importKind == .loopFile { loopFailure = error.localizedDescription }
+                    else { files.error = error.localizedDescription }
+                }
             }
         }
+        .fileExporter(isPresented: $exportingLoop, document: loopExport?.document, contentType: .jamLoop, defaultFilename: loopExport?.name ?? "Loop") { result in
+            if let loopExport { model.didSaveLoop(id: loopExport.id, result: result) }
+            loopExport = nil
+        }
+        .alert(loopFailure == nil ? "Replace current loop?" : "Loop file", isPresented: Binding(
+            get: { confirmingLoopRecall || loopFailure != nil },
+            set: { if !$0 { confirmingLoopRecall = false; loopFailure = nil } }
+        )) {
+            if loopFailure != nil {
+                Button("OK") { loopFailure = nil }
+            } else {
+                Button("Cancel", role: .cancel) { model.pendingRecall = nil }
+                Button("Replace loop", role: .destructive) { Task { await model.confirmRecall() } }
+            }
+        } message: {
+            Text(loopFailure ?? "Your current loop hasn’t been saved. Opening \(model.pendingRecall?.name ?? "this loop") will replace it.")
+        }
+        .onReceive(model.$requestingLoopFile.filter { $0 }.receive(on: RunLoop.main)) { _ in model.requestingLoopFile = false; beginImport(.loopFile) }
+        .onReceive(model.$exportRequest.compactMap { $0 }.receive(on: RunLoop.main)) { request in
+            model.exportRequest = nil; loopExport = request; exportingLoop = true
+        }
+        .onReceive(model.$pendingRecall.compactMap { $0 }.receive(on: RunLoop.main)) { _ in confirmingLoopRecall = true }
+        .onReceive(model.$loopFileFailure.compactMap { $0 }.receive(on: RunLoop.main)) { failure in model.loopFileFailure = nil; loopFailure = failure }
         .onAppear { files.setOutput(model.output); drumOutput = model.output }
         .onReceive(model.$outputUID.removeDuplicates().dropFirst().receive(on: RunLoop.main)) { _ in files.setOutput(model.output); drumOutput = model.output; model.routeDidChange() }
         .onReceive(model.$devices.dropFirst().receive(on: RunLoop.main)) { _ in files.setOutput(model.output); drumOutput = model.output }
@@ -177,7 +208,8 @@ struct ContentView: View, Equatable {
         #if os(iOS)
         .onOpenURL { url in
             guard url.isFileURL else { return }
-            if url.pathExtension.lowercased() == "json" { library.openLibrary(url) }
+            if url.pathExtension.lowercased() == "jamloop" { Task { await model.openLoop(url) } }
+            else if url.pathExtension.lowercased() == "json" { library.openLibrary(url) }
             else if AudioLibrary.isAudio(url) { files.selectFile(url, autoplay: true) }
         }
         #endif

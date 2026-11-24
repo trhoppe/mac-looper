@@ -3,6 +3,25 @@ import AudioToolbox
 import LooperAudioUnit
 
 final class PluginTransportTests: XCTestCase {
+    func testDownbeatClockIsIndependentOfMixerBranchOrderAndTempoChanges() {
+        let clock = MLPluginTransport()
+        clock.configureSampleRate(48000); clock.tempo = 120; clock.isPlaying = true
+        XCTAssertEqual(clock.framesUntilDownbeat(atSampleTime: 1000), 0)
+        clock.beginRenderFrames(24000, atSampleTime: 1000); clock.endRenderFrames(24000)
+        // Loop before Drummer sees the previous end anchor; loop after Drummer
+        // sees the next end anchor and extrapolates back to the same sample.
+        let before = clock.framesUntilDownbeat(atSampleTime: 25000)
+        clock.beginRenderFrames(512, atSampleTime: 25000); clock.endRenderFrames(512)
+        XCTAssertEqual(clock.framesUntilDownbeat(atSampleTime: 25000), before)
+        XCTAssertEqual(before, 72000)
+        clock.tempo = 90
+        let nextSample = 25512.0
+        let tempoBefore = clock.framesUntilDownbeat(atSampleTime: nextSample)
+        clock.beginRenderFrames(128, atSampleTime: nextSample); clock.endRenderFrames(128)
+        XCTAssertEqual(clock.framesUntilDownbeat(atSampleTime: nextSample), tempoBefore)
+        clock.isPlaying = false; XCTAssertEqual(clock.framesUntilDownbeat(atSampleTime: nextSample), -1)
+        clock.isPlaying = true; XCTAssertEqual(clock.framesUntilDownbeat(atSampleTime: nextSample), 0)
+    }
     private func makeUnit() throws -> MLGuitarLoopAudioUnit {
         let d = AudioComponentDescription(componentType: kAudioUnitType_Effect, componentSubType: 0x6D6C6C70,
             componentManufacturer: 0x4D614C70, componentFlags: 0, componentFlagsMask: 0)

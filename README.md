@@ -229,8 +229,22 @@ in `Packages/JamDesignKit`, used by Mac Jams and AM4 Remote.
 
 The looper volume control changes **loop playback only**.
 Loop, file-player and drummer volume each start at **100%**. Type a percentage beside its speaker icon
-for an exact setting. The AM4 handles live guitar monitoring. Captured loops stay in memory;
-there are no saved sessions. Overdub is deferred to a later version.
+for an exact setting. The AM4 handles live guitar monitoring. Overdub is deferred to a later version.
+
+Use **Save loop** (the save icon) to write a lossless stereo `.jamloop` file, then
+**Open saved loop** (the folder icon) to recall it on Mac or iPad. Files include the
+take’s actual length, BPM and bar count; early finishes are preserved. You choose
+where to save, including iCloud Drive for sharing between devices. Opening a file
+restores its BPM to the shared tempo and leaves playback stopped. An unsaved take
+gets a replacement confirmation. Recalled loops can play without a capture input.
+
+When Drummer is running, **Play / CC24** queues a recalled loop for the next
+**beat 1 of a 4/4 bar**. Its badge says **Waiting**; Stop / CC24 cancels the queued
+start. With Drummer stopped, playback starts immediately. If Drummer is stopped
+while waiting, the loop starts immediately. Recording and playback of a fresh
+take keep their existing immediate/threshold behavior. No stretching or recording
+quantization is applied; the take’s length must match the rhythm to stay aligned
+on subsequent repetitions.
 
 MIDI controllers connect automatically on all channels (USB, or a controller already paired
 through the system). **CC22** arms, **CC23** records/finishes, **CC24** plays/stops the loop,

@@ -2,6 +2,7 @@
 #include <stdatomic.h>
 #include <stdlib.h>
 #include <math.h>
+#include <string.h>
 
 #define WAVE_BINS 256
 #define COMMANDS 32
@@ -17,6 +18,9 @@ struct TLCore {
     uint32_t tailRemaining, rampFrames, edgeFrames;
     TLCommand commands[COMMANDS];
     _Atomic uint32_t commandRead, commandWrite;
+    _Atomic int editing; // 0 renderable, 1 file worker, 2 suspension owner
+    _Atomic bool suspendRequested;
+    _Atomic uint32_t readers;
     _Atomic float threshold, targetVolume;
     _Atomic int publishedState;
     _Atomic uint32_t publishedLength, publishedRecorded, publishedPosition;
@@ -44,6 +48,7 @@ TLCore *tl_create(double rate, uint32_t capacity) {
     c->historyRight = calloc(c->preCount, sizeof(float));
     if (!c->left || !c->right || !c->historyLeft || !c->historyRight) { tl_destroy(c); return NULL; }
     atomic_init(&c->commandRead, 0); atomic_init(&c->commandWrite, 0);
+    atomic_init(&c->editing, 0); atomic_init(&c->suspendRequested, false); atomic_init(&c->readers, 0);
     atomic_init(&c->threshold, .031622777f); atomic_init(&c->targetVolume, .7f);
     atomic_init(&c->publishedState, TL_EMPTY); atomic_init(&c->publishedLength, 0);
     atomic_init(&c->publishedRecorded, 0); atomic_init(&c->publishedPosition, 0);
@@ -66,7 +71,7 @@ void tl_destroy(TLCore *c) {
     free(c->left); free(c->right); free(c->historyLeft); free(c->historyRight); free(c);
 }
 bool tl_command(TLCore *c, int command, uint32_t length) {
-    if (!c || command < TL_CMD_ARM || command > TL_CMD_RECORD) return false;
+    if (!c || command < TL_CMD_ARM || command > TL_CMD_PLAY_SYNC || atomic_load(&c->editing)) return false;
     if ((command == TL_CMD_ARM || command == TL_CMD_RECORD) && (length < 16 || length > c->capacity)) return false;
     uint32_t w = atomic_load_explicit(&c->commandWrite, memory_order_relaxed);
     if (w - atomic_load_explicit(&c->commandRead, memory_order_acquire) >= COMMANDS) return false;
@@ -137,9 +142,10 @@ static void consume_commands(TLCore *c) {
                 c->position = 0; c->gain = 0; c->state = TL_PLAYING;
             }
             // A second press before even one sample, or after auto-completion, is harmless.
-        } else if (cmd.kind == TL_CMD_PLAY_STOP) {
+        } else if (cmd.kind == TL_CMD_PLAY_STOP || cmd.kind == TL_CMD_PLAY_SYNC) {
             if (c->state == TL_PLAYING) { reset_tail(c); c->state = TL_STOPPED; c->position = 0; }
-            else if (c->state == TL_STOPPED) { c->state = TL_PLAYING; c->position = 0; c->gain = 0; }
+            else if (c->state == TL_WAITING) { c->state = TL_STOPPED; c->position = 0; }
+            else if (c->state == TL_STOPPED) { c->state = cmd.kind == TL_CMD_PLAY_SYNC ? TL_WAITING : TL_PLAYING; c->position = 0; c->gain = 0; }
             else if (c->state == TL_ARMED || c->state == TL_RECORDING) {
                 c->state = TL_EMPTY; c->length = 0; c->recorded = 0; c->position = 0;
                 for (int b = 0; b < WAVE_BINS; b++) atomic_store_explicit(&c->waveform[b], 0, memory_order_relaxed);
@@ -148,10 +154,10 @@ static void consume_commands(TLCore *c) {
     }
     atomic_store_explicit(&c->commandRead, r, memory_order_release);
 }
-void tl_suspend(TLCore *c) {
+static void suspend_now(TLCore *c) {
     if (!c) return;
     consume_commands(c);
-    if (c->state == TL_PLAYING || c->state == TL_STOPPED) {
+    if (c->state == TL_PLAYING || c->state == TL_STOPPED || c->state == TL_WAITING) {
         c->state = TL_STOPPED; c->position = 0;
     } else {
         c->state = TL_EMPTY; c->length = c->recorded = c->position = 0;
@@ -164,13 +170,77 @@ void tl_suspend(TLCore *c) {
     atomic_store(&c->publishedRecorded, c->recorded); atomic_store(&c->publishedPosition, c->position);
     atomic_store(&c->publishedCycles, c->cycles); atomic_store(&c->peak, 0); atomic_store(&c->outputPeak, 0);
 }
+void tl_suspend(TLCore *c) {
+    if (!c) return;
+    atomic_store(&c->suspendRequested, true);
+    // A file worker may own the core while iPadOS suspends the graph. Let the
+    // worker finish first; exactly one control thread consumes the suspension.
+    int expected = 0;
+    if (atomic_compare_exchange_strong(&c->editing, &expected, 2)) {
+        atomic_store(&c->suspendRequested, false); suspend_now(c); atomic_store(&c->editing, 0);
+    }
+}
+bool tl_begin_edit(TLCore *c) {
+    if (!c) return false;
+    int expected = 0;
+    if (!atomic_compare_exchange_strong(&c->editing, &expected, 1) && expected != 1) return false;
+    return atomic_load(&c->readers) == 0;
+}
+void tl_end_edit(TLCore *c) {
+    if (!c) return;
+    int expected = 1;
+    if (!atomic_compare_exchange_strong(&c->editing, &expected, 0)) return;
+    if (atomic_load(&c->suspendRequested)) tl_suspend(c);
+}
+double tl_sample_rate(TLCore *c) { return c ? c->rate : 0; }
+bool tl_copy_loop(TLCore *c, float *left, float *right, uint32_t frames) {
+    if (!c || atomic_load(&c->editing) != 1 || !left || !right) return false;
+    // Apply any already queued stop/clear before deciding whether a take exists.
+    consume_commands(c);
+    if ((c->state != TL_PLAYING && c->state != TL_STOPPED && c->state != TL_WAITING) || frames != c->length) return false;
+    memcpy(left, c->left, frames * sizeof(float)); memcpy(right, c->right, frames * sizeof(float));
+    return true;
+}
+bool tl_load_loop(TLCore *c, const float *left, const float *right, uint32_t frames) {
+    if (!c || atomic_load(&c->editing) != 1 || !left || !right || frames < 16 || frames > c->capacity) return false;
+    for (uint32_t i = 0; i < frames; i++) if (!isfinite(left[i]) || !isfinite(right[i])) return false;
+    memcpy(c->left, left, frames * sizeof(float)); memcpy(c->right, right, frames * sizeof(float));
+    atomic_store(&c->commandRead, atomic_load(&c->commandWrite));
+    c->length = c->recorded = frames; c->state = TL_STOPPED; c->position = 0; c->cycles = 0;
+    c->gain = 0; c->tailRemaining = 0; c->lastLeft = c->lastRight = 0;
+    c->historyValid = c->historyPosition = 0;
+    for (int b = 0; b < WAVE_BINS; b++) atomic_store(&c->waveform[b], 0);
+    for (uint32_t i = 0; i < frames; i++) {
+        uint32_t bin = (uint32_t)((uint64_t)i * WAVE_BINS / frames);
+        float peak = fmaxf(fabsf(left[i]), fabsf(right[i]));
+        if (peak > atomic_load(&c->waveform[bin])) atomic_store(&c->waveform[bin], peak);
+    }
+    atomic_store(&c->publishedLength, frames); atomic_store(&c->publishedRecorded, frames);
+    atomic_store(&c->publishedPosition, 0); atomic_store(&c->publishedCycles, 0);
+    atomic_store(&c->publishedState, TL_STOPPED); atomic_store(&c->peak, 0); atomic_store(&c->outputPeak, 0);
+    return true;
+}
 void tl_process(TLCore *c, const float *left, const float *right, float *outL, float *outR, uint32_t frames) {
+    tl_process_timed(c, left, right, outL, outR, frames, -1);
+}
+void tl_process_timed(TLCore *c, const float *left, const float *right, float *outL, float *outR, uint32_t frames, int64_t downbeatOffset) {
     if (!c || !outL || !outR) return;
+    // Gated callbacks never join the active-reader count. A callback racing the
+    // gate checks again after joining, before accessing any render-owned data.
+    if (atomic_load(&c->editing)) {
+        memset(outL, 0, frames * sizeof(float)); memset(outR, 0, frames * sizeof(float)); return;
+    }
+    atomic_fetch_add(&c->readers, 1);
+    if (atomic_load(&c->editing)) {
+        memset(outL, 0, frames * sizeof(float)); memset(outR, 0, frames * sizeof(float));
+        atomic_fetch_sub(&c->readers, 1); return;
+    }
     consume_commands(c);
     const float threshold = atomic_load_explicit(&c->threshold, memory_order_relaxed);
     const float targetVolume = atomic_load_explicit(&c->targetVolume, memory_order_relaxed);
     float peak = 0, outputPeak = 0;
     for (uint32_t i = 0; i < frames; i++) {
+        if (c->state == TL_WAITING && (downbeatOffset < 0 || (int64_t)i >= downbeatOffset)) c->state = TL_PLAYING;
         float l = left && isfinite(left[i]) ? left[i] : 0;
         float r = right && isfinite(right[i]) ? right[i] : l;
         peak = fmaxf(peak, fmaxf(fabsf(l), fabsf(r)));
@@ -221,4 +291,5 @@ void tl_process(TLCore *c, const float *left, const float *right, float *outL, f
     atomic_store(&c->publishedState, c->state);
     atomic_store_explicit(&c->peak, peak, memory_order_relaxed);
     atomic_store_explicit(&c->outputPeak, outputPeak, memory_order_relaxed);
+    atomic_fetch_sub(&c->readers, 1);
 }

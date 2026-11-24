@@ -32,6 +32,9 @@ import AM4RemoteKit
             return
         }
         let localURLs = urls.filter(\.isFileURL)
+        if let url = localURLs.first(where: { $0.pathExtension.lowercased() == "jamloop" }) {
+            Task { await model?.openLoop(url) }
+        }
         for url in localURLs where url.pathExtension.lowercased() == "json" { library?.openLibrary(url) }
         if let url = localURLs.first(where: AudioLibrary.isAudio) { files.selectFile(url, autoplay: true) }
     }

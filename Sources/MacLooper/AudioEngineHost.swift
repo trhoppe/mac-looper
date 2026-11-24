@@ -3,6 +3,7 @@ import AVFoundation
 import AudioToolbox
 import LooperCore
 import LooperAudioUnit
+import JamCore
 #if os(macOS)
 import CoreAudio
 #endif
@@ -87,7 +88,7 @@ import CoreAudio
             let token = lifecycle
             try await configuration.acquire(); defer { configuration.release() }
             try checkLifecycle(token)
-            if captureEnabled {
+            if loopUnit != nil {
                 if file == nil && !drums.playing { shutdownAudio() }
                 else { try await rebuild(capture: false) }
             }
@@ -286,6 +287,7 @@ import CoreAudio
                 try checkLifecycle(token)
                 trace("loop instantiated")
                 guard let unit = node.auAudioUnit as? MLGuitarLoopAudioUnit else { throw AudioFailure(message: "Unexpected guitar processing unit.") }
+                unit.syncTransport = drums.transport
                 unit.inputLeft = UInt32(max(0, left)); unit.inputRight = UInt32(max(0, right)); #if os(macOS)
                 unit.require32Frames = true
                 #else
@@ -341,6 +343,68 @@ import CoreAudio
             if self.engine === e { shutdownAudio(); filePlaying = false }
             throw error
         }
+    }
+    /// Add an output-only loop source without rebuilding an already playing
+    /// drummer branch. Recalled audio does not require microphone permission.
+    func prepareLoopRecall(output: AudioDevice) async throws {
+        let token = lifecycle
+        try await configuration.acquire(); defer { configuration.release() }
+        try checkLifecycle(token)
+        if loopUnit?.core != nil { return }
+        if engine == nil {
+            self.output = output
+            try await rebuild(capture: false, useSystemBuffer: true)
+        }
+        guard let engine else { throw LoopFileError.transfer }
+        if !Self.registered {
+            AUAudioUnit.registerSubclass(MLGuitarLoopAudioUnit.self, as: Self.description, name: "Mac Looper: Guitar Loop", version: 1)
+            Self.registered = true
+        }
+        let node: AVAudioUnit = try await withCheckedThrowingContinuation { continuation in
+            AVAudioUnit.instantiate(with: Self.description, options: []) { node, error in
+                if let node { continuation.resume(returning: node) }
+                else { continuation.resume(throwing: error ?? LoopFileError.transfer) }
+            }
+        }
+        try checkLifecycle(token)
+        guard self.engine === engine, let unit = node.auAudioUnit as? MLGuitarLoopAudioUnit else { throw LoopFileError.transfer }
+        let format = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 2)!
+        let silence = AVAudioSourceNode(format: format) { silent, _, _, buffers in
+            for buffer in UnsafeMutableAudioBufferListPointer(buffers) {
+                if let data = buffer.mData { memset(data, 0, Int(buffer.mDataByteSize)) }
+            }
+            silent.pointee = true; return noErr
+        }
+        unit.syncTransport = drums.transport
+        engine.attach(silence); engine.attach(node)
+        do {
+            try MLAudioGraphTools.connect(engine, source: silence, sourceBus: 0, destination: node, destinationBus: 0, format: format)
+            try MLAudioGraphTools.connect(engine, source: node, sourceBus: 0, destination: engine.mainMixerNode, destinationBus: 0, format: format)
+            try MLAudioGraphTools.prepare(engine)
+            if !engine.isRunning { try MLAudioGraphTools.start(engine) }
+            loopNode = node; loopUnit = unit
+        } catch {
+            engine.detach(node); engine.detach(silence); throw error
+        }
+    }
+    func snapshotLoop(bpm: Double, bars: Int) async throws -> SavedLoop {
+        let token = lifecycle
+        try await configuration.acquire(); defer { configuration.release() }
+        try checkLifecycle(token)
+        guard let unit = loopUnit else { throw LoopFileError.unavailable }
+        let transfer = LoopAudioTransfer(unit: unit)
+        let loop = try await Task.detached(priority: .userInitiated) { try transfer.copy(bpm: bpm, bars: bars) }.value
+        try checkLifecycle(token)
+        return loop
+    }
+    func restoreLoop(_ loop: SavedLoop) async throws {
+        let token = lifecycle
+        try await configuration.acquire(); defer { configuration.release() }
+        try checkLifecycle(token)
+        guard let unit = loopUnit else { throw LoopFileError.transfer }
+        let transfer = LoopAudioTransfer(unit: unit)
+        try await Task.detached(priority: .userInitiated) { try transfer.load(loop) }.value
+        try checkLifecycle(token)
     }
     func attachPreparedDrummer(to engine: AVAudioEngine) async throws {
         guard let node = drums.node, node.engine !== engine else { return }

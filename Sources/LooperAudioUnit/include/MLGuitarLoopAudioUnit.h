@@ -3,11 +3,14 @@
 #import "LooperDSP.h"
 
 NS_ASSUME_NONNULL_BEGIN
+@class MLPluginTransport;
 @interface MLGuitarLoopAudioUnit : AUAudioUnit
 @property(nonatomic, readonly, nullable) TLCore *core;
 @property(nonatomic) UInt32 inputLeft;
 @property(nonatomic) UInt32 inputRight;
 @property(nonatomic) BOOL require32Frames;
+// Set only while this unit is not rendering.
+@property(nonatomic, strong, nullable) MLPluginTransport *syncTransport;
 @property(nonatomic, readonly) OSStatus renderError;
 @property(nonatomic, readonly) UInt64 callbackCount;
 @property(nonatomic, readonly) UInt32 callbackFrames;

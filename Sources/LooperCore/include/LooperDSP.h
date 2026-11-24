@@ -6,8 +6,8 @@
 typedef struct TLCore TLCore;
 typedef struct TLHardware TLHardware;
 enum { TL_BUFFER_FRAMES = 32, TL_BUFFER_SIZE_ERROR = -60001 };
-enum { TL_EMPTY = 0, TL_ARMED, TL_RECORDING, TL_PLAYING, TL_STOPPED };
-enum { TL_CMD_ARM = 1, TL_CMD_CLEAR, TL_CMD_PLAY_STOP, TL_CMD_RECORD };
+enum { TL_EMPTY = 0, TL_ARMED, TL_RECORDING, TL_PLAYING, TL_STOPPED, TL_WAITING };
+enum { TL_CMD_ARM = 1, TL_CMD_CLEAR, TL_CMD_PLAY_STOP, TL_CMD_RECORD, TL_CMD_PLAY_SYNC };
 typedef struct {
     int state;
     uint32_t length, recorded, position;
@@ -28,9 +28,21 @@ uint32_t tl_loop_frames(double rate, double bpm, uint32_t bars, uint32_t beats);
 // Control-thread suspension only AFTER rendering is paused and callbacks have
 // stopped. Drains pending commands, preserves completed audio, cancels capture.
 void tl_suspend(TLCore *core);
+// One control-thread editor, retaining the core's owner throughout. Begin closes
+// the render gate; retry until true, then copy/load off the audio thread and end.
+// Rendering never waits: this branch emits silence during the short transfer.
+bool tl_begin_edit(TLCore *core);
+void tl_end_edit(TLCore *core);
+double tl_sample_rate(TLCore *core);
+bool tl_copy_loop(TLCore *core, float *left, float *right, uint32_t frames);
+bool tl_load_loop(TLCore *core, const float *left, const float *right, uint32_t frames);
 // No allocation, locks, UI dispatch, logging, or file access in this function.
 // Input is captured only; it is NEVER passed through to output.
 void tl_process(TLCore *core, const float *left, const float *right,
                 float *outLeft, float *outRight, uint32_t frames);
+// Offset from this callback's sample time to the drummer's next bar. Negative
+// means no drummer is running; waiting playback starts immediately in that case.
+void tl_process_timed(TLCore *core, const float *left, const float *right,
+                      float *outLeft, float *outRight, uint32_t frames, int64_t downbeatOffset);
 
 #endif

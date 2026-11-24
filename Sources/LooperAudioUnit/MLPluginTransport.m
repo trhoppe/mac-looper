@@ -9,14 +9,17 @@ typedef struct {
     _Atomic float observedPeak;
     _Atomic double beat, sample, bpm;
     _Atomic BOOL moving, changed;
-    UInt64 seenReset;
+    _Atomic UInt64 seenReset, anchorSequence;
+    _Atomic double anchorSample, anchorBeat;
+    _Atomic BOOL anchorValid;
+    double renderSample;
 } MLTransportContext;
 static void begin(MLTransportContext *c, UInt32 n) {
     BOOL moving = atomic_load_explicit(&c->requestedPlaying, memory_order_relaxed);
     double bpm = atomic_load_explicit(&c->requestedTempo, memory_order_relaxed);
     UInt64 reset = atomic_load_explicit(&c->reset, memory_order_acquire);
     BOOL discontinuity = reset != c->seenReset || (moving && !c->moving);
-    if (discontinuity) { c->beat = 0; c->sample = 0; c->seenReset = reset; }
+    if (discontinuity) { c->beat = 0; c->sample = 0; c->seenReset = reset; c->anchorValid = NO; }
     if (discontinuity || moving != c->moving || bpm != c->bpm) atomic_store_explicit(&c->changed, YES, memory_order_release);
     c->moving = moving; c->bpm = bpm;
     atomic_store_explicit(&c->frames, n, memory_order_relaxed);
@@ -25,6 +28,11 @@ static void end(MLTransportContext *c, UInt32 n) {
     if (c->moving) {
         c->sample += n;
         c->beat += (double)n * c->bpm / (60.0 * atomic_load_explicit(&c->rate, memory_order_relaxed));
+    }
+    if (isfinite(c->renderSample)) {
+        atomic_fetch_add(&c->anchorSequence, 1);
+        c->anchorSample = c->renderSample + n; c->anchorBeat = c->beat; c->anchorValid = YES;
+        atomic_fetch_add(&c->anchorSequence, 1);
     }
     atomic_store_explicit(&c->publishedBeat, c->beat, memory_order_relaxed);
     atomic_fetch_add_explicit(&c->callbacks, 1, memory_order_relaxed);
@@ -46,6 +54,9 @@ static void end(MLTransportContext *c, UInt32 n) {
     atomic_init(&_context->reset, 1); atomic_init(&_context->callbacks, 0); atomic_init(&_context->frames, 0);
     atomic_init(&_context->beat, 0); atomic_init(&_context->sample, 0); atomic_init(&_context->bpm, 120);
     atomic_init(&_context->moving, NO); atomic_init(&_context->changed, NO);
+    atomic_init(&_context->seenReset, 0); atomic_init(&_context->anchorSequence, 0);
+    atomic_init(&_context->anchorSample, 0); atomic_init(&_context->anchorBeat, 0); atomic_init(&_context->anchorValid, NO);
+    _context->renderSample = NAN;
     if (!atomic_is_lock_free(&_context->requestedTempo)) { free(_context); _context = NULL; return nil; }
     return self;
 }
@@ -77,8 +88,28 @@ static void end(MLTransportContext *c, UInt32 n) {
 - (UInt64)musicalQueries { return atomic_load(&_context->musicQueries); }
 - (UInt64)transportQueries { return atomic_load(&_context->transportQueries); }
 - (UInt32)renderedFrames { return atomic_load(&_context->frames); }
-- (void)beginRenderFrames:(UInt32)n { begin(_context, n); }
+- (void)beginRenderFrames:(UInt32)n { _context->renderSample = NAN; begin(_context, n); }
+- (void)beginRenderFrames:(UInt32)n atSampleTime:(double)sample { _context->renderSample = sample; begin(_context, n); }
 - (void)endRenderFrames:(UInt32)n { end(_context, n); }
+- (int64_t)framesUntilDownbeatAtSampleTime:(double)sample {
+    MLTransportContext *c = _context;
+    if (!atomic_load(&c->requestedPlaying)) return -1;
+    if (!isfinite(sample)) return -1;
+    if (atomic_load(&c->reset) != atomic_load(&c->seenReset) || !atomic_load(&c->anchorValid)) return 0;
+    // Bounded snapshot: never spin or wait on an audio callback.
+    for (int attempt = 0; attempt < 3; attempt++) {
+        UInt64 sequence = atomic_load(&c->anchorSequence);
+        if (sequence & 1) continue;
+        double anchor = atomic_load(&c->anchorSample), beat = atomic_load(&c->anchorBeat);
+        if (sequence != atomic_load(&c->anchorSequence)) continue;
+        double framesPerBeat = 60.0 * atomic_load(&c->rate) / atomic_load(&c->requestedTempo);
+        double current = beat + (sample - anchor) / framesPerBeat;
+        double phase = fmod(fmax(0, current), 4.0);
+        double remaining = (phase < 1e-8 || 4.0 - phase < 1e-8) ? 0 : (4.0 - phase) * framesPerBeat;
+        return (int64_t)llround(remaining);
+    }
+    return INT64_MAX; // Try again next callback, rather than start off the beat.
+}
 - (void)attachToAudioUnit:(AUAudioUnit *)unit {
     [self detach]; _unit = unit;
     MLTransportContext *c = _context;
@@ -105,9 +136,8 @@ static void end(MLTransportContext *c, UInt32 n) {
         return YES;
     };
     _observer = [unit tokenByAddingRenderObserver:^(AudioUnitRenderActionFlags flags, const AudioTimeStamp *time, AUAudioFrameCount frames, NSInteger bus) {
-        (void)time;
         if (bus != 0) return;
-        if (flags & kAudioUnitRenderAction_PreRender) begin(c, frames);
+        if (flags & kAudioUnitRenderAction_PreRender) { c->renderSample = time && (time->mFlags & kAudioTimeStampSampleTimeValid) ? time->mSampleTime : NAN; begin(c, frames); }
         if (flags & kAudioUnitRenderAction_PostRender) end(c, frames);
     }];
     _attached = YES;

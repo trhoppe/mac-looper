@@ -9,10 +9,10 @@ struct LooperPanel: View {
     private var bars: Binding<Double> { Binding(get: { Double(model.bars) }, set: { if $0.isFinite { model.bars = Int(min(8, max(1, $0.rounded()))) } }) }
     private var threshold: Binding<Double> { Binding(get: { model.thresholdDB }, set: { if $0.isFinite { model.thresholdDB = min(0, max(-72, $0)) } }) }
     private var stateColor: Color {
-        switch Int(model.state) { case TL_RECORDING: JamDesign.recording; case TL_ARMED: JamDesign.armed; case TL_PLAYING: JamDesign.playing; default: JamDesign.secondary }
+        switch Int(model.state) { case TL_RECORDING: JamDesign.recording; case TL_ARMED, TL_WAITING: JamDesign.armed; case TL_PLAYING: JamDesign.playing; default: JamDesign.secondary }
     }
     private var stateName: String {
-        switch Int(model.state) { case TL_RECORDING: "Recording"; case TL_ARMED: "Armed"; case TL_PLAYING: "Playing"; case TL_STOPPED: "Stopped"; default: "Empty" }
+        switch Int(model.state) { case TL_RECORDING: "Recording"; case TL_ARMED: "Armed"; case TL_WAITING: "Waiting"; case TL_PLAYING: "Playing"; case TL_STOPPED: "Stopped"; default: "Empty" }
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -97,7 +97,13 @@ struct LooperPanel: View {
             .font(.system(size: 13, weight: .regular).monospacedDigit()).foregroundStyle(.secondary).fixedSize()
     }
     private var transport: some View {
-        HStack(spacing: 10) { armButton; recordButton; playButton; clearButton }
+        HStack(spacing: 8) {
+            armButton; recordButton; playButton; clearButton
+            Button { Task { await model.saveLoop() } } label: { transportIcon("square.and.arrow.down") }
+                .disabled(!model.canSave).help("Save loop…").accessibilityLabel("Save loop")
+            Button { model.requestingLoopFile = true } label: { transportIcon("folder") }
+                .disabled(!model.canRecall).help("Open saved loop…").accessibilityLabel("Open saved loop")
+        }
             .buttonStyle(JamIconStyle())
     }
     private var armButton: some View {
@@ -118,13 +124,13 @@ struct LooperPanel: View {
     }
     private var playButton: some View {
         Button { model.playStop() } label: {
-                transportIcon(model.state == TL_PLAYING || model.busy ? "stop.fill" : "play.fill")
-            }.disabled(!model.hasLoop && !model.busy)
-                .help(model.state == TL_PLAYING || model.busy ? "Stop loop" : "Play loop")
-                .accessibilityLabel(model.state == TL_PLAYING || model.busy ? "Stop loop" : "Play loop")
+                transportIcon(model.state == TL_PLAYING || model.state == TL_WAITING || model.busy ? "stop.fill" : "play.fill")
+            }.disabled((!model.hasLoop && !model.busy) || model.fileBusy || model.pendingRecall != nil)
+                .help(model.state == TL_WAITING ? "Cancel queued loop" : model.state == TL_PLAYING || model.busy ? "Stop loop" : "Play loop")
+                .accessibilityLabel(model.state == TL_PLAYING || model.state == TL_WAITING || model.busy ? "Stop loop" : "Play loop")
     }
     private var clearButton: some View {
-        Button { model.clear() } label: { transportIcon("trash") }.disabled((!model.running && !model.audioPaused) || model.state == TL_EMPTY)
+        Button { model.clear() } label: { transportIcon("trash") }.disabled((!model.running && !model.audioPaused) || model.state == TL_EMPTY || model.fileBusy || model.pendingRecall != nil)
             .help("Clear loop").accessibilityLabel("Clear loop")
     }
     private func transportIcon(_ name: String) -> some View {

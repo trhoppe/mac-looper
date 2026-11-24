@@ -18,5 +18,9 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)detach;
 - (void)beginRenderFrames:(UInt32)frames;
 - (void)endRenderFrames:(UInt32)frames;
+// Render-thread query in the engine sample-time domain, independent of which
+// mixer branch is pulled first. -1 means stopped.
+- (int64_t)framesUntilDownbeatAtSampleTime:(double)sampleTime;
+- (void)beginRenderFrames:(UInt32)frames atSampleTime:(double)sampleTime;
 @end
 NS_ASSUME_NONNULL_END
