@@ -5,6 +5,7 @@ import LooperCore
 struct LooperPanel: View {
     @ObservedObject var model: LooperModel
     var fillsHeight = false
+    @State private var showingSavedLoops = false
     private let accent = JamDesign.accent
     private var bars: Binding<Double> { Binding(get: { Double(model.bars) }, set: { if $0.isFinite { model.bars = Int(min(8, max(1, $0.rounded()))) } }) }
     private var threshold: Binding<Double> { Binding(get: { model.thresholdDB }, set: { if $0.isFinite { model.thresholdDB = min(0, max(-72, $0)) } }) }
@@ -70,11 +71,12 @@ struct LooperPanel: View {
                 let mid = size.height / 2
                 var baseline = Path(); baseline.move(to: CGPoint(x: 0, y: mid)); baseline.addLine(to: CGPoint(x: size.width, y: mid))
                 context.stroke(baseline, with: .color(.white.opacity(0.1)), lineWidth: 1)
+                var peaks = Path()
                 for (i, value) in model.waveform.enumerated() where value > 0 {
                     let x = size.width * (Double(i) + 0.5) / 256, h = max(1, min(1, Double(value)) * mid)
-                    var p = Path(); p.move(to: CGPoint(x: x, y: mid - h)); p.addLine(to: CGPoint(x: x, y: mid + h))
-                    context.stroke(p, with: .color(stateColor.opacity(0.9)), lineWidth: 2)
+                    peaks.move(to: CGPoint(x: x, y: mid - h)); peaks.addLine(to: CGPoint(x: x, y: mid + h))
                 }
+                context.stroke(peaks, with: .color(stateColor.opacity(0.9)), lineWidth: 2)
                 if model.hasLoop || model.state == TL_RECORDING {
                     let x = size.width * min(1, max(0, model.progress))
                     var p = Path(); p.move(to: CGPoint(x: x, y: 0)); p.addLine(to: CGPoint(x: x, y: size.height))
@@ -101,8 +103,13 @@ struct LooperPanel: View {
             armButton; recordButton; playButton; clearButton
             Button { Task { await model.saveLoop() } } label: { transportIcon("square.and.arrow.down") }
                 .disabled(!model.canSave).help("Save loop…").accessibilityLabel("Save loop")
-            Button { model.requestingLoopFile = true } label: { transportIcon("folder") }
+            Button { showingSavedLoops.toggle() } label: { transportIcon("folder") }
                 .disabled(!model.canRecall).help("Open saved loop…").accessibilityLabel("Open saved loop")
+                .anchorPreference(key: JamDropdownPopupKey.self, value: .bounds) { anchor in
+                    showingSavedLoops ? JamDropdownRequest(anchor: anchor, title: "Saved loops",
+                        content: AnyView(SavedLoopBrowser(model: model, close: { showingSavedLoops = false })),
+                        close: { showingSavedLoops = false }, width: 380, height: 420, prefersAbove: true, opensBeside: true) : nil
+                }
         }
             .buttonStyle(JamIconStyle())
     }

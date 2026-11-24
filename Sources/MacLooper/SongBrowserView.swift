@@ -67,6 +67,18 @@ struct SongBrowserView: View {
                 // Preserve the Songs popover's outline beside the opaque rows.
                 .clipped().padding(.horizontal, 1)
                 #endif
+                .overlay {
+                    if library.library != nil && library.songs.isEmpty {
+                        VStack(spacing: 8) {
+                            Text(library.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                 ? (library.playlistID == nil ? "No songs yet" : "This playlist is empty") : "No matching songs")
+                                .font(.callout)
+                            Text(library.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                 ? "Use + to add a song." : "Try another title or artist.")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }.multilineTextAlignment(.center).padding(20).allowsHitTesting(false)
+                    }
+                }
             Text(library.status).font(.caption2).foregroundStyle(.secondary).lineLimit(3)
                 .padding(.horizontal, 16).padding(.vertical, 12).accessibilityLabel("Library status: \(library.status)")
         }.frame(maxHeight: .infinity)

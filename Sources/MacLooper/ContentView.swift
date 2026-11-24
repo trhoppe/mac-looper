@@ -26,8 +26,8 @@ struct ContentView: View, Equatable {
     @AppStorage("audioPaneWidth") private var audioWidth = 380.0
     @State private var drumOutput: AudioDevice?
     @State private var importing = false
-    @State private var exportingLoop = false
-    @State private var loopExport: LoopExport?
+    @State private var namingLoop: LoopSaveRequest?
+    @State private var loopSaveName = ""
     @State private var confirmingLoopRecall = false
     @State private var loopFailure: String?
     @State private var importKind = ImportKind.libraryFolder
@@ -155,30 +155,32 @@ struct ContentView: View, Equatable {
                 }
             }
         }
-        .fileExporter(isPresented: $exportingLoop, document: loopExport?.document, contentType: .jamLoop, defaultFilename: loopExport?.name ?? "Loop") { result in
-            if let loopExport { model.didSaveLoop(id: loopExport.id, result: result) }
-            loopExport = nil
-        }
-        .alert(loopFailure == nil ? "Replace current loop?" : "Loop file", isPresented: Binding(
-            get: { confirmingLoopRecall || loopFailure != nil },
-            set: { if !$0 { confirmingLoopRecall = false; loopFailure = nil } }
+        .alert(namingLoop != nil ? "Save loop" : loopFailure == nil ? "Replace current loop?" : "Loop file", isPresented: Binding(
+            get: { namingLoop != nil || confirmingLoopRecall || loopFailure != nil },
+            set: { if !$0 { namingLoop = nil; confirmingLoopRecall = false; loopFailure = nil } }
         )) {
-            if loopFailure != nil {
+            if let request = namingLoop {
+                TextField("Loop name", text: $loopSaveName)
+                Button("Cancel", role: .cancel) { namingLoop = nil }
+                Button("Save") { Task { await model.storeLoop(request, name: loopSaveName) } }
+                    .disabled(loopSaveName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            } else if loopFailure != nil {
                 Button("OK") { loopFailure = nil }
             } else {
                 Button("Cancel", role: .cancel) { model.pendingRecall = nil }
                 Button("Replace loop", role: .destructive) { Task { await model.confirmRecall() } }
             }
         } message: {
-            Text(loopFailure ?? "Your current loop hasn’t been saved. Opening \(model.pendingRecall?.name ?? "this loop") will replace it.")
+            Text(namingLoop != nil ? "Saved in your library’s Loops folder." : loopFailure ?? "Your current loop hasn’t been saved. Opening \(model.pendingRecall?.name ?? "this loop") will replace it.")
         }
         .onReceive(model.$requestingLoopFile.filter { $0 }.receive(on: RunLoop.main)) { _ in model.requestingLoopFile = false; beginImport(.loopFile) }
-        .onReceive(model.$exportRequest.compactMap { $0 }.receive(on: RunLoop.main)) { request in
-            model.exportRequest = nil; loopExport = request; exportingLoop = true
+        .onReceive(model.$saveRequest.compactMap { $0 }.receive(on: RunLoop.main)) { request in
+            model.saveRequest = nil; loopSaveName = request.name; namingLoop = request
         }
         .onReceive(model.$pendingRecall.compactMap { $0 }.receive(on: RunLoop.main)) { _ in confirmingLoopRecall = true }
         .onReceive(model.$loopFileFailure.compactMap { $0 }.receive(on: RunLoop.main)) { failure in model.loopFileFailure = nil; loopFailure = failure }
         .onAppear { files.setOutput(model.output); drumOutput = model.output }
+        .onReceive(library.$folderURL.removeDuplicates().receive(on: RunLoop.main)) { model.configureLoopLibrary($0) }
         .onReceive(model.$outputUID.removeDuplicates().dropFirst().receive(on: RunLoop.main)) { _ in files.setOutput(model.output); drumOutput = model.output; model.routeDidChange() }
         .onReceive(model.$devices.dropFirst().receive(on: RunLoop.main)) { _ in files.setOutput(model.output); drumOutput = model.output }
         .onReceive(model.$inputUID.removeDuplicates().dropFirst().receive(on: RunLoop.main)) { _ in model.inputChannel = 0; model.routeDidChange() }

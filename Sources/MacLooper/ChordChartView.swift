@@ -10,13 +10,11 @@ struct ChordChartView: View {
     let library: SongLibraryModel
     @AppStorage("chartFontSize") private var fontSize = 21.0
     @AppStorage("chartTwoColumns") private var twoColumns = true
-    private let document: ChordProDocument?
     init(song: LibrarySong?, library: SongLibraryModel, edit: @escaping () -> Void = {}) {
         self.song = song; self.library = library; self.edit = edit
-        document = song.map { ChordProDocument(source: $0.chordPro, transpose: $0.chartTransposition, flats: $0.chartKey?.contains("b") == true) }
     }
     var body: some View {
-        ChartPresentation(song: song, library: library, document: document, fontSize: fontSize, twoColumns: twoColumns,
+        ChartPresentation(song: song, library: library, fontSize: fontSize, twoColumns: twoColumns,
                           changeFont: { fontSize = $0 }, toggleColumns: { twoColumns.toggle() }, edit: edit).equatable()
     }
 }
@@ -24,7 +22,6 @@ struct ChordChartView: View {
 private struct ChartPresentation: View, Equatable {
     let song: LibrarySong?
     let library: SongLibraryModel
-    let document: ChordProDocument?
     let fontSize: Double
     let twoColumns: Bool
     let changeFont: (Double) -> Void
@@ -38,16 +35,20 @@ private struct ChartPresentation: View, Equatable {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if let song, let document {
+            if let song {
+                // Parse inside the equatable boundary, after unchanged inputs
+                // have been skipped by SwiftUI.
+                let document = ChordProDocument(source: song.chordPro, transpose: song.chartTransposition,
+                                                flats: song.chartKey?.contains("b") == true)
                 ViewThatFits(in: .horizontal) {
                     HStack(alignment: .top, spacing: 16) {
                         songTitle(song, document: document)
                         Spacer(minLength: 12)
-                        chartControls(song)
+                        chartControls(song, document: document)
                     }
                     VStack(alignment: .leading, spacing: 10) {
                         songTitle(song, document: document)
-                        HStack { Spacer(minLength: 0); chartControls(song) }
+                        HStack { Spacer(minLength: 0); chartControls(song, document: document) }
                     }
                 }.padding(.horizontal, 20).padding(.top, 18).padding(.bottom, showingDiagrams ? 14 : 2)
                 if showingDiagrams && !document.guitarChords.isEmpty {
@@ -164,7 +165,7 @@ private struct ChartPresentation: View, Equatable {
     private func toggleDiagrams() {
         withAnimation(.easeInOut(duration: 0.2)) { showingDiagrams.toggle() }
     }
-    private func chartControls(_ song: LibrarySong) -> some View {
+    private func chartControls(_ song: LibrarySong, document: ChordProDocument) -> some View {
         VStack(alignment: .trailing, spacing: 8) {
             HStack(spacing: 6) {
                 Button { autoScrolling.toggle() } label: {
@@ -195,7 +196,7 @@ private struct ChartPresentation: View, Equatable {
                 }.accessibilityLabel("Edit song").help("Edit song")
             }.buttonStyle(JamIconStyle()).controlSize(.regular)
             songMetadata(song).font(.caption).foregroundStyle(.secondary).lineLimit(2)
-            if !showingDiagrams && document?.guitarChords.isEmpty == false {
+            if !showingDiagrams && !document.guitarChords.isEmpty {
                 Button { toggleDiagrams() } label: {
                     HStack(spacing: 6) {
                         Text("Chord charts").font(.system(size: 12, weight: .medium))

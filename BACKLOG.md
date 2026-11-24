@@ -8,6 +8,7 @@ The redesign is complete. Remaining features, in priority order:
 ## Completed
 
 - **Save and recall loops** (2026-11-23, original priority 1): portable `.jamloop` files with stereo audio, BPM, bars, and actual take length. Recalled loops can queue playback on Drummer’s next 4/4 beat 1. Recording retains its immediate/threshold behavior. Drummer preset saving remains in its plugin.
+- **Shared loop storage** (2026-11-24): Save writes named takes into the chord library’s Loops folder; Open browses that collection on either device. Choosing the same iCloud Drive library folder shares the files. Duplicate names preserve both takes.
 
 ## Existing choices to preserve
 

@@ -121,3 +121,41 @@ extension LibraryLaunchTests {
         XCTAssertNil(model.error); XCTAssertFalse(model.status.contains("pending"))
     }
 }
+
+
+extension LibraryLaunchTests {
+    @MainActor func testBrowserSnapshotUpdatesForSearchSortPlaylistEditsAndRefresh() async throws {
+        let suite = "MacJamsBrowserSnapshot-" + UUID().uuidString
+        let defaults = UserDefaults(suiteName: suite)!
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(suite)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder); defaults.removePersistentDomain(forName: suite) }
+        let url = folder.appendingPathComponent("library.json")
+        try Data(#"{"songs":[{"id":"a","title":"Zebra","artist":"Alpha","rawData":"[C]A"},{"id":"b","title":"Apple","artist":"Zulu","rawData":"[G]B"}],"playlists":[{"id":"p","separateSongSettings":true,"arrangement":[{"type":"song","id":"a","capo":2}]}]}"#.utf8).write(to: url)
+        let model = SongLibraryModel(defaults: defaults, loadOnLaunch: false, folderOverride: folder)
+        defer { model.shutdown() }
+        await model.refresh()
+        XCTAssertEqual(model.songs.map(\.id), ["b", "a"])
+        model.selectedSongID = "a"
+        model.query = "Zulu"
+        XCTAssertEqual(model.songs.map(\.id), ["b"])
+        XCTAssertEqual(model.selectedSong?.id, "a", "Searching must not replace the open chart")
+        model.query = ""
+        model.sortOrder = .artistName
+        XCTAssertEqual(model.songs.map(\.id), ["a", "b"])
+        model.playlistID = "p"
+        XCTAssertEqual(model.songs.map(\.id), ["a"])
+        XCTAssertEqual(model.selectedSong?.capo, "2", "Keep playlist-specific chart settings")
+        model.playlistID = nil
+        var draft = SongDraft(song: try XCTUnwrap(model.selectedSong))
+        draft.title = "Edited"
+        try await model.save(draft)
+        XCTAssertEqual(model.songs.first?.title, "Edited")
+        XCTAssertEqual(model.selectedSong?.title, "Edited")
+        let updated = try Data(contentsOf: url)
+        try Data(String(decoding: updated, as: UTF8.self).replacingOccurrences(of: "Edited", with: "Refreshed").utf8).write(to: url, options: .atomic)
+        await model.refresh()
+        XCTAssertEqual(model.songs.first?.title, "Refreshed")
+        XCTAssertEqual(model.selectedSong?.title, "Refreshed")
+    }
+}

@@ -23,10 +23,17 @@ import JamCore
     @Published var error: String?
     @Published var requestingLoopFile = false
     @Published var loopFileFailure: String?
-    @Published var exportRequest: LoopExport?
+    @Published var saveRequest: LoopSaveRequest?
     @Published var pendingRecall: LoopRecall?
     @Published private(set) var fileBusy = false
     @Published private(set) var loopName: String?
+    @Published private(set) var savedLoopURL: URL?
+    @Published private(set) var loopLibraryFolder: URL?
+    @Published private(set) var savedLoops: [SavedLoopFile] = []
+    @Published private(set) var readingSavedLoops = false
+    @Published private(set) var savedLoopsError: String?
+    private let loopFiles: LoopFiles
+    private var loopFolderRevision = UUID()
     private var recalled = false
     private var loopIsSaved = false
     private var takeID = UUID()
@@ -53,7 +60,8 @@ import JamCore
     private var routeTask: Task<Void, Never>?
     private var scanningDevices = false
 
-    init() {
+    init(loopFiles: LoopFiles = LoopFiles()) {
+        self.loopFiles = loopFiles
         refreshDevices()
         #if os(macOS)
         if CommandLine.arguments.contains("--smoke-direct"), let direct = outputs.first(where: \.isAM4) { outputUID = direct.uid }
@@ -293,7 +301,23 @@ import JamCore
         if !tl_command(core, Int32(recalled ? TL_CMD_PLAY_SYNC : TL_CMD_PLAY_STOP), 0) { error = "Audio controls are busy. Try again." }
     }
     private func newTake() {
-        takeID = UUID(); loopIsSaved = false; recalled = false; loopName = nil
+        takeID = UUID(); loopIsSaved = false; recalled = false; loopName = nil; savedLoopURL = nil
+    }
+    func configureLoopLibrary(_ folder: URL) {
+        guard folder != loopLibraryFolder else { return }
+        loopFolderRevision = UUID(); loopLibraryFolder = folder
+        savedLoops = []; savedLoopsError = nil; readingSavedLoops = false
+    }
+    func refreshSavedLoops() async {
+        guard let folder = loopLibraryFolder else { savedLoopsError = LoopStorageError.chooseLibrary.localizedDescription; return }
+        let revision = loopFolderRevision
+        readingSavedLoops = true; savedLoopsError = nil
+        defer { if revision == loopFolderRevision { readingSavedLoops = false } }
+        do {
+            let entries = try await loopFiles.list(in: folder)
+            guard revision == loopFolderRevision else { return }
+            savedLoops = entries
+        } catch { if revision == loopFolderRevision { savedLoopsError = error.localizedDescription } }
     }
     func saveLoop() async {
         guard canSave else { return }
@@ -301,19 +325,23 @@ import JamCore
         defer { fileBusy = false }
         let id = takeID, tempo = bpm, count = bars
         do {
+            guard let folder = loopLibraryFolder else { throw LoopStorageError.chooseLibrary }
             let loop = try await host.snapshotLoop(bpm: tempo, bars: count)
             let data = try await Task.detached(priority: .userInitiated) { try loop.encoded() }.value
             guard id == takeID else { return }
-            exportRequest = LoopExport(id: id, document: LoopFileDocument(data: data), name: loopName ?? "Loop \(Int(tempo)) BPM")
+            saveRequest = LoopSaveRequest(id: id, data: data, name: loopName ?? "Loop \(Int(tempo)) BPM", libraryFolder: folder)
         } catch { loopFileFailure = error.localizedDescription }
     }
-    func didSaveLoop(id: UUID, result: Result<URL, Error>) {
-        switch result {
-        case .success(let url):
-            if id == takeID { loopIsSaved = true; loopName = url.deletingPathExtension().lastPathComponent }
-        case .failure(let error):
-            if (error as NSError).code != NSUserCancelledError { loopFileFailure = error.localizedDescription }
-        }
+    func storeLoop(_ request: LoopSaveRequest, name: String) async {
+        guard !fileBusy else { return }
+        guard loopLibraryFolder == request.libraryFolder else { loopFileFailure = "The library folder changed. Save the loop again to use its Loops folder."; return }
+        fileBusy = true
+        defer { fileBusy = false }
+        do {
+            let file = try await loopFiles.save(request.data, name: name, in: request.libraryFolder)
+            if request.id == takeID { loopIsSaved = true; loopName = file.name; savedLoopURL = file.url }
+            await refreshSavedLoops()
+        } catch { loopFileFailure = error.localizedDescription }
     }
     func openLoop(_ url: URL) async {
         // Finder/Files may deliver an open event while startup is still
@@ -331,12 +359,8 @@ import JamCore
         let access = url.startAccessingSecurityScopedResource()
         defer { if access { url.stopAccessingSecurityScopedResource() }; fileBusy = false }
         do {
-            let loop = try await Task.detached(priority: .userInitiated) {
-                let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
-                guard size <= SavedLoop.maximumFileBytes else { throw LoopFileError.invalid }
-                return try SavedLoop.decode(Data(contentsOf: url))
-            }.value
-            let recall = LoopRecall(loop: loop, name: url.deletingPathExtension().lastPathComponent)
+            let loop = try await loopFiles.read(url)
+            let recall = LoopRecall(loop: loop, name: url.deletingPathExtension().lastPathComponent, url: url)
             if hasLoop && !loopIsSaved { pendingRecall = recall }
             else { try await applyRecall(recall) }
         } catch { loopFileFailure = error.localizedDescription }
@@ -353,6 +377,7 @@ import JamCore
         try await host.prepareLoopRecall(output: output)
         try await host.restoreLoop(recall.loop)
         takeID = UUID(); loopName = recall.name; recalled = true; loopIsSaved = true
+        savedLoopURL = recall.url
         bpm = recall.loop.bpm; bars = recall.loop.bars; sampleRate = host.sampleRate
         running = true; audioPaused = false; lastCallbacks = host.callbacks; stalledTicks = 0
         error = nil

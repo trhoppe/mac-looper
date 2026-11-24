@@ -6,6 +6,34 @@ import JamCore
 @testable import MacLooper
 
 final class SavedLoopHostTests: XCTestCase {
+    @MainActor func testSharedLoopListTracksFolderAndPendingSaveCannotGoToAnotherLibrary() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let first = root.appendingPathComponent("First"), second = root.appendingPathComponent("Second")
+        try FileManager.default.createDirectory(at: first, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: second, withIntermediateDirectories: true)
+        let data = try SavedLoop(sampleRate: 48000, bpm: 120, bars: 1, left: Array(repeating: 0.2, count: 32), right: Array(repeating: 0.1, count: 32)).encoded()
+        let files = LoopFiles(), model = LooperModel(loopFiles: files)
+        defer { model.shutdown() }
+        _ = try await files.save(data, name: "First take", in: first)
+        model.configureLoopLibrary(first); await model.refreshSavedLoops()
+        XCTAssertEqual(model.savedLoops.map(\.name), ["First take"])
+        let request = LoopSaveRequest(id: UUID(), data: data, name: "Pending take", libraryFolder: first)
+        model.configureLoopLibrary(second)
+        XCTAssertTrue(model.savedLoops.isEmpty)
+        await model.storeLoop(request, name: "Pending take")
+        XCTAssertTrue(model.loopFileFailure?.contains("folder changed") == true)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: LoopFiles.folder(in: second).path))
+    }
+    @MainActor func testFailedCloudDownloadRetainsCurrentTake() async throws {
+        let model = LooperModel(loopFiles: LoopFiles(refreshCloudFile: { _ in throw URLError(.notConnectedToInternet) }))
+        defer { model.shutdown() }
+        model.state = Int32(TL_STOPPED); model.length = 1234; model.recorded = 1234
+        await model.openLoop(URL(fileURLWithPath: "/unavailable/Remote.jamloop"))
+        XCTAssertEqual(model.state, Int32(TL_STOPPED)); XCTAssertEqual(model.length, 1234)
+        XCTAssertNil(model.pendingRecall); XCTAssertFalse(model.fileBusy)
+        XCTAssertTrue(model.loopFileFailure?.contains("iCloud") == true)
+    }
     @MainActor func testFileOpenIntentWaitsForStartupAndProtectsUnsavedTake() async throws {
         let model = LooperModel()
         defer { model.shutdown() }

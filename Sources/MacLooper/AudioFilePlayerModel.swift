@@ -4,7 +4,10 @@ import AppKit
 #endif
 
 @MainActor final class AudioFilePlayerModel: ObservableObject {
-    @Published private(set) var groups: [AudioFolderGroup] = []
+    @Published private(set) var groups: [AudioFolderGroup] = [] {
+        didSet { tracks = groups.flatMap(\.tracks) }
+    }
+    private(set) var tracks: [AudioTrack] = []
     @Published private(set) var visibleGroups: [AudioFolderGroup] = []
     @Published private(set) var folder: URL?
     @Published private(set) var scanning = false
@@ -43,8 +46,7 @@ import AppKit
             openFolder(url)
         }
     }
-    var trackCount: Int { groups.reduce(0) { $0 + $1.tracks.count } }
-    var tracks: [AudioTrack] { groups.flatMap(\.tracks) }
+    var trackCount: Int { tracks.count }
     var outputName: String { output?.name ?? "Choose an output in settings" }
     func setOutput(_ device: AudioDevice?) {
         guard output?.uid != device?.uid else { output = device; return }

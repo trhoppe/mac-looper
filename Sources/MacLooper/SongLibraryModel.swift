@@ -3,12 +3,16 @@ import SwiftUI
 import JamCore
 
 @MainActor final class SongLibraryModel: ObservableObject {
-    @Published private(set) var library: JustChordsLibrary?
+    @Published private(set) var library: JustChordsLibrary? { didSet { updateSongs() } }
+    @Published private(set) var songs: [LibrarySong] = []
     @Published var selectedSongID: String?
-    @Published var playlistID: String?
-    @Published var query = ""
+    @Published var playlistID: String? { didSet { if playlistID != oldValue { updateSongs() } } }
+    @Published var query = "" { didSet { if query != oldValue { updateSongs() } } }
     @Published var sortOrder: SongSortOrder {
-        didSet { defaults.set(sortOrder.rawValue, forKey: "songSortOrder") }
+        didSet {
+            defaults.set(sortOrder.rawValue, forKey: "songSortOrder")
+            if sortOrder != oldValue { updateSongs() }
+        }
     }
     @Published private(set) var status = "Choose your library in Settings"
     @Published private(set) var error: String?
@@ -67,8 +71,11 @@ import JamCore
         if loadOnLaunch { Task { await refresh() } }
     }
     var selectedSong: LibrarySong? { songs.first(where: { $0.id == selectedSongID }) ?? library?.songs.first(where: { $0.id == selectedSongID }) }
-    var songs: [LibrarySong] {
-        sortOrder.apply(to: library?.songs(in: playlistID) ?? [], query: query)
+    // Rebuild only when browser inputs change, rather than on each selection,
+    // layout or status update. All Songs needs no intermediate title sort.
+    private func updateSongs() {
+        let source = playlistID == nil ? library?.songs : library?.songs(in: playlistID)
+        songs = sortOrder.apply(to: source ?? [], query: query)
     }
 
     var destination: URL { folderURL.appendingPathComponent("library.json") }

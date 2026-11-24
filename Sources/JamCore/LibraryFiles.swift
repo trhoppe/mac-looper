@@ -46,7 +46,7 @@ public enum LibraryCloudRefreshError: LocalizedError {
 }
 
 extension LibraryFiles {
-    private static func downloadCurrentCloudFile(_ url: URL) async throws {
+    static func downloadCurrentCloudFile(_ url: URL) async throws {
         try await waitForCurrentCloudFile(url, status: { url in
             var fresh = url
             fresh.removeAllCachedResourceValues()

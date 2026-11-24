@@ -56,7 +56,7 @@ struct JamPlainButtonStyle: ButtonStyle {
     }
 }
 
-enum JamPopupEdge { case top, leading }
+enum JamPopupEdge { case top, bottom, leading }
 
 private struct JamPopupShape: Shape {
     let edge: JamPopupEdge
@@ -64,8 +64,8 @@ private struct JamPopupShape: Shape {
     func path(in rect: CGRect) -> Path {
         let left: CGFloat = edge == .leading ? 8 : 0
         let top: CGFloat = edge == .top ? 8 : 0
-        let right = rect.width, bottom = rect.height, radius: CGFloat = JamDesign.radius
-        let tip = min(max(pointer, 20), (edge == .top ? right : bottom) - 20)
+        let right = rect.width, bottom = rect.height - (edge == .bottom ? 8 : 0), radius: CGFloat = JamDesign.radius
+        let tip = min(max(pointer, 20), (edge == .leading ? bottom : right) - 20)
         var path = Path()
         path.move(to: CGPoint(x: left + radius, y: top))
         if edge == .top {
@@ -77,6 +77,11 @@ private struct JamPopupShape: Shape {
         path.addQuadCurve(to: CGPoint(x: right, y: top + radius), control: CGPoint(x: right, y: top))
         path.addLine(to: CGPoint(x: right, y: bottom - radius))
         path.addQuadCurve(to: CGPoint(x: right - radius, y: bottom), control: CGPoint(x: right, y: bottom))
+        if edge == .bottom {
+            path.addLine(to: CGPoint(x: tip + 8, y: bottom))
+            path.addLine(to: CGPoint(x: tip, y: rect.height))
+            path.addLine(to: CGPoint(x: tip - 8, y: bottom))
+        }
         path.addLine(to: CGPoint(x: left + radius, y: bottom))
         path.addQuadCurve(to: CGPoint(x: left, y: bottom - radius), control: CGPoint(x: left, y: bottom))
         if edge == .leading {
@@ -98,7 +103,7 @@ struct JamPopupSurface<Content: View>: View {
     var body: some View {
         let shape = JamPopupShape(edge: edge, pointer: pointer)
         content().clipShape(RoundedRectangle(cornerRadius: JamDesign.radius))
-            .padding(edge == .top ? .top : .leading, 8)
+            .padding(edge == .top ? .top : edge == .bottom ? .bottom : .leading, 8)
             .background(shape.fill(JamDesign.card))
             .overlay { shape.stroke(.white.opacity(0.16), lineWidth: 1) }
             .shadow(color: .black.opacity(0.45), radius: 14, y: 6)
@@ -113,6 +118,7 @@ struct JamDropdownRequest {
     let close: () -> Void
     var width: CGFloat = 340
     var height: CGFloat? = nil
+    var prefersAbove = false
     var alignLeading = false
     var opensBeside = false
 }
@@ -130,14 +136,19 @@ struct JamDropdownPopup: View {
             let anchor = geo[request.anchor]
             let opensRight = request.opensBeside && anchor.maxX + request.width + 16 <= geo.size.width - 8
             let width = min(request.width + (opensRight ? 8 : 0), max(0, geo.size.width - 16))
-            let y = opensRight ? max(8, top + 4) : anchor.maxY + 6
-            let available = max(0, geo.size.height * 0.9 - y)
+            let belowY = anchor.maxY + 6
+            let ceiling = max(8, top + 4), floor = geo.size.height * 0.9
+            let aboveBottom = min(anchor.minY - 6, floor)
+            let aboveAvailable = max(0, aboveBottom - ceiling), belowAvailable = max(0, floor - belowY)
+            let opensAbove = request.prefersAbove && !opensRight && belowAvailable < 200 && aboveAvailable > belowAvailable
+            let available = opensAbove ? aboveAvailable : opensRight ? max(0, floor - ceiling) : belowAvailable
             let height = min(request.height ?? available, available)
+            let y = opensAbove ? aboveBottom - height : opensRight ? ceiling : belowY
             let preferredX = opensRight ? anchor.maxX + 8 : request.alignLeading ? anchor.minX : anchor.midX - width / 2
             let x = min(max(8, preferredX), max(8, geo.size.width - width - 8))
             ZStack(alignment: .topLeading) {
                 Color.black.opacity(0.001).contentShape(Rectangle()).onTapGesture(perform: request.close)
-                JamPopupSurface(edge: opensRight ? .leading : .top,
+                JamPopupSurface(edge: opensRight ? .leading : opensAbove ? .bottom : .top,
                                 pointer: opensRight ? anchor.midY - y : anchor.midX - x) { request.content }
                     .frame(width: width, height: height).offset(x: x, y: y)
                 Button("Close " + request.title, action: request.close).keyboardShortcut(.cancelAction)

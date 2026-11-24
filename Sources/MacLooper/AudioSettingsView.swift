@@ -61,6 +61,8 @@ struct AudioSettingsView: View {
                 Text(library.status).font(.caption).foregroundStyle(.secondary)
                 Text("Library folder: \(library.folderURL.lastPathComponent)").font(.caption).lineLimit(2)
                 Button("Choose library folder…") { chooseFolder() }
+                Text("Loops save in this library’s Loops folder. Choose the same iCloud Drive library folder on Mac and iPad.")
+                    .font(.caption).foregroundStyle(.secondary)
                 if !library.conflicts.isEmpty {
                     Button("Review iCloud versions…") { reviewingConflicts = true }
                 }

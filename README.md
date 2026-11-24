@@ -231,12 +231,21 @@ The looper volume control changes **loop playback only**.
 Loop, file-player and drummer volume each start at **100%**. Type a percentage beside its speaker icon
 for an exact setting. The AM4 handles live guitar monitoring. Overdub is deferred to a later version.
 
-Use **Save loop** (the save icon) to write a lossless stereo `.jamloop` file, then
-**Open saved loop** (the folder icon) to recall it on Mac or iPad. Files include the
-take’s actual length, BPM and bar count; early finishes are preserved. You choose
-where to save, including iCloud Drive for sharing between devices. Opening a file
-restores its BPM to the shared tempo and leaves playback stopped. An unsaved take
-gets a replacement confirmation. Recalled loops can play without a capture input.
+Use **Save loop** (the save icon) and enter a name. Takes save automatically as
+lossless stereo `.jamloop` files in **Loops**, inside the selected chord-library
+folder. Choose the **same iCloud Drive library folder in Settings on Mac and iPad**;
+iCloud Drive carries the files between devices. No separate loop folder setup is
+needed. Duplicate names get a number so an earlier take is kept.
+
+**Open saved loop** (the folder icon) shows this shared collection, with search
+and Refresh. To bring in a previously saved local take, choose **Open a loop file…**,
+then **Save loop** to copy it into the shared folder. The original file stays in place.
+Files include the take’s actual length, BPM and bar count; early finishes are
+preserved. Opening restores the shared BPM and leaves playback stopped. An
+unsaved take gets a replacement confirmation. Recalled loops can play without a
+capture input. Cloud-only files download before opening; an unavailable download
+or conflicting cloud version leaves the current take in place. iCloud transfers
+can take time; Refresh the collection after the other device finishes uploading.
 
 When Drummer is running, **Play / CC24** queues a recalled loop for the next
 **beat 1 of a 4/4 bar**. Its badge says **Waiting**; Stop / CC24 cancels the queued
