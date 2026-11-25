@@ -968,7 +968,7 @@
 				"SDKROOT" = "iphoneos";
 				"SUPPORTED_PLATFORMS" = "iphoneos iphonesimulator";
 				"IPHONEOS_DEPLOYMENT_TARGET" = "18.0";
-				"TARGETED_DEVICE_FAMILY" = "2";
+				"TARGETED_DEVICE_FAMILY" = "1,2";
 				"SUPPORTS_MACCATALYST" = "NO";
 				"PRODUCT_BUNDLE_IDENTIFIER" = "com.thoppe.maclooper";
 				"CODE_SIGN_ENTITLEMENTS" = "MacLooper-iPad.entitlements";
@@ -977,6 +977,7 @@
 				"INFOPLIST_KEY_UILaunchScreen_Generation" = "YES";
 				"INFOPLIST_KEY_UIFileSharingEnabled" = "YES";
 				"INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace" = "YES";
+				"INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone" = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				"INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad" = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				"SWIFT_OPTIMIZATION_LEVEL" = "-Onone";
 				"DEBUG_INFORMATION_FORMAT" = "dwarf";
@@ -1009,7 +1010,7 @@
 				"SDKROOT" = "iphoneos";
 				"SUPPORTED_PLATFORMS" = "iphoneos iphonesimulator";
 				"IPHONEOS_DEPLOYMENT_TARGET" = "18.0";
-				"TARGETED_DEVICE_FAMILY" = "2";
+				"TARGETED_DEVICE_FAMILY" = "1,2";
 				"SUPPORTS_MACCATALYST" = "NO";
 				"PRODUCT_BUNDLE_IDENTIFIER" = "com.thoppe.maclooper";
 				"CODE_SIGN_ENTITLEMENTS" = "MacLooper-iPad.entitlements";
@@ -1018,6 +1019,7 @@
 				"INFOPLIST_KEY_UILaunchScreen_Generation" = "YES";
 				"INFOPLIST_KEY_UIFileSharingEnabled" = "YES";
 				"INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace" = "YES";
+				"INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone" = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				"INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad" = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				"SWIFT_OPTIMIZATION_LEVEL" = "-O";
 				"DEBUG_INFORMATION_FORMAT" = "dwarf-with-dsym";
@@ -1330,7 +1332,7 @@
 				"SDKROOT" = "iphoneos";
 				"SUPPORTED_PLATFORMS" = "iphoneos iphonesimulator";
 				"IPHONEOS_DEPLOYMENT_TARGET" = "18.0";
-				"TARGETED_DEVICE_FAMILY" = "2";
+				"TARGETED_DEVICE_FAMILY" = "1,2";
 				"PRODUCT_NAME" = "MacLooper-iPadTests";
 				"PRODUCT_BUNDLE_IDENTIFIER" = "com.thoppe.maclooper.tests";
 				"GENERATE_INFOPLIST_FILE" = "YES";
@@ -1358,7 +1360,7 @@
 				"SDKROOT" = "iphoneos";
 				"SUPPORTED_PLATFORMS" = "iphoneos iphonesimulator";
 				"IPHONEOS_DEPLOYMENT_TARGET" = "18.0";
-				"TARGETED_DEVICE_FAMILY" = "2";
+				"TARGETED_DEVICE_FAMILY" = "1,2";
 				"PRODUCT_NAME" = "MacLooper-iPadTests";
 				"PRODUCT_BUNDLE_IDENTIFIER" = "com.thoppe.maclooper.tests";
 				"GENERATE_INFOPLIST_FILE" = "YES";
@@ -1588,6 +1590,106 @@
 			"productReference" = "AD5D520508EF8024D25C00BA";
 			"productType" = "com.apple.product-type.bundle.unit-test";
 		};
+		"FC3F0E48C5E866D91623BA94" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Tests/PhoneUITests/PhoneNavigationTests.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"48584B9FB709BA502C041C53" = {
+			"isa" = "PBXFileReference";
+			"explicitFileType" = "wrapper.cfbundle";
+			"path" = "PhoneUITests.xctest";
+			"sourceTree" = "BUILT_PRODUCTS_DIR";
+		};
+		"85CAD00B183D0EFA74F3123F" = {
+			"isa" = "XCBuildConfiguration";
+			"buildSettings" = {
+				"SWIFT_VERSION" = "5.0";
+				"CLANG_ENABLE_MODULES" = "YES";
+				"CLANG_ENABLE_OBJC_ARC" = "YES";
+				"SWIFT_STRICT_CONCURRENCY" = "minimal";
+				"ENABLE_USER_SCRIPT_SANDBOXING" = "YES";
+				"LD_RUNPATH_SEARCH_PATHS" = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks";
+				"SDKROOT" = "iphoneos";
+				"SUPPORTED_PLATFORMS" = "iphoneos iphonesimulator";
+				"IPHONEOS_DEPLOYMENT_TARGET" = "18.0";
+				"TARGETED_DEVICE_FAMILY" = "1,2";
+				"PRODUCT_NAME" = "PhoneUITests";
+				"TEST_TARGET_NAME" = "MacLooper-iPad";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "com.thoppe.maclooper.phoneuitests";
+				"GENERATE_INFOPLIST_FILE" = "YES";
+				"DEVELOPMENT_TEAM" = "S37ZVC89JW";
+				"CODE_SIGN_STYLE" = "Automatic";
+				"SWIFT_OPTIMIZATION_LEVEL" = "-Onone";
+				"DEBUG_INFORMATION_FORMAT" = "dwarf";
+				"SWIFT_ACTIVE_COMPILATION_CONDITIONS" = "$(inherited) DEBUG";
+				"ENABLE_TESTABILITY" = "YES";
+				"ONLY_ACTIVE_ARCH" = "YES";
+			};
+			"name" = "Debug";
+		};
+		"C0B00E019AB833573E0B03BA" = {
+			"isa" = "XCBuildConfiguration";
+			"buildSettings" = {
+				"SWIFT_VERSION" = "5.0";
+				"CLANG_ENABLE_MODULES" = "YES";
+				"CLANG_ENABLE_OBJC_ARC" = "YES";
+				"SWIFT_STRICT_CONCURRENCY" = "minimal";
+				"ENABLE_USER_SCRIPT_SANDBOXING" = "YES";
+				"LD_RUNPATH_SEARCH_PATHS" = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks";
+				"SDKROOT" = "iphoneos";
+				"SUPPORTED_PLATFORMS" = "iphoneos iphonesimulator";
+				"IPHONEOS_DEPLOYMENT_TARGET" = "18.0";
+				"TARGETED_DEVICE_FAMILY" = "1,2";
+				"PRODUCT_NAME" = "PhoneUITests";
+				"TEST_TARGET_NAME" = "MacLooper-iPad";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "com.thoppe.maclooper.phoneuitests";
+				"GENERATE_INFOPLIST_FILE" = "YES";
+				"DEVELOPMENT_TEAM" = "S37ZVC89JW";
+				"CODE_SIGN_STYLE" = "Automatic";
+				"SWIFT_OPTIMIZATION_LEVEL" = "-O";
+				"DEBUG_INFORMATION_FORMAT" = "dwarf-with-dsym";
+			};
+			"name" = "Release";
+		};
+		"FF1A65672BF84D365C7E056B" = {
+			"isa" = "XCConfigurationList";
+			"buildConfigurations" = (
+				"85CAD00B183D0EFA74F3123F",
+				"C0B00E019AB833573E0B03BA",
+			);
+			"defaultConfigurationIsVisible" = "0";
+			"defaultConfigurationName" = "Release";
+		};
+		"0FE28AD96A4CDA54527AC4C6" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "FC3F0E48C5E866D91623BA94";
+		};
+		"46D04A3FE06D75A856FE6B93" = {
+			"isa" = "PBXSourcesBuildPhase";
+			"buildActionMask" = "2147483647";
+			"files" = (
+				"0FE28AD96A4CDA54527AC4C6",
+			);
+			"runOnlyForDeploymentPostprocessing" = "0";
+		};
+		"F5FEF3FB92E21B3A0CD899C0" = {
+			"isa" = "PBXNativeTarget";
+			"name" = "PhoneUITests";
+			"productName" = "PhoneUITests";
+			"productReference" = "48584B9FB709BA502C041C53";
+			"productType" = "com.apple.product-type.bundle.ui-testing";
+			"dependencies" = (
+				"2A21D9E9044D0B11FAFCCFE3",
+			);
+			"buildRules" = (
+			);
+			"buildConfigurationList" = "FF1A65672BF84D365C7E056B";
+			"buildPhases" = (
+				"46D04A3FE06D75A856FE6B93",
+			);
+		};
 		"482182478A3ECD4745BEA917" = {
 			"isa" = "PBXGroup";
 			"children" = (
@@ -1672,6 +1774,7 @@
 				"F4D4F2850F326985465C25F1",
 				"F20DD9222736E8FE95C0CC0A",
 				"DA6A9F24424006BF5EF3D091",
+				"FC3F0E48C5E866D91623BA94",
 			);
 			"name" = "Shared Tests";
 			"sourceTree" = "<group>";
@@ -1690,6 +1793,7 @@
 				"347C5000B9C2D8FA065C16E9",
 				"2D7F403A62505FBF2C0EC577",
 				"AD5D520508EF8024D25C00BA",
+				"48584B9FB709BA502C041C53",
 			);
 			"name" = "Products";
 			"sourceTree" = "<group>";
@@ -1779,6 +1883,7 @@
 				"62B4A2F1E0B5C3F1EE0C65C9",
 				"8DA9A47D78C32181D21ED263",
 				"D41C8A5C27AD12AE4D7B5F9B",
+				"F5FEF3FB92E21B3A0CD899C0",
 			);
 		};
 	};

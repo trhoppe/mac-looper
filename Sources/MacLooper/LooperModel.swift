@@ -277,7 +277,7 @@ import JamCore
             host.resetAudioService(); running = false; starting = false; audioPaused = false
             state = Int32(TL_EMPTY); length = 0; recorded = 0; progress = 0; cycles = 0
             waveform = [Float](repeating: 0, count: 256)
-            error = "iPad audio services restarted. The guitar loop was cleared. Use Retry Connection; playback stays stopped."
+            error = "Audio services restarted. The guitar loop was cleared. Use Retry Connection; playback stays stopped."
         }
     }
     func retryAudio() async {

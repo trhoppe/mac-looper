@@ -14,7 +14,7 @@ struct AudioSettingsView: View {
         #if os(macOS)
         return "32 samples"
         #else
-        return model.running ? "\(model.audioCallbackFrames) samples" : "Requests 32 samples · iPadOS chooses buffer"
+        return model.running ? "\(model.audioCallbackFrames) samples" : "Requests 32 samples · system chooses buffer"
         #endif
     }
     var body: some View {

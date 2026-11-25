@@ -32,6 +32,10 @@ struct ContentView: View, Equatable {
     @State private var loopFailure: String?
     @State private var importKind = ImportKind.libraryFolder
     @State private var editingDraft: SongDraft?
+    #if os(iOS)
+    private enum PhoneTab { case songs, chart, jam, tools, remote }
+    @State private var phoneTab = PhoneTab.songs
+    #endif
     private let accent = JamDesign.accent
     static func == (lhs: Self, rhs: Self) -> Bool { lhs.model === rhs.model && lhs.files === rhs.files && lhs.library === rhs.library && lhs.remote === rhs.remote }
     private enum ImportKind { case libraryFolder, audioFolder, audioFile, loopFile }
@@ -45,65 +49,19 @@ struct ContentView: View, Equatable {
 
     var body: some View {
         GeometryReader { geo in
-            let compactHeader = geo.size.width < 1180
-            VStack(spacing: 0) {
-                HStack(spacing: 6) {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 6) {
-                    Button { showingSongs.toggle() } label: {
-                        JamDropdownLabel("Songs", icon: "music.note.list", compact: compactHeader, active: showingSongs)
-                    }.buttonStyle(JamPlainButtonStyle()).accessibilityLabel("Show or hide songs").help("Songs")
-                        .accessibilityValue(showingSongs ? "Shown" : "Hidden")
-                        .anchorPreference(key: JamDropdownPopupKey.self, value: .bounds) { anchor in
-                            showingSongs ? JamDropdownRequest(anchor: anchor, title: "Songs",
-                                content: AnyView(SongBrowserView(library: library, onSelectSong: revealChords, onAddSong: beginAdding)),
-                                close: { showingSongs = false }, width: 310, alignLeading: true) : nil
-                        }
-                    panelButton("Chart", icon: "text.alignleft", visible: showingChords, compact: compactHeader) { showingChords.toggle() }
-                    panelButton("Player", icon: "waveform", visible: showingPlayer, compact: compactHeader) { showingPlayer.toggle() }
-                    panelButton("Drummer", icon: "square.grid.2x2", visible: showingDrummer, compact: compactHeader) { showingDrummer.toggle() }
-                    panelButton("Looper", icon: "arrow.triangle.2.circlepath", visible: showingLooper, compact: compactHeader) { showingLooper.toggle() }
-                    Button { showingMore.toggle() } label: {
-                        JamDropdownLabel("More", icon: compactHeader ? "ellipsis" : nil, compact: compactHeader, active: showingMore)
-                    }.buttonStyle(JamPlainButtonStyle()).accessibilityLabel("More").help("More")
-                        .anchorPreference(key: JamDropdownPopupKey.self, value: .bounds) { anchor in
-                            showingMore ? JamDropdownRequest(anchor: anchor, title: "More", content: AnyView(moreContent),
-                                close: { showingMore = false }, width: 230, height: JamDesign.target * 3 + 24, alignLeading: true) : nil
-                        }
-                        }
-                    }.frame(height: JamDesign.target)
-                    AppReadinessBadge(model: readiness, compact: compactHeader).fixedSize().padding(.trailing, 4)
-                    TempoControl(model: model, context: "Global").fixedSize().padding(.trailing, 4)
-                    Button { showingMix.toggle() } label: {
-                        Image(systemName: "slider.vertical.3")
-                    }.buttonStyle(JamIconStyle(active: showingMix)).accessibilityLabel("Mix").help("Mix Player, Drummer, and Looper volumes")
-                        #if os(macOS)
-                        .anchorPreference(key: VolumePopupKey.self, value: .bounds) { anchor in
-                            showingMix ? VolumePopupRequest(anchor: anchor,
-                                content: AnyView(JamMixView(looper: model, files: files, drums: AudioEngineHost.shared.drums)),
-                                close: { showingMix = false }, width: 376, height: 320) : nil
-                        }
-                        #else
-                        .popover(isPresented: $showingMix, arrowEdge: .top) {
-                            JamMixView(looper: model, files: files, drums: AudioEngineHost.shared.drums)
-                                .presentationCompactAdaptation(.popover)
-                        }
-                        #endif
-                    Button { showingSettings.toggle() } label: { JamDropdownLabel("Settings", icon: "gearshape", compact: true, active: showingSettings) }
-                        .buttonStyle(JamPlainButtonStyle()).accessibilityLabel("Settings").help("Settings")
-                        .anchorPreference(key: JamDropdownPopupKey.self, value: .bounds) { anchor in
-                            showingSettings ? JamDropdownRequest(anchor: anchor, title: "Settings", content: AnyView(settingsContent),
-                                close: { showingSettings = false }, width: 430) : nil
-                        }
-                }.padding(.horizontal, compactHeader ? 14 : 18).padding(.vertical, 12)
-                    .background(JamDesign.card)
-                    .onGeometryChange(for: Double.self) { $0.size.height } action: { navigationHeight = $0 }
-                Divider()
-                panes(width: geo.size.width, height: geo.size.height)
-
+            Group {
+                #if os(iOS)
+                if UIDevice.current.userInterfaceIdiom == .phone {
+                    phoneWorkspace
+                } else {
+                    wideWorkspace(width: geo.size.width, height: geo.size.height)
+                }
+                #else
+                wideWorkspace(width: geo.size.width, height: geo.size.height)
+                #endif
             }
             .overlayPreferenceValue(JamDropdownPopupKey.self) { request in
-                if let request { JamDropdownPopup(request: request, top: navigationHeight) }
+                if let request, !isPhone { JamDropdownPopup(request: request, top: navigationHeight) }
             }
             #if os(macOS)
             .overlayPreferenceValue(VolumePopupKey.self) { request in
@@ -113,10 +71,10 @@ struct ContentView: View, Equatable {
             .onChange(of: showingSongs) { _, showing in if showing { showingMore = false; showingSettings = false } }
             .onChange(of: showingMore) { _, showing in if showing { showingSongs = false; showingSettings = false } }
             .onChange(of: showingSettings) { _, showing in if showing { showingSongs = false; showingMore = false } }
-            .allowsHitTesting(editingDraft == nil && !remote.isPresented && !showingChordLibrary && !showingScaleLibrary)
-            .accessibilityHidden(editingDraft != nil || remote.isPresented || showingChordLibrary || showingScaleLibrary)
+            .allowsHitTesting(editingDraft == nil && (!remote.isPresented || isPhone) && !showingChordLibrary && !showingScaleLibrary)
+            .accessibilityHidden(editingDraft != nil || (remote.isPresented && !isPhone) || showingChordLibrary || showingScaleLibrary)
             .overlay {
-                if remote.isPresented {
+                if remote.isPresented && !isPhone {
                     AM4RemoteScreen(session: remote)
                         .frame(width: geo.size.width, height: geo.size.height)
                         .accessibilityAddTraits(.isModal)
@@ -216,6 +174,116 @@ struct ContentView: View, Equatable {
         }
         #endif
     }
+    private func wideWorkspace(width: CGFloat, height: CGFloat) -> some View {
+        let compactHeader = width < 1180
+        return VStack(spacing: 0) {
+            HStack(spacing: 6) {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        Button { showingSongs.toggle() } label: {
+                            JamDropdownLabel("Songs", icon: "music.note.list", compact: compactHeader, active: showingSongs)
+                        }.buttonStyle(JamPlainButtonStyle()).accessibilityLabel("Show or hide songs").help("Songs")
+                            .accessibilityValue(showingSongs ? "Shown" : "Hidden")
+                            .anchorPreference(key: JamDropdownPopupKey.self, value: .bounds) { anchor in
+                                showingSongs ? JamDropdownRequest(anchor: anchor, title: "Songs",
+                                    content: AnyView(SongBrowserView(library: library, onSelectSong: revealChords, onAddSong: beginAdding)),
+                                    close: { showingSongs = false }, width: 310, alignLeading: true) : nil
+                            }
+                        panelButton("Chart", icon: "text.alignleft", visible: showingChords, compact: compactHeader) { showingChords.toggle() }
+                        panelButton("Player", icon: "waveform", visible: showingPlayer, compact: compactHeader) { showingPlayer.toggle() }
+                        panelButton("Drummer", icon: "square.grid.2x2", visible: showingDrummer, compact: compactHeader) { showingDrummer.toggle() }
+                        panelButton("Looper", icon: "arrow.triangle.2.circlepath", visible: showingLooper, compact: compactHeader) { showingLooper.toggle() }
+                        Button { showingMore.toggle() } label: {
+                            JamDropdownLabel("More", icon: compactHeader ? "ellipsis" : nil, compact: compactHeader, active: showingMore)
+                        }.buttonStyle(JamPlainButtonStyle()).accessibilityLabel("More").help("More")
+                            .anchorPreference(key: JamDropdownPopupKey.self, value: .bounds) { anchor in
+                                showingMore ? JamDropdownRequest(anchor: anchor, title: "More", content: AnyView(moreContent),
+                                    close: { showingMore = false }, width: 230, height: JamDesign.target * 3 + 24, alignLeading: true) : nil
+                            }
+                    }
+                }.frame(height: JamDesign.target)
+                AppReadinessBadge(model: readiness, compact: compactHeader).fixedSize().padding(.trailing, 4)
+                TempoControl(model: model, context: "Global").fixedSize().padding(.trailing, 4)
+                Button { showingMix.toggle() } label: {
+                    Image(systemName: "slider.vertical.3")
+                }.buttonStyle(JamIconStyle(active: showingMix)).accessibilityLabel("Mix").help("Mix Player, Drummer, and Looper volumes")
+                    #if os(macOS)
+                    .anchorPreference(key: VolumePopupKey.self, value: .bounds) { anchor in
+                        showingMix ? VolumePopupRequest(anchor: anchor,
+                            content: AnyView(JamMixView(looper: model, files: files, drums: AudioEngineHost.shared.drums)),
+                            close: { showingMix = false }, width: 376, height: 320) : nil
+                    }
+                    #else
+                    .popover(isPresented: $showingMix, arrowEdge: .top) {
+                        JamMixView(looper: model, files: files, drums: AudioEngineHost.shared.drums)
+                            .presentationCompactAdaptation(.popover)
+                    }
+                    #endif
+                Button { showingSettings.toggle() } label: { JamDropdownLabel("Settings", icon: "gearshape", compact: true, active: showingSettings) }
+                    .buttonStyle(JamPlainButtonStyle()).accessibilityLabel("Settings").help("Settings")
+                    .anchorPreference(key: JamDropdownPopupKey.self, value: .bounds) { anchor in
+                        showingSettings ? JamDropdownRequest(anchor: anchor, title: "Settings", content: AnyView(settingsContent),
+                            close: { showingSettings = false }, width: 430) : nil
+                    }
+            }.padding(.horizontal, compactHeader ? 14 : 18).padding(.vertical, 12)
+                .background(JamDesign.card)
+                .onGeometryChange(for: Double.self) { $0.size.height } action: { navigationHeight = $0 }
+            Divider()
+            panes(width: width, height: height)
+        }
+    }
+
+    #if os(iOS)
+    private var phoneWorkspace: some View {
+        TabView(selection: $phoneTab) {
+            VStack(spacing: 0) {
+                SongBrowserView(library: library, onSelectSong: revealChords, onAddSong: beginAdding)
+                if library.library == nil && !library.syncing {
+                    Button("Choose library folder…") { beginImport(.libraryFolder) }.padding(12)
+                }
+            }
+                .tabItem { Label("Songs", systemImage: "music.note.list") }.tag(PhoneTab.songs)
+            ChordChartView(song: library.selectedSong, library: library, edit: beginEditing)
+                .tabItem { Label("Chart", systemImage: "text.alignleft") }.tag(PhoneTab.chart)
+            ScrollView {
+                VStack(spacing: JamDesign.gap) {
+                    HStack {
+                        AppReadinessBadge(model: readiness, compact: true)
+                        TempoControl(model: model, context: "Global")
+                        Spacer()
+                        Button { showingMix = true } label: { Label("Mix", systemImage: "slider.vertical.3") }
+                    }
+                    looperCard
+                    playerCard
+                    DrummerPanel(drums: AudioEngineHost.shared.drums, output: drumOutput)
+                }.padding(12)
+            }
+            .overlayPreferenceValue(JamDropdownPopupKey.self) { request in
+                if let request { JamDropdownPopup(request: request) }
+            }
+            .sheet(isPresented: $showingMix) {
+                JamMixView(looper: model, files: files, drums: AudioEngineHost.shared.drums)
+                    .presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
+            }
+            .tabItem { Label("Jam", systemImage: "waveform") }.tag(PhoneTab.jam)
+            List {
+                Button { showingChordLibrary = true } label: { Label("Chord Library", systemImage: "guitars") }
+                Button { showingScaleLibrary = true } label: { Label("Scales", systemImage: "music.note.list") }
+                Button { showingSettings = true } label: { Label("Settings", systemImage: "gearshape") }
+            }.tabItem { Label("Tools", systemImage: "wrench.and.screwdriver") }.tag(PhoneTab.tools)
+            ZStack {
+                if phoneTab == .remote { AM4RemoteScreen(session: remote, embedded: true) }
+            }
+                .tabItem { Label("AM4", systemImage: "slider.horizontal.3") }.tag(PhoneTab.remote)
+        }
+        .onChange(of: phoneTab) { old, next in
+            if next == .remote { remote.present() }
+            else if old == .remote { remote.dismiss() }
+        }
+        .overlay { if showingSettings { settingsContent.background(JamDesign.card) } }
+    }
+    #endif
+
     private var moreContent: some View {
         VStack(spacing: 0) {
             moreItem("AM4 Remote", icon: "slider.horizontal.3") { remote.present() }
@@ -305,6 +373,13 @@ struct ContentView: View, Equatable {
         DrummerPanel(drums: AudioEngineHost.shared.drums, output: drumOutput,
                      compact: isIPad)
     }
+    private var isPhone: Bool {
+        #if os(iOS)
+        UIDevice.current.userInterfaceIdiom == .phone
+        #else
+        false
+        #endif
+    }
     private var isIPad: Bool {
         #if os(iOS)
         true
@@ -326,7 +401,12 @@ struct ContentView: View, Equatable {
         showingSongs = false; library.editing = true
         editingDraft = SongDraft(playlistIDs: library.playlistID.map { Set([$0]) } ?? [])
     }
-    private func revealChords() { showingChords = true; showingSongs = false }
+    private func revealChords() {
+        #if os(iOS)
+        if UIDevice.current.userInterfaceIdiom == .phone { phoneTab = .chart; return }
+        #endif
+        showingChords = true; showingSongs = false
+    }
     private func beginImport(_ kind: ImportKind) { showingSettings = false; importKind = kind; importing = true }
 }
 

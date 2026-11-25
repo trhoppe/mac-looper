@@ -11,6 +11,14 @@ struct SongEditorView: View {
     @State private var saveError: String?
     @State private var confirmingDiscard = false
     @State private var exporting = false
+    @State private var showingDetails = false
+    private var phone: Bool {
+        #if os(iOS)
+        UIDevice.current.userInterfaceIdiom == .phone
+        #else
+        false
+        #endif
+    }
     let close: () -> Void
     let save: (SongDraft) async throws -> Void
     init(draft: SongDraft, library: SongLibraryModel, close: @escaping () -> Void, save: @escaping (SongDraft) async throws -> Void) {
@@ -22,7 +30,9 @@ struct SongEditorView: View {
             HStack {
                 Text(draft.isNew ? "New song" : "Edit song").font(.system(size: 17, weight: .semibold))
                 Spacer()
-                Button("Export ChordPro…") { exporting = true }.disabled(saving)
+                Button { exporting = true } label: {
+                    if phone { Image(systemName: "square.and.arrow.up") } else { Text("Export ChordPro…") }
+                }.accessibilityLabel("Export ChordPro").disabled(saving)
                 Button("Cancel") {
                     if draft.hasChanges { confirmingDiscard = true } else { close() }
                 }.disabled(saving).keyboardShortcut(.cancelAction)
@@ -35,24 +45,37 @@ struct SongEditorView: View {
                 }.buttonStyle(JamButtonStyle(prominent: true)).keyboardShortcut("s", modifiers: .command)
                     .disabled(saving || !draft.hasChanges || draft.validationError != nil)
             }.padding(18).background(JamDesign.card)
-            VStack(spacing: 12) {
+            if phone {
+                Button("Song details") { showingDetails = true }.disabled(saving).padding(8)
+                    .sheet(isPresented: $showingDetails) {
+                        NavigationStack {
+                            Form {
+                                field("Song name", text: $editor.draft.title, prompt: "Song name")
+                                field("Artist", text: $editor.draft.artist, prompt: "Artist name")
+                                playlistField
+                                metadataFields
+                            }.navigationTitle("Song details").toolbar {
+                                Button("Done") { showingDetails = false }
+                            }
+                        }
+                    }
+            } else {
+                VStack(spacing: 12) {
                     HStack(spacing: 14) {
                         field("Song name", text: $editor.draft.title, prompt: "Song name")
                         field("Artist", text: $editor.draft.artist, prompt: "Artist name")
                         playlistField.frame(minWidth: 140, maxWidth: 260)
                     }
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 14), count: 4), spacing: 12) {
-                        field("Song key", text: $editor.draft.key, prompt: "C, F# or Am")
-                        field("BPM", text: $editor.draft.tempo, prompt: "120")
-                        field("Time signature", text: $editor.draft.timeSignature, prompt: "4/4")
-                        field("Length", text: $editor.draft.duration, prompt: "3:45")
+                        metadataFields
                     }
-            }.padding(.horizontal, 18).padding(.bottom, 14).disabled(saving)
+                }.padding(.horizontal, 18).padding(.bottom, 14).disabled(saving)
+            }
             Divider()
             HStack {
                 Text("ChordPro").font(.subheadline.weight(.semibold))
                 Spacer()
-                Text("Details above edit the ChordPro header. Use [C] before a word.")
+                Text(phone ? "Use [C] before a word." : "Details above edit the ChordPro header. Use [C] before a word.")
                     .font(.caption).foregroundStyle(.secondary)
             }.padding(.horizontal, 18).padding(.vertical, 10)
             ChordProTextEditor(text: $editor.draft.chordPro).disabled(saving).frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -78,6 +101,12 @@ struct SongEditorView: View {
             Button("Keep editing", role: .cancel) { }
         }
 
+    }
+    @ViewBuilder private var metadataFields: some View {
+        field("Song key", text: $editor.draft.key, prompt: "C, F# or Am")
+        field("BPM", text: $editor.draft.tempo, prompt: "120")
+        field("Time signature", text: $editor.draft.timeSignature, prompt: "4/4")
+        field("Length", text: $editor.draft.duration, prompt: "3:45")
     }
     private var playlistField: some View {
         VStack(alignment: .leading, spacing: 5) {

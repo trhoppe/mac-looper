@@ -313,6 +313,14 @@ private enum BlockLabel {
     }
 }
 
+private var phoneLayout: Bool {
+    #if os(iOS)
+    UIDevice.current.userInterfaceIdiom == .phone
+    #else
+    false
+    #endif
+}
+
 private struct BlockPanel: View {
     @ObservedObject var midi: AM4Connection
     let blockID: UInt32
@@ -356,25 +364,31 @@ private struct BlockPanel: View {
                 }.padding(.horizontal, 24).padding(.vertical, 10)
                     .disabled(midi.isApplyingGain || midi.isNavigating || !midi.isConnected)
                 Divider()
-                HStack(spacing: 0) {
-                    ScrollView {
-                        VStack(spacing: 4) {
-                            ForEach(pages) { item in
-                                Button { page = item.id } label: {
-                                    Text(item.title == "Cabinet" ? "Cab" : item.title)
-                                        .font(.headline).foregroundStyle(page == item.id ? .white : .secondary)
-                                        .frame(maxWidth: .infinity, minHeight: 36, alignment: .leading)
-                                        .padding(.horizontal, 18)
-                                        .background(page == item.id ? Color.white.opacity(0.08) : .clear,
-                                                    in: RoundedRectangle(cornerRadius: 6))
-                                        .overlay(alignment: .leading) {
-                                            if page == item.id { Capsule().fill(dialAccent).frame(width: 3).padding(.vertical, 12) }
-                                        }
-                                }.buttonStyle(AM4ButtonStyle())
-                            }
-                        }.padding(.vertical, 14).padding(.horizontal, 8)
-                    }.frame(width: 148).background(.white.opacity(0.025))
-                        .disabled(midi.isApplyingGain)
+                (phoneLayout ? AnyLayout(VStackLayout(spacing: 0)) : AnyLayout(HStackLayout(spacing: 0))) {
+                    if phoneLayout {
+                        Picker("Page", selection: Binding(get: { page }, set: { page = $0 })) {
+                            ForEach(pages) { Text($0.title).tag($0.id) }
+                        }.pickerStyle(.menu).disabled(midi.isApplyingGain)
+                    } else {
+                        ScrollView {
+                            VStack(spacing: 4) {
+                                ForEach(pages) { item in
+                                    Button { page = item.id } label: {
+                                        Text(item.title == "Cabinet" ? "Cab" : item.title)
+                                            .font(.headline).foregroundStyle(page == item.id ? .white : .secondary)
+                                            .frame(maxWidth: .infinity, minHeight: 36, alignment: .leading)
+                                            .padding(.horizontal, 18)
+                                            .background(page == item.id ? Color.white.opacity(0.08) : .clear,
+                                                        in: RoundedRectangle(cornerRadius: 6))
+                                            .overlay(alignment: .leading) {
+                                                if page == item.id { Capsule().fill(dialAccent).frame(width: 3).padding(.vertical, 12) }
+                                            }
+                                    }.buttonStyle(AM4ButtonStyle())
+                                }
+                            }.padding(.vertical, 14).padding(.horizontal, 8)
+                        }.frame(width: 148).background(.white.opacity(0.025))
+                            .disabled(midi.isApplyingGain)
+                    }
                     Divider()
                     ScrollView {
                         VStack(alignment: .leading, spacing: 28) {
@@ -674,6 +688,9 @@ private struct EQBandStrip: View {
         }
     }
     var body: some View {
+        if phoneLayout { ScrollView(.horizontal) { bands } } else { bands }
+    }
+    private var bands: some View {
         HStack(alignment: .top, spacing: 8) {
             if let first = controls.first, let definition = definition(first.key) {
                 VStack(spacing: 12) {
@@ -827,19 +844,25 @@ private struct EffectPanel: View {
                 Spacer()
             }.padding(.horizontal, 24).padding(.vertical, 10).disabled(busy)
             Divider()
-            HStack(spacing: 0) {
-                ScrollView {
-                    VStack(spacing: 4) {
-                        ForEach(effect.pages) { item in
-                            Button { page = item.id } label: {
-                                Text(item.title).font(.headline).foregroundStyle(activePage == item.id ? .white : .secondary)
-                                    .frame(maxWidth: .infinity, minHeight: 36, alignment: .leading).padding(.horizontal, 18)
-                                    .background(activePage == item.id ? Color.white.opacity(0.08) : .clear, in: RoundedRectangle(cornerRadius: 6))
-                                    .overlay(alignment: .leading) { if activePage == item.id { Capsule().fill(AM4Appearance.accent).frame(width: 3).padding(.vertical, 12) } }
-                            }.buttonStyle(AM4ButtonStyle())
-                        }
-                    }.padding(.vertical, 14).padding(.horizontal, 8)
-                }.frame(width: 148).background(.white.opacity(0.025)).disabled(busy)
+            (phoneLayout ? AnyLayout(VStackLayout(spacing: 0)) : AnyLayout(HStackLayout(spacing: 0))) {
+                if phoneLayout {
+                    Picker("Page", selection: Binding(get: { activePage }, set: { page = $0 })) {
+                        ForEach(effect.pages) { Text($0.title).tag($0.id) }
+                    }.pickerStyle(.menu).disabled(busy)
+                } else {
+                    ScrollView {
+                        VStack(spacing: 4) {
+                            ForEach(effect.pages) { item in
+                                Button { page = item.id } label: {
+                                    Text(item.title).font(.headline).foregroundStyle(activePage == item.id ? .white : .secondary)
+                                        .frame(maxWidth: .infinity, minHeight: 36, alignment: .leading).padding(.horizontal, 18)
+                                        .background(activePage == item.id ? Color.white.opacity(0.08) : .clear, in: RoundedRectangle(cornerRadius: 6))
+                                        .overlay(alignment: .leading) { if activePage == item.id { Capsule().fill(AM4Appearance.accent).frame(width: 3).padding(.vertical, 12) } }
+                                }.buttonStyle(AM4ButtonStyle())
+                            }
+                        }.padding(.vertical, 14).padding(.horizontal, 8)
+                    }.frame(width: 148).background(.white.opacity(0.025)).disabled(busy)
+                }
                 Divider()
                 ScrollView {
                     VStack(alignment: .leading, spacing: 28) {
@@ -929,6 +952,7 @@ private struct EffectPanel: View {
 /// overlay inside Mac Jams, so use a content-only split on Mac and keep the
 /// original adaptive preset navigation on iPad.
 private struct AM4WorkspaceSplit<Sidebar: View, Detail: View>: View {
+    @State private var showingDetail = false
     @ViewBuilder let sidebar: () -> Sidebar
     @ViewBuilder let detail: () -> Detail
     var body: some View {
@@ -940,11 +964,21 @@ private struct AM4WorkspaceSplit<Sidebar: View, Detail: View>: View {
             detail().frame(minWidth: 320, maxWidth: .infinity)
         }
         #else
+        if phoneLayout {
+            VStack(spacing: 0) {
+                Picker("AM4", selection: $showingDetail) {
+                    Text("Presets").tag(false)
+                    Text("Controls").tag(true)
+                }.pickerStyle(.segmented).padding(8)
+                if showingDetail { detail() } else { sidebar() }
+            }
+        } else {
         NavigationSplitView {
             sidebar().navigationTitle("AM4 Remote")
                 .navigationSplitViewColumnWidth(min: 250, ideal: 300)
         } detail: {
             detail().navigationTitle("")
+        }
         }
         #endif
     }

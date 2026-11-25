@@ -50,8 +50,9 @@ def app(name, platform):
               'CURRENT_PROJECT_VERSION':'6','MARKETING_VERSION':'0.3.0','CODE_SIGN_STYLE':'Automatic','DEVELOPMENT_TEAM':'S37ZVC89JW',
               'ASSETCATALOG_COMPILER_APPICON_NAME':'AppIconPad' if ipad else 'AppIconMac'}
     if ipad:
-        settings.update({'SDKROOT':'iphoneos','SUPPORTED_PLATFORMS':'iphoneos iphonesimulator','IPHONEOS_DEPLOYMENT_TARGET':'18.0','TARGETED_DEVICE_FAMILY':'2','SUPPORTS_MACCATALYST':'NO','PRODUCT_BUNDLE_IDENTIFIER':'com.thoppe.maclooper',
+        settings.update({'SDKROOT':'iphoneos','SUPPORTED_PLATFORMS':'iphoneos iphonesimulator','IPHONEOS_DEPLOYMENT_TARGET':'18.0','TARGETED_DEVICE_FAMILY':'1,2','SUPPORTS_MACCATALYST':'NO','PRODUCT_BUNDLE_IDENTIFIER':'com.thoppe.maclooper',
                          'CODE_SIGN_ENTITLEMENTS':'MacLooper-iPad.entitlements','INFOPLIST_FILE':'MacLooper-iPad-Info.plist','INFOPLIST_KEY_UIApplicationSceneManifest_Generation':'YES','INFOPLIST_KEY_UILaunchScreen_Generation':'YES','INFOPLIST_KEY_UIFileSharingEnabled':'YES','INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace':'YES',
+                         'INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone':'UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight',
                          'INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad':'UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight'})
     else:
         settings.update({'SDKROOT':'macosx','MACOSX_DEPLOYMENT_TARGET':'14.0','SUPPORTED_PLATFORMS':'macosx','PRODUCT_BUNDLE_IDENTIFIER':'local.thoppe.maclooper','INFOPLIST_FILE':'MacLooper-Mac-Info.plist','ENABLE_APP_SANDBOX':'NO','CODE_SIGN_IDENTITY':'-','LD_RUNPATH_SEARCH_PATHS':'$(inherited) @executable_path/../Frameworks'})
@@ -65,20 +66,38 @@ test_product=obj('testsproduct','PBXFileReference',explicitFileType='wrapper.cfb
 deps,links=package_dependencies('ipadtests')
 proxy=obj('testproxy','PBXContainerItemProxy',containerPortal=project,proxyType='1',remoteGlobalIDString=ipad,remoteInfo='MacLooper-iPad')
 dependency=obj('testdependency','PBXTargetDependency',target=ipad,targetProxy=proxy)
-tests=obj('ipadtests','PBXNativeTarget',buildConfigurationList=configs('ipadtests',{'SDKROOT':'iphoneos','SUPPORTED_PLATFORMS':'iphoneos iphonesimulator','IPHONEOS_DEPLOYMENT_TARGET':'18.0','TARGETED_DEVICE_FAMILY':'2','PRODUCT_NAME':'MacLooper-iPadTests','PRODUCT_BUNDLE_IDENTIFIER':'com.thoppe.maclooper.tests','GENERATE_INFOPLIST_FILE':'YES','DEVELOPMENT_TEAM':'S37ZVC89JW','CODE_SIGN_STYLE':'Automatic','TEST_HOST':'$(BUILT_PRODUCTS_DIR)/Mac Jams.app/MacLooper','BUNDLE_LOADER':'$(TEST_HOST)'}),
+tests=obj('ipadtests','PBXNativeTarget',buildConfigurationList=configs('ipadtests',{'SDKROOT':'iphoneos','SUPPORTED_PLATFORMS':'iphoneos iphonesimulator','IPHONEOS_DEPLOYMENT_TARGET':'18.0','TARGETED_DEVICE_FAMILY':'1,2','PRODUCT_NAME':'MacLooper-iPadTests','PRODUCT_BUNDLE_IDENTIFIER':'com.thoppe.maclooper.tests','GENERATE_INFOPLIST_FILE':'YES','DEVELOPMENT_TEAM':'S37ZVC89JW','CODE_SIGN_STYLE':'Automatic','TEST_HOST':'$(BUILT_PRODUCTS_DIR)/Mac Jams.app/MacLooper','BUNDLE_LOADER':'$(TEST_HOST)'}),
     buildPhases=[obj('testsources','PBXSourcesBuildPhase',buildActionMask='2147483647',files=[obj('testbuild'+ref,'PBXBuildFile',fileRef=ref) for ref in testrefs],runOnlyForDeploymentPostprocessing='0'),obj('testframeworks','PBXFrameworksBuildPhase',buildActionMask='2147483647',files=links,runOnlyForDeploymentPostprocessing='0')],buildRules=[],dependencies=[dependency],name='MacLooper-iPadTests',packageProductDependencies=deps,productName='MacLooper-iPadTests',productReference=test_product,productType='com.apple.product-type.bundle.unit-test')
+ui_name = 'PhoneUITests'
+ui_ref = obj('phone-ui-source', 'PBXFileReference', lastKnownFileType='sourcecode.swift',
+             path='Tests/PhoneUITests/PhoneNavigationTests.swift', sourceTree='SOURCE_ROOT')
+testrefs.append(ui_ref)
+ui_product = obj('phone-ui-product', 'PBXFileReference', explicitFileType='wrapper.cfbundle',
+                 path=ui_name+'.xctest', sourceTree='BUILT_PRODUCTS_DIR')
+products.append(ui_product)
+ui = obj(ui_name, 'PBXNativeTarget', name=ui_name, productName=ui_name, productReference=ui_product,
+         productType='com.apple.product-type.bundle.ui-testing', dependencies=[dependency], buildRules=[],
+         buildConfigurationList=configs(ui_name, {
+             'SDKROOT':'iphoneos', 'SUPPORTED_PLATFORMS':'iphoneos iphonesimulator', 'IPHONEOS_DEPLOYMENT_TARGET':'18.0',
+             'TARGETED_DEVICE_FAMILY':'1,2', 'PRODUCT_NAME':ui_name, 'TEST_TARGET_NAME':'MacLooper-iPad',
+             'PRODUCT_BUNDLE_IDENTIFIER':'com.thoppe.maclooper.phoneuitests', 'GENERATE_INFOPLIST_FILE':'YES',
+             'DEVELOPMENT_TEAM':'S37ZVC89JW', 'CODE_SIGN_STYLE':'Automatic'}),
+         buildPhases=[obj('phone-ui-sources', 'PBXSourcesBuildPhase', buildActionMask='2147483647',
+                          files=[obj('phone-ui-build', 'PBXBuildFile', fileRef=ui_ref)], runOnlyForDeploymentPostprocessing='0')])
 source_group=obj('sourcegroup','PBXGroup',children=source_refs,name='Shared App',sourceTree='<group>')
 test_group=obj('testgroup','PBXGroup',children=testrefs,name='Shared Tests',sourceTree='<group>')
 resource_group=obj('resourcegroup','PBXGroup',children=resource_refs,name='Resources',sourceTree='<group>')
 product_group=obj('productgroup','PBXGroup',children=products,name='Products',sourceTree='<group>')
 obj('root','PBXGroup',children=[source_group,test_group,resource_group,product_group],sourceTree='<group>')
-obj('project','PBXProject',attributes={'LastUpgradeCheck':'2720','TargetAttributes':{ipad:{'DevelopmentTeam':'S37ZVC89JW'},tests:{'TestTargetID':ipad,'DevelopmentTeam':'S37ZVC89JW'}}},buildConfigurationList=configs('project',{}),compatibilityVersion='Xcode 14.0',developmentRegion='en',hasScannedForEncodings='0',knownRegions=['en','Base'],mainGroup=root,productRefGroup=product_group,projectDirPath='',projectRoot='',packageReferences=[package,remote_package,design_package],targets=[mac,ipad,tests])
+obj('project','PBXProject',attributes={'LastUpgradeCheck':'2720','TargetAttributes':{ipad:{'DevelopmentTeam':'S37ZVC89JW'},tests:{'TestTargetID':ipad,'DevelopmentTeam':'S37ZVC89JW'}}},buildConfigurationList=configs('project',{}),compatibilityVersion='Xcode 14.0',developmentRegion='en',hasScannedForEncodings='0',knownRegions=['en','Base'],mainGroup=root,productRefGroup=product_group,projectDirPath='',projectRoot='',packageReferences=[package,remote_package,design_package],targets=[mac,ipad,tests,ui])
 OUT.mkdir(exist_ok=True)
 (OUT/'project.pbxproj').write_text('// !$*UTF8*$!\n'+encode({'archiveVersion':'1','classes':{},'objectVersion':'56','objects':objects,'rootObject':project})+'\n')
 schemes=OUT/'xcshareddata/xcschemes';schemes.mkdir(parents=True,exist_ok=True)
 def ref(target,name,product): return f'<BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="{target}" BuildableName="{product}" BlueprintName="{name}" ReferencedContainer="container:MacLooper.xcodeproj"/>'
 for target,name in [(mac,'MacLooper-macOS'),(ipad,'MacLooper-iPad')]:
     tests_xml=f'<TestableReference skipped="NO">{ref(tests,"MacLooper-iPadTests","MacLooper-iPadTests.xctest")}</TestableReference>' if target==ipad else ''
+    if target == ipad:
+        tests_xml += f'<TestableReference skipped="NO">{ref(ui,ui_name,ui_name+".xctest")}</TestableReference>'
     xml=f'''<?xml version="1.0" encoding="UTF-8"?>
 <Scheme LastUpgradeVersion="2720" version="1.7">
 <BuildAction parallelizeBuildables="YES" buildImplicitDependencies="YES"><BuildActionEntries><BuildActionEntry buildForTesting="YES" buildForRunning="YES" buildForProfiling="YES" buildForArchiving="YES" buildForAnalyzing="YES">{ref(target,name,'Mac Jams.app')}</BuildActionEntry></BuildActionEntries></BuildAction>

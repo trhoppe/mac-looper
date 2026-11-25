@@ -2,7 +2,7 @@
 
 Planned work: [post-redesign backlog](BACKLOG.md).
 
-A native Mac and iPad guitar-jamming app. Chord charts and backing playback share
+A native Mac, iPad, and iPhone guitar-jamming app. Chord charts and backing playback share
 one SwiftUI workspace. A full-app AM4 Remote controls the connected amp over USB MIDI. Header controls show or hide Songs, Chords, Looper, Drummer and
 Player; the chart expands into the available space.
 A shared C render core provides sample-accurate threshold capture. Live guitar
@@ -22,9 +22,12 @@ The resulting app runs independently of Xcode. The script replaces the executabl
 atomically, avoiding an in-place overwrite of a running app; relaunch to use a new build. Open `MacLooper.xcodeproj` for native Mac/iPad targets, or `Package.swift` for
 shared-code development. Use the packaged Mac app for normal use.
 
-### iPad
+### iPhone and iPad
 
-Requires iPadOS 18 or newer. Open `MacLooper.xcodeproj`, select **MacLooper-iPad**,
+The **MacLooper-iPad** scheme builds a universal iOS app. On iPhone the bottom tabs keep Songs, Chart, Jam, Tools, and AM4 within reach. Selecting a song opens its chart. Jam groups the looper, player, drummer, tempo, and mix. Tools contains chord diagrams, scales, and audio settings. AM4 has separate Presets and Controls views. Switching tabs keeps the audio session running.
+
+
+Requires iOS or iPadOS 18 or newer. Open `MacLooper.xcodeproj`, select **MacLooper-iPad**,
 and choose your iPad as the destination. In Xcode Settings → Accounts, sign in to
 your Apple Account; select your development team under Signing & Capabilities if
 needed. Unlock the connected iPad and press Run. The iPad app uses the distinct
@@ -233,7 +236,7 @@ for an exact setting. The AM4 handles live guitar monitoring. Overdub is deferre
 
 Use **Save loop** (the save icon) and enter a name. Takes save automatically as
 lossless stereo `.jamloop` files in **Loops**, inside the selected chord-library
-folder. Choose the **same iCloud Drive library folder in Settings on Mac and iPad**;
+folder. Choose the **same iCloud Drive library folder in Settings on each device**;
 iCloud Drive carries the files between devices. No separate loop folder setup is
 needed. Duplicate names get a number so an earlier take is kept.
 

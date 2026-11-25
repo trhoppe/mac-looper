@@ -133,27 +133,41 @@ struct JamDropdownPopup: View {
     var top: CGFloat = 0
     var body: some View {
         GeometryReader { geo in
-            let anchor = geo[request.anchor]
-            let opensRight = request.opensBeside && anchor.maxX + request.width + 16 <= geo.size.width - 8
-            let width = min(request.width + (opensRight ? 8 : 0), max(0, geo.size.width - 16))
-            let belowY = anchor.maxY + 6
-            let ceiling = max(8, top + 4), floor = geo.size.height * 0.9
-            let aboveBottom = min(anchor.minY - 6, floor)
-            let aboveAvailable = max(0, aboveBottom - ceiling), belowAvailable = max(0, floor - belowY)
-            let opensAbove = request.prefersAbove && !opensRight && belowAvailable < (request.height ?? aboveAvailable) && aboveAvailable > belowAvailable
-            let available = opensAbove ? aboveAvailable : opensRight ? max(0, floor - ceiling) : belowAvailable
-            let height = min(request.height ?? available, available)
-            let y = opensAbove ? aboveBottom - height : opensRight ? ceiling : belowY
-            let preferredX = opensRight ? anchor.maxX + 8 : request.alignLeading ? anchor.minX : anchor.midX - width / 2
-            let x = min(max(8, preferredX), max(8, geo.size.width - width - 8))
-            ZStack(alignment: .topLeading) {
-                Color.black.opacity(0.001).contentShape(Rectangle()).onTapGesture(perform: request.close)
-                JamPopupSurface(edge: opensRight ? .leading : opensAbove ? .bottom : .top,
-                                pointer: opensRight ? anchor.midY - y : anchor.midX - x) { request.content }
-                    .frame(width: width, height: height).offset(x: x, y: y)
-                Button("Close " + request.title, action: request.close).keyboardShortcut(.cancelAction)
-                    .frame(width: 0, height: 0).opacity(0).accessibilityHidden(true)
+            #if os(iOS)
+            if UIDevice.current.userInterfaceIdiom == .phone {
+                VStack(spacing: 0) {
+                    HStack { Spacer(); Button("Done", action: request.close).padding(12) }
+                    request.content.frame(maxWidth: .infinity, maxHeight: .infinity)
+                }.background(JamDesign.card).accessibilityAddTraits(.isModal)
+            } else {
+                anchoredPopup(in: geo)
             }
+            #else
+            anchoredPopup(in: geo)
+            #endif
+        }
+    }
+    private func anchoredPopup(in geo: GeometryProxy) -> some View {
+        let anchor = geo[request.anchor]
+        let opensRight = request.opensBeside && anchor.maxX + request.width + 16 <= geo.size.width - 8
+        let width = min(request.width + (opensRight ? 8 : 0), max(0, geo.size.width - 16))
+        let belowY = anchor.maxY + 6
+        let ceiling = max(8, top + 4), floor = geo.size.height * 0.9
+        let aboveBottom = min(anchor.minY - 6, floor)
+        let aboveAvailable = max(0, aboveBottom - ceiling), belowAvailable = max(0, floor - belowY)
+        let opensAbove = request.prefersAbove && !opensRight && belowAvailable < (request.height ?? aboveAvailable) && aboveAvailable > belowAvailable
+        let available = opensAbove ? aboveAvailable : opensRight ? max(0, floor - ceiling) : belowAvailable
+        let height = min(request.height ?? available, available)
+        let y = opensAbove ? aboveBottom - height : opensRight ? ceiling : belowY
+        let preferredX = opensRight ? anchor.maxX + 8 : request.alignLeading ? anchor.minX : anchor.midX - width / 2
+        let x = min(max(8, preferredX), max(8, geo.size.width - width - 8))
+        return ZStack(alignment: .topLeading) {
+            Color.black.opacity(0.001).contentShape(Rectangle()).onTapGesture(perform: request.close)
+            JamPopupSurface(edge: opensRight ? .leading : opensAbove ? .bottom : .top,
+                            pointer: opensRight ? anchor.midY - y : anchor.midX - x) { request.content }
+                .frame(width: width, height: height).offset(x: x, y: y)
+            Button("Close " + request.title, action: request.close).keyboardShortcut(.cancelAction)
+                .frame(width: 0, height: 0).opacity(0).accessibilityHidden(true)
         }
     }
 }

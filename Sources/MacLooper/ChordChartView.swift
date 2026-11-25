@@ -27,7 +27,16 @@ private struct ChartPresentation: View, Equatable {
     let changeFont: (Double) -> Void
     let toggleColumns: () -> Void
     let edit: () -> Void
-    @AppStorage("showChordDiagrams") private var showingDiagrams = true
+    @AppStorage("showChordDiagrams") private var wideDiagrams = true
+    @AppStorage("phoneChordDiagrams") private var phoneDiagrams = false
+    private var isPhone: Bool {
+        #if os(iOS)
+        UIDevice.current.userInterfaceIdiom == .phone
+        #else
+        false
+        #endif
+    }
+    private var showingDiagrams: Bool { isPhone ? phoneDiagrams : wideDiagrams }
     @State private var autoScrolling = false
     @Environment(\.scenePhase) private var scenePhase
     private let accent = JamDesign.accent
@@ -39,17 +48,40 @@ private struct ChartPresentation: View, Equatable {
                 // Parse inside the equatable boundary, after unchanged inputs
                 // have been skipped by SwiftUI.
                 let document = library.chartDocument(for: song)
-                ViewThatFits(in: .horizontal) {
-                    HStack(alignment: .top, spacing: 16) {
-                        songTitle(song, document: document)
-                        Spacer(minLength: 12)
-                        chartControls(song, document: document)
-                    }
-                    VStack(alignment: .leading, spacing: 10) {
-                        songTitle(song, document: document)
-                        HStack { Spacer(minLength: 0); chartControls(song, document: document) }
-                    }
-                }.padding(.horizontal, 20).padding(.top, 18).padding(.bottom, showingDiagrams ? 14 : 2)
+                if isPhone {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(song.title).font(.headline).lineLimit(2)
+                            songMetadata(song).font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer(minLength: 4)
+                        Button { autoScrolling.toggle() } label: {
+                            Image(systemName: autoScrolling ? "pause.fill" : "play.fill")
+                        }.buttonStyle(JamIconStyle()).accessibilityLabel(autoScrolling ? "Pause chart auto-scroll" : "Start chart auto-scroll")
+                        Menu {
+                            Button("Edit song", action: edit)
+                            Button("Larger chart text") { changeFont(min(36, fontSize + 1)) }.disabled(fontSize >= 36)
+                            Button("Smaller chart text") { changeFont(max(12, fontSize - 1)) }.disabled(fontSize <= 12)
+                            Button(twoColumns ? "Use one column" : "Use two columns", action: toggleColumns)
+                            if !document.guitarChords.isEmpty {
+                                Button(showingDiagrams ? "Hide chord diagrams" : "Show chord diagrams", action: toggleDiagrams)
+                            }
+                        } label: { Image(systemName: "ellipsis.circle").frame(width: 44, height: 44) }
+                            .accessibilityLabel("Chart options")
+                    }.padding(.horizontal, 14)
+                } else {
+                    ViewThatFits(in: .horizontal) {
+                        HStack(alignment: .top, spacing: 16) {
+                            songTitle(song, document: document)
+                            Spacer(minLength: 12)
+                            chartControls(song, document: document)
+                        }
+                        VStack(alignment: .leading, spacing: 10) {
+                            songTitle(song, document: document)
+                            HStack { Spacer(minLength: 0); chartControls(song, document: document) }
+                        }
+                    }.padding(.horizontal, 20).padding(.top, 18).padding(.bottom, showingDiagrams ? 14 : 2)
+                }
                 if showingDiagrams && !document.guitarChords.isEmpty {
                     HStack(alignment: .top, spacing: 0) {
                         GuitarChordStrip(library: library, song: song, chords: document.guitarChords)
@@ -162,7 +194,9 @@ private struct ChartPresentation: View, Equatable {
         }
     }
     private func toggleDiagrams() {
-        withAnimation(.easeInOut(duration: 0.2)) { showingDiagrams.toggle() }
+        withAnimation(.easeInOut(duration: 0.2)) {
+            if isPhone { phoneDiagrams.toggle() } else { wideDiagrams.toggle() }
+        }
     }
     private func chartControls(_ song: LibrarySong, document: ChordProDocument) -> some View {
         VStack(alignment: .trailing, spacing: 8) {
