@@ -3,6 +3,11 @@ import SwiftUI
 import AppKit
 #endif
 
+@MainActor @Observable final class PlaybackTiming {
+    var position = 0.0
+    var duration = 0.0
+}
+
 @MainActor final class AudioFilePlayerModel: ObservableObject {
     @Published private(set) var groups: [AudioFolderGroup] = [] {
         didSet { tracks = groups.flatMap(\.tracks); updateSelectedIndex() }
@@ -11,14 +16,25 @@ import AppKit
     @Published private(set) var visibleGroups: [AudioFolderGroup] = []
     @Published private(set) var folder: URL?
     @Published private(set) var scanning = false
+    @Published private(set) var hasDuration = false
     @Published private(set) var loading = false
     @Published private(set) var selected: AudioTrack? { didSet { updateSelectedIndex() } }
     private var selectedIndex: Int?
     private func updateSelectedIndex() {
         selectedIndex = selected.flatMap { track in tracks.firstIndex { $0.id == track.id } }
     }
-    @Published private(set) var duration = 0.0
-    @Published private(set) var position = 0.0
+    private(set) var duration: Double {
+        get { timing.duration }
+        set {
+            timing.duration = newValue
+            let available = newValue > 0
+            if available != hasDuration { hasDuration = available }
+        }
+    }
+    private(set) var position: Double {
+        get { timing.position }
+        set { timing.position = newValue }
+    }
     @Published private(set) var playing = false
     @Published private(set) var startingPlayback = false
     private var playRequest = UUID()
@@ -30,22 +46,23 @@ import AppKit
     @Published var volume = 1.0 { didSet { configure() } }
     @Published var repeatTrack = false { didSet { configure() } }
     private var output: AudioDevice?
-    private let playback = FilePlayback()
+    private let host: AudioEngineHost
+    private let playback: FilePlayback
     private var session = UUID()
     private var scanGeneration = UUID()
     private var worker: Task<AudioLibraryScan, Error>?
     private var loadTask: Task<Void, Never>?
     private var timer: Timer?
-    private var polling = false
+    let timing = PlaybackTiming()
     private var scopedFolder: URL?
     private var scopedFile: URL?
     private let defaults: UserDefaults
 
-    init(defaults: UserDefaults = .standard, restoreFolder: Bool = true) {
+    init(defaults: UserDefaults = .standard, restoreFolder: Bool = true, host: AudioEngineHost? = nil) {
+        let host = host ?? AudioEngineHost.shared
+        self.host = host
+        self.playback = FilePlayback(host: host)
         self.defaults = defaults
-        timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-            Task { @MainActor in await self?.poll() }
-        }
         if restoreFolder, let url = SongLibraryModel.resolve(defaults.data(forKey: "audioPlayerFolder")) {
             openFolder(url)
         }
@@ -55,9 +72,7 @@ import AppKit
     func setOutput(_ device: AudioDevice?) {
         guard output?.uid != device?.uid else { output = device; return }
         pauseForInterruption()
-        output = device; playing = false
-        let token = session
-        Task { await playback.pause(session: token) }
+        output = device
     }
     func chooseFolder() {
         #if os(macOS)
@@ -147,7 +162,7 @@ import AppKit
         let useSystemBuffer = false
         #endif
         guard let device else { error = "Choose an output device in Audio Settings before playing a file."; return }
-        guard let request = AudioEngineHost.shared.requestFilePlay(session: token) else { return }
+        guard let request = host.requestFilePlay(session: token) else { return }
         playRequest = request; startingPlayback = true; error = nil
         Task {
             do {
@@ -155,7 +170,7 @@ import AppKit
                 try await playback.play(session: token, output: device, requestedIntent: request, useSystemBuffer: useSystemBuffer)
                 guard session == token, playRequest == request else { return }
                 startingPlayback = false
-                await poll()
+                poll()
             } catch {
                 guard session == token, playRequest == request else { return }
                 startingPlayback = false; playing = false; self.error = error.localizedDescription
@@ -170,23 +185,25 @@ import AppKit
         guard selected != nil, !loading, duration > 0 else { return }
         position = 0
         let token = session
-        Task { await playback.seek(session: token, to: 0); await poll() }
+        host.seekFile(session: token, to: 0); poll()
     }
     func pauseForInterruption() {
         playRequest = UUID(); startingPlayback = false; playing = false
         // Invalidate pending host Play immediately, before the actor hop.
-        AudioEngineHost.shared.pauseFile(session: session)
+        host.pauseFile(session: session)
+        if let snapshot = host.fileSnapshot(session: session) { position = snapshot.position }
+        stopPolling()
     }
     func stop() {
         pauseForInterruption()
         let token = session; playing = false; position = 0
-        Task { await playback.stop(session: token) }
+        host.stopFile(session: token)
     }
     func seek(_ seconds: Double) {
         guard seconds.isFinite, duration > 0, !loading else { return }
         position = min(duration, max(0, seconds))
         let token = session
-        Task { await playback.seek(session: token, to: seconds) }
+        host.seekFile(session: token, to: seconds)
     }
     func step(_ offset: Int) {
         let list = tracks
@@ -201,24 +218,38 @@ import AppKit
         let token = session
         Task { await playback.configure(session: token, volume: Float(volume), repeating: repeatTrack) }
     }
-    private func poll() async {
-        guard !polling, selected != nil, !loading else { return }
-        polling = true; defer { polling = false }
+    private func startPolling() {
+        guard playing, timer == nil else { return }
+        let timer = Timer(timeInterval: 0.1, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.poll() }
+        }
+        self.timer = timer
+        RunLoop.main.add(timer, forMode: .common)
+    }
+    private func stopPolling() {
+        timer?.invalidate()
+        timer = nil
+    }
+    private func poll() {
+        guard selected != nil, !loading else { stopPolling(); return }
         let token = session
-        if playing, let output, !AudioDevices.alive(output.id) {
-            await playback.pause(session: token)
-            guard session == token else { return }
+        if playing, let output, !host.fileOutputAvailable(output) {
+            pauseForInterruption()
             playing = false; error = "The file-player output disconnected. Reconnect it or choose another output."
             return
         }
-        guard let snapshot = await playback.snapshot(session: token), token == session else { return }
+        guard let snapshot = host.fileSnapshot(session: token) else {
+            playing = false; stopPolling(); return
+        }
         if duration != snapshot.duration { duration = snapshot.duration }
         if position != snapshot.position { position = snapshot.position }
-        if playing != snapshot.playing { playing = snapshot.playing }
+        // The transport stays active while a replacement graph has no playing node.
+        if playing != snapshot.intendsToPlay { playing = snapshot.intendsToPlay }
+        if snapshot.intendsToPlay { startPolling() } else { stopPolling() }
     }
     func shutdown() {
         pauseForInterruption()
-        worker?.cancel(); loadTask?.cancel(); timer?.invalidate()
+        worker?.cancel(); loadTask?.cancel(); stopPolling()
         let scope = scopedFolder, fileScope = scopedFile; scopedFolder = nil; scopedFile = nil
         let token = session
         Task { await playback.unload(session: token); scope?.stopAccessingSecurityScopedResource(); fileScope?.stopAccessingSecurityScopedResource() }

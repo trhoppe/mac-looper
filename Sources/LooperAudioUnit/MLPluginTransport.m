@@ -91,8 +91,14 @@ static void end(MLTransportContext *c, UInt32 n) {
 - (void)beginRenderFrames:(UInt32)n { _context->renderSample = NAN; begin(_context, n); }
 - (void)beginRenderFrames:(UInt32)n atSampleTime:(double)sample { _context->renderSample = sample; begin(_context, n); }
 - (void)endRenderFrames:(UInt32)n { end(_context, n); }
+- (void *)renderContext { return _context; }
 - (int64_t)framesUntilDownbeatAtSampleTime:(double)sample {
-    MLTransportContext *c = _context;
+    return MLFramesUntilDownbeat(_context, sample);
+}
+
+int64_t MLFramesUntilDownbeat(void *context, double sample) {
+    MLTransportContext *c = context;
+    if (!c) return -1;
     if (!atomic_load(&c->requestedPlaying)) return -1;
     if (!isfinite(sample)) return -1;
     if (atomic_load(&c->reset) != atomic_load(&c->seenReset) || !atomic_load(&c->anchorValid)) return 0;

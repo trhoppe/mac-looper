@@ -1,5 +1,6 @@
 import XCTest
 import AVFoundation
+import LooperAudioUnit
 @testable import MacLooper
 
 final class FilePlaybackTests: XCTestCase {
@@ -55,6 +56,75 @@ final class FilePlaybackTests: XCTestCase {
         XCTAssertEqual(model.selected?.url, audio)
         XCTAssertFalse(model.playing)
     }
+    @MainActor func testPositionPollingSurvivesLoopRouteRebuild() async throws {
+        let format = AVAudioFormat(standardFormatWithSampleRate: 48000, channels: 2)!
+        let input = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 32)!
+        input.frameLength = 32
+        for channel in 0..<2 { input.floatChannelData![channel].initialize(repeating: 0, count: 32) }
+
+        let held = Suspension()
+        let drums = PopDrummerModel(instrumentLoader: { AVAudioUnitSampler() })
+        let host = AudioEngineHost(drums: drums, playbackSetup: { engine in
+            try engine.enableManualRenderingMode(.realtime, format: format, maximumFrameCount: 32)
+            XCTAssertTrue(engine.inputNode.setManualRenderingInputPCMFormat(format) { _ in input.audioBufferList })
+            return 48000
+        }, makeGain: {
+            await held.wait()
+            return try await AudioEngineHost.makeDrummerGain()
+        })
+        let model = AudioFilePlayerModel(restoreFolder: false, host: host)
+        defer { model.shutdown(); host.shutdown() }
+        let route = AudioDevice(id: 0, uid: "offline", name: "Offline", inputs: 2, outputs: 2, rate: 48000)
+        try await host.startLoop(input: route, output: route, channel: 0)
+        let original = try XCTUnwrap(host.engine)
+        model.setOutput(route)
+        model.selectFile(audio)
+        for _ in 0..<100 where model.loading { try await Task.sleep(for: .milliseconds(10)) }
+        XCTAssertNil(model.error)
+        model.togglePlay()
+        for _ in 0..<100 where !model.playing { try await Task.sleep(for: .milliseconds(10)) }
+        XCTAssertTrue(model.playing)
+
+        func render(_ engine: AVAudioEngine, quanta: Int) {
+            let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 32)!
+            buffer.frameLength = 32
+            for _ in 0..<quanta {
+                var error: OSStatus = 0
+                XCTAssertEqual(engine.manualRenderingBlock(32, buffer.mutableAudioBufferList, &error), .success)
+                XCTAssertEqual(error, 0)
+            }
+        }
+
+        render(original, quanta: 24)
+        for _ in 0..<50 where model.position <= 0 { try await Task.sleep(for: .milliseconds(10)) }
+        let before = model.position
+        XCTAssertGreaterThan(before, 0)
+
+        // Adding the already prepared drummer suspends rebuild after it has
+        // replaced the player node, while the existing backing intent is live.
+        await drums.prepare()
+        XCTAssertTrue(drums.ready)
+        let rebuild = Task { await host.stopLoop() }
+        defer { held.resume(); rebuild.cancel() }
+        for _ in 0..<100 where !held.entered { try await Task.sleep(for: .milliseconds(10)) }
+        XCTAssertTrue(held.entered)
+        try await Task.sleep(for: .milliseconds(250))
+        XCTAssertTrue(model.playing)
+        XCTAssertFalse(host.isRunning)
+        held.resume()
+        await rebuild.value
+
+        let replacement = try XCTUnwrap(host.engine)
+        XCTAssertFalse(original === replacement)
+        XCTAssertFalse(host.captureEnabled)
+        render(replacement, quanta: 24)
+        for _ in 0..<50 where model.position <= before + 0.005 { try await Task.sleep(for: .milliseconds(10)) }
+        XCTAssertTrue(model.playing)
+        XCTAssertGreaterThan(model.position, before + 0.005)
+        model.togglePlay()
+        XCTAssertFalse(model.playing)
+    }
+
     func testStaleSessionCannotSeekOrStopNewSelection() async throws {
         let player = FilePlayback(), old = UUID(), current = UUID()
         _ = try await player.load(audio, session: old, volume: 0, repeating: false)

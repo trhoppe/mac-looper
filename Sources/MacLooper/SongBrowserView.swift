@@ -35,7 +35,7 @@ struct SongBrowserView: View {
                         .accessibilityLabel("Sort songs by").accessibilityValue(library.sortOrder.title)
                 }
                 if searching {
-                    TextField("Search songs", text: $library.query).textFieldStyle(.roundedBorder).hoverHighlight().focused($searchFocused)
+                    TextField("Search songs", text: Binding(get: { library.query }, set: { library.query = $0 })).textFieldStyle(.roundedBorder).hoverHighlight().focused($searchFocused)
                 }
                 Picker("Playlist", selection: $library.playlistID) {
                     Text("All Songs").tag(String?.none)

@@ -12,8 +12,6 @@ struct AudioFileRail: View {
     @State private var dropTargeted = false
     @State private var searching = false
     @FocusState private var searchFocused: Bool
-    @State private var scrubbing = false
-    @State private var scrubPosition = 0.0
     private var selection: Binding<URL?> {
         Binding(get: { model.selected?.id }, set: { id in
             if let track = model.tracks.first(where: { $0.id == id }) {
@@ -196,33 +194,21 @@ struct AudioFileRail: View {
                 Spacer(minLength: 0)
             }
             if fillsHeight { Spacer(minLength: 0) }
-            VStack(spacing: 3) {
-                Slider(value: Binding(get: { scrubbing ? scrubPosition : min(model.position, max(model.duration, 0.01)) },
-                                      set: { scrubPosition = $0; if !scrubbing { model.seek($0) } }), in: 0...max(model.duration, 0.01),
-                       onEditingChanged: { editing in
-                    if editing { scrubPosition = model.position; scrubbing = true }
-                    else { model.seek(scrubPosition); scrubbing = false }
-                }).hoverHighlight().disabled(model.duration <= 0 || model.loading).accessibilityLabel("File playback position")
-                HStack {
-                    Text(Self.time(scrubbing ? scrubPosition : model.position))
-                    Spacer()
-                    Text(Self.time(model.duration))
-                }.font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-            }
+            PlaybackTimeline(timing: model.timing, loading: model.loading, seek: model.seek)
             if fillsHeight { Spacer(minLength: 0) }
             HStack(spacing: 4) {
                 Button { model.restart() } label: { playerIcon("backward.end.fill") }
-                    .disabled(model.duration <= 0 || model.loading).accessibilityLabel("Restart current song")
+                    .disabled(!model.hasDuration || model.loading).accessibilityLabel("Restart current song")
                     .help("Restart current song")
                 Button { model.skip(-10) } label: { playerIcon("gobackward.10") }
-                    .disabled(model.duration <= 0 || model.loading).accessibilityLabel("Back 10 seconds")
+                    .disabled(!model.hasDuration || model.loading).accessibilityLabel("Back 10 seconds")
                 Button { model.togglePlay() } label: {
                     Image(systemName: (model.playing || model.startingPlayback) ? "pause.fill" : "play.fill")
-                }.buttonStyle(JamIconStyle()).disabled(model.duration <= 0 || model.loading).accessibilityLabel((model.playing || model.startingPlayback) ? "Pause file" : "Play file")
+                }.buttonStyle(JamIconStyle()).disabled(!model.hasDuration || model.loading).accessibilityLabel((model.playing || model.startingPlayback) ? "Pause file" : "Play file")
                 Button { model.stop() } label: { playerIcon("stop.fill") }
                     .disabled(model.selected == nil || model.loading).accessibilityLabel("Stop file")
                 Button { model.skip(10) } label: { playerIcon("goforward.10") }
-                    .disabled(model.duration <= 0 || model.loading).accessibilityLabel("Forward 10 seconds")
+                    .disabled(!model.hasDuration || model.loading).accessibilityLabel("Forward 10 seconds")
                 Button { model.step(1) } label: { playerIcon("forward.end.fill") }
                     .disabled(!model.canStep(1)).accessibilityLabel("Next audio file")
                 Button { model.repeatTrack.toggle() } label: {
@@ -240,5 +226,30 @@ struct AudioFileRail: View {
         let n = value.isFinite ? max(0, Int(value)) : 0
         return n >= 3600 ? String(format: "%d:%02d:%02d", n / 3600, n / 60 % 60, n % 60)
             : String(format: "%d:%02d", n / 60, n % 60)
+    }
+}
+
+private struct PlaybackTimeline: View {
+    let timing: PlaybackTiming
+    let loading: Bool
+    let seek: (Double) -> Void
+    @State private var scrubbing = false
+    @State private var scrubPosition = 0.0
+
+    var body: some View {
+        let position = timing.position, duration = timing.duration
+        VStack(spacing: 3) {
+            Slider(value: Binding(get: { scrubbing ? scrubPosition : min(position, max(duration, 0.01)) },
+                                  set: { scrubPosition = $0; if !scrubbing { seek($0) } }), in: 0...max(duration, 0.01),
+                   onEditingChanged: { editing in
+                if editing { scrubPosition = position; scrubbing = true }
+                else { seek(scrubPosition); scrubbing = false }
+            }).hoverHighlight().disabled(duration <= 0 || loading).accessibilityLabel("File playback position")
+            HStack {
+                Text(AudioFileRail.time(scrubbing ? scrubPosition : position))
+                Spacer()
+                Text(AudioFileRail.time(duration))
+            }.font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+        }
     }
 }

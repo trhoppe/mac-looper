@@ -169,7 +169,8 @@ The source lives in `Packages/AM4RemoteKit`, imported from the original local
 `am4-remote` checkout without modifying that project. It includes its catalogs,
 saved Amp/effect libraries and protocol tests. There is no runtime dependency on
 the other checkout or on a work account. Physical Mac/iPad use Core MIDI directly;
-the optional localhost helper remains a simulator development facility.
+the optional localhost helper can be enabled in the simulator with the
+`--am4-simulator-helper` launch argument.
 
 One session owns the MIDI connection. It starts on first opening the remote;
 closing pauses polling without interrupting a pending verified operation. MIDI

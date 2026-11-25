@@ -43,11 +43,15 @@ enum AudioLibrary {
             at: root, includingPropertiesForKeys: [.isRegularFileKey, .isSymbolicLinkKey],
             options: [.skipsHiddenFiles, .skipsPackageDescendants], errorHandler: { _, _ in unreadable += 1; return true }
         ) else { throw AudioFailure(message: "Could not read this folder.") }
+        var audioByExtension: [String: Bool] = [:]
         var grouped: [String: [AudioTrack]] = [:]
         let prefix = root.path.hasSuffix("/") ? root.path : root.path + "/"
         for case let url as URL in enumerator {
             try Task.checkCancellation()
-            guard isAudio(url) else { continue }
+            let ext = url.pathExtension.lowercased()
+            let audio = audioByExtension[ext] ?? isAudio(url)
+            audioByExtension[ext] = audio
+            guard audio else { continue }
             guard let info = try? url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey]),
                   info.isRegularFile == true, info.isSymbolicLink != true else { continue }
             let parent = url.deletingLastPathComponent().standardizedFileURL.path

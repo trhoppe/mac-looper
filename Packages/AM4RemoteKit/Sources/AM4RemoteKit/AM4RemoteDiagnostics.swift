@@ -64,12 +64,12 @@ import Foundation
     private static func exerciseGainAndClose(session: AM4RemoteSession, report: inout [String]) async throws {
         let connection = session.connection
         await connection.showAmpPage("Amp")
-        guard let original = connection.amp else { throw Failure("No current Amp Gain to test.") }
+        guard let original = try await connection.readCurrentGain() else { throw Failure("No current Amp Gain to test.") }
         let target = original.gain < 9.8 ? original.gain + 0.1 : original.gain - 0.1
         do {
             let edit = Task { try await connection.changeGain(AM4GainCommand(expected: original, gain: target)) }
-            for _ in 0..<100 where !connection.isApplyingGain { await Task.yield() }
-            guard connection.isApplyingGain else { try await edit.value; throw Failure("Gain edit finished before Close could be exercised.") }
+            for _ in 0..<100 where !connection.isEditingHardware { await Task.yield() }
+            guard connection.isEditingHardware else { try await edit.value; throw Failure("Gain edit finished before Close could be exercised.") }
             session.dismiss()
             let pageCleared = connection.ampPage == nil && connection.effectPage == nil
             try await edit.value
@@ -111,7 +111,7 @@ import Foundation
                 if connection.gainStatus == "Applying change…" || finished { break }
                 try? await Task.sleep(for: .milliseconds(5))
             }
-            let closedWhileBusy = connection.isApplyingGain
+            let closedWhileBusy = connection.isEditingHardware
             session.dismiss()
             try await edit.value
             guard closedWhileBusy, connection.ampPage == nil else { throw Failure("Could not exercise Close during the Amp editor write.") }

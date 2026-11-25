@@ -18,7 +18,8 @@ struct LooperPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             controls
-            waveform.frame(height: 56)
+            LoopWaveform(telemetry: model.telemetry, bars: model.bars, stateColor: stateColor,
+                         showsProgress: model.hasLoop || model.state == TL_RECORDING).frame(height: 56)
         }.frame(maxHeight: fillsHeight ? .infinity : nil, alignment: .top)
             .jamSurface(border: model.busy || model.hasLoop ? stateColor.opacity(0.4) : JamDesign.border)
             .tint(accent)
@@ -38,18 +39,10 @@ struct LooperPanel: View {
                     transport
                 }
             }
-            Text(model.detail).font(.caption).foregroundStyle(JamDesign.secondary)
-                .lineLimit(2, reservesSpace: true)
-                .padding(.top, 4).padding(.bottom, -4)
+            LoopDetail(model: model)
             HStack(spacing: 10) {
                 Text("Threshold").font(.caption).foregroundStyle(.secondary)
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        Capsule().fill(.white.opacity(0.08))
-                        Capsule().fill(accent.opacity(0.65)).frame(width: max(0, geo.size.width * min(1, max(0, (model.meterDB + 72) / 72))))
-                        Rectangle().fill(.orange).frame(width: 2).offset(x: min(geo.size.width - 2, max(0, geo.size.width * (model.thresholdDB + 72) / 72)))
-                    }
-                }.frame(height: 8).accessibilityLabel("Input level \(Int(model.meterDB)) decibels")
+                LoopInputMeter(telemetry: model.telemetry, threshold: model.thresholdDB)
                 TextField("dB", value: threshold, format: .number.precision(.fractionLength(0)))
                     .textFieldStyle(.plain).jamNumberField(width: 48).multilineTextAlignment(.trailing).accessibilityLabel("Threshold decibels")
                 Text("dB").font(.caption).foregroundStyle(.secondary)
@@ -60,30 +53,6 @@ struct LooperPanel: View {
         Text(stateName).font(.caption.weight(.semibold)).foregroundStyle(stateColor)
             .padding(.horizontal, 8).padding(.vertical, 5)
             .background(stateColor.opacity(0.1), in: Capsule())
-    }
-    private var waveform: some View {
-        let waveform = model.waveform, progress = model.progress
-        return Canvas { context, size in
-                for bar in 0...model.bars {
-                    let x = size.width * Double(bar) / Double(model.bars)
-                    var line = Path(); line.move(to: CGPoint(x: x, y: 0)); line.addLine(to: CGPoint(x: x, y: size.height))
-                    context.stroke(line, with: .color(.white.opacity(0.06)), lineWidth: 1)
-                }
-                let mid = size.height / 2
-                var baseline = Path(); baseline.move(to: CGPoint(x: 0, y: mid)); baseline.addLine(to: CGPoint(x: size.width, y: mid))
-                context.stroke(baseline, with: .color(.white.opacity(0.1)), lineWidth: 1)
-                var peaks = Path()
-                for (i, value) in waveform.enumerated() where value > 0 {
-                    let x = size.width * (Double(i) + 0.5) / 256, h = max(1, min(1, Double(value)) * mid)
-                    peaks.move(to: CGPoint(x: x, y: mid - h)); peaks.addLine(to: CGPoint(x: x, y: mid + h))
-                }
-                context.stroke(peaks, with: .color(stateColor.opacity(0.9)), lineWidth: 2)
-                if model.hasLoop || model.state == TL_RECORDING {
-                    let x = size.width * min(1, max(0, progress))
-                    var p = Path(); p.move(to: CGPoint(x: x, y: 0)); p.addLine(to: CGPoint(x: x, y: size.height))
-                    context.stroke(p, with: .color(.white.opacity(0.8)), lineWidth: 1)
-                }
-            }.accessibilityLabel("Loop waveform")
     }
     private var timing: some View {
         HStack(spacing: 10) { barsControl; timingSummary }
@@ -231,5 +200,62 @@ private struct TimingControl: View {
         guard enabled else { return }
         value = min(bounds.upperBound, max(bounds.lowerBound, value.rounded() + delta))
         draft = formatted(value)
+    }
+}
+
+private struct LoopDetail: View {
+    @ObservedObject var model: LooperModel
+    var body: some View {
+        Text(model.detail).font(.caption).foregroundStyle(JamDesign.secondary)
+            .lineLimit(2, reservesSpace: true)
+            .padding(.top, 4).padding(.bottom, -4)
+    }
+}
+
+private struct LoopInputMeter: View {
+    let telemetry: LoopTelemetry
+    let threshold: Double
+
+    var body: some View {
+        let level = telemetry.meterDB
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                Capsule().fill(.white.opacity(0.08))
+                Capsule().fill(JamDesign.accent.opacity(0.65)).frame(width: max(0, geo.size.width * min(1, max(0, (level + 72) / 72))))
+                Rectangle().fill(.orange).frame(width: 2).offset(x: min(geo.size.width - 2, max(0, geo.size.width * (threshold + 72) / 72)))
+            }
+        }.frame(height: 8).accessibilityLabel("Input level \(Int(level)) decibels")
+    }
+}
+
+private struct LoopWaveform: View {
+    let telemetry: LoopTelemetry
+    let bars: Int
+    let stateColor: Color
+    let showsProgress: Bool
+
+    var body: some View {
+        let waveform = telemetry.waveform, progress = telemetry.progress
+        return Canvas { context, size in
+            for bar in 0...bars {
+                let x = size.width * Double(bar) / Double(bars)
+                var line = Path(); line.move(to: CGPoint(x: x, y: 0)); line.addLine(to: CGPoint(x: x, y: size.height))
+                context.stroke(line, with: .color(.white.opacity(0.06)), lineWidth: 1)
+            }
+            let mid = size.height / 2
+            var baseline = Path(); baseline.move(to: CGPoint(x: 0, y: mid)); baseline.addLine(to: CGPoint(x: size.width, y: mid))
+            context.stroke(baseline, with: .color(.white.opacity(0.1)), lineWidth: 1)
+            var peaks = Path()
+            for (i, value) in waveform.enumerated() where value > 0 {
+                let x = size.width * (Double(i) + 0.5) / 256, h = max(1, min(1, Double(value)) * mid)
+                peaks.move(to: CGPoint(x: x, y: mid - h)); peaks.addLine(to: CGPoint(x: x, y: mid + h))
+            }
+            context.stroke(peaks, with: .color(stateColor.opacity(0.9)), lineWidth: 2)
+            if showsProgress {
+                let x = size.width * min(1, max(0, progress))
+                var p = Path(); p.move(to: CGPoint(x: x, y: 0)); p.addLine(to: CGPoint(x: x, y: size.height))
+                context.stroke(p, with: .color(.white.opacity(0.8)), lineWidth: 1)
+            }
+        }.accessibilityLabel("Loop waveform")
     }
 }

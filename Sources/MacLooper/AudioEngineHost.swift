@@ -42,16 +42,19 @@ import CoreAudio
     private var aggregate: AudioDeviceID?
     private var macDriver: MLMacAudioDriver?
     #endif
-    private var file: PlaybackAsset?
-    private var fileSession: UUID?
-    private var filePosition = 0.0
-    private var filePlaying = false
-    private var fileRepeat = false
-    private var fileVolume: Float = 1.0
-    private var segmentStart: AVAudioFramePosition = 0
-    private var fileGeneration = UUID()
-    private var fileScheduled = false
-    private var fileIntent = UUID()
+    private struct BackingPlayback {
+        var asset: PlaybackAsset?
+        var session: UUID?
+        var position = 0.0
+        var playing = false
+        var repeating = false
+        var volume: Float = 1.0
+        var segmentStart: AVAudioFramePosition = 0
+        var generation = UUID()
+        var scheduled = false
+        var intent = UUID()
+    }
+    private var backing = BackingPlayback()
 
     var core: OpaquePointer? { loopUnit?.core }
     var callbacks: UInt64 { loopUnit?.callbackCount ?? 0 }
@@ -73,13 +76,13 @@ import CoreAudio
         try checkLifecycle(token)
         if captureEnabled, isRunning, self.input?.uid == input.uid, self.output?.uid == output.uid, inputChannel == channel { return }
         self.input = input; self.output = output; inputChannel = channel
-        let resumeBacking = filePlaying, backingSession = fileSession, backingIntent = fileIntent
+        let resumeBacking = backing.playing, backingSession = backing.session, backingIntent = backing.intent
         do { try await rebuild(capture: true) }
         catch {
             try checkLifecycle(token)
             let captureError = error
-            filePlaying = resumeBacking && fileSession == backingSession && fileIntent == backingIntent
-            if file != nil || drums.playing { try? await rebuild(capture: false) }
+            backing.playing = resumeBacking && backing.session == backingSession && backing.intent == backingIntent
+            if backing.asset != nil || drums.playing { try? await rebuild(capture: false) }
             throw captureError
         }
     }
@@ -89,20 +92,20 @@ import CoreAudio
             try await configuration.acquire(); defer { configuration.release() }
             try checkLifecycle(token)
             if loopUnit != nil {
-                if file == nil && !drums.playing { shutdownAudio() }
+                if backing.asset == nil && !drums.playing { shutdownAudio() }
                 else { try await rebuild(capture: false) }
             }
-        } catch is CancellationError { } catch { shutdownAudio(); filePlaying = false }
+        } catch is CancellationError { } catch { shutdownAudio(); backing.playing = false }
     }
     func shutdown() {
-        lifecycle = UUID(); fileIntent = UUID()
-        filePlaying = false; drums.setPlaying(false); drums.saveState(); shutdownAudio()
+        lifecycle = UUID(); backing.intent = UUID()
+        backing.playing = false; drums.setPlaying(false); drums.saveState(); shutdownAudio()
     }
     /// iPad suspension preserves completed samples and cancels capture after
     /// rendering stops. Returning to the app never resumes a transport.
     func suspendAudio() {
-        lifecycle = UUID(); fileIntent = UUID(); suspended = true
-        filePosition = position(); player?.pause(); filePlaying = false
+        lifecycle = UUID(); backing.intent = UUID(); suspended = true
+        backing.position = position(); player?.pause(); backing.playing = false
         drums.setPlaying(false); updateDrummerVolume()
         // iPad lifecycle calls this; offline tests have no physical driver.
         #if os(macOS)
@@ -143,7 +146,7 @@ import CoreAudio
     }
     #endif
     func resetAudioService() {
-        lifecycle = UUID(); fileIntent = UUID(); filePlaying = false
+        lifecycle = UUID(); backing.intent = UUID(); backing.playing = false
         shutdownAudio(); drums.resetAfterAudioServiceReset()
     }
     func updateDrummerVolume() { drumGain?.volume = drums.playing ? Float(drums.volume) : 0 }
@@ -195,19 +198,19 @@ import CoreAudio
         engine?.stop(); player?.stop()
         if let engine { removeDrummer(from: engine) }
         suspended = false
-        loopUnit = nil; loopNode = nil; player = nil; engine = nil; captureEnabled = false; fileScheduled = false
+        loopUnit = nil; loopNode = nil; player = nil; engine = nil; captureEnabled = false; backing.scheduled = false
         #if os(macOS)
         if let aggregate { AudioHardwareDestroyAggregateDevice(aggregate) }
         aggregate = nil
         #endif
     }
-    private func trace(_ value: String) { if CommandLine.arguments.contains("--smoke-test") { print("Audio: " + value) } }
+    private func trace(_ value: String) { if LaunchOptions.has("--smoke-test") { print("Audio: " + value) } }
     private func rebuild(capture: Bool, useSystemBuffer: Bool = false) async throws {
         trace("rebuild capture=\(capture)")
-        let token = lifecycle, session = fileSession, intent = fileIntent
-        let resume = filePlaying
-        filePosition = position()
-        fileGeneration = UUID()
+        let token = lifecycle, session = backing.session, intent = backing.intent
+        let resume = backing.playing
+        backing.position = position()
+        backing.generation = UUID()
         shutdownAudio()
         guard let output else { throw AudioFailure(message: "Choose an output in Audio Settings.") }
         let e = AVAudioEngine(), p = AVAudioPlayerNode()
@@ -273,17 +276,8 @@ import CoreAudio
             let backingFormat = AVAudioFormat(standardFormatWithSampleRate: 48000, channels: 2)!
             try MLAudioGraphTools.connect(e, source: p, sourceBus: 0, destination: e.mainMixerNode, destinationBus: 1, format: backingFormat)
             if capture {
-                if !Self.registered {
-                    AUAudioUnit.registerSubclass(MLGuitarLoopAudioUnit.self, as: Self.description, name: "Mac Looper: Guitar Loop", version: 1)
-                    Self.registered = true
-                }
                 trace("instantiate loop")
-                let node: AVAudioUnit = try await withCheckedThrowingContinuation { continuation in
-                    AVAudioUnit.instantiate(with: Self.description, options: []) { unit, error in
-                        if let unit { continuation.resume(returning: unit) }
-                        else { continuation.resume(throwing: error ?? AudioFailure(message: "Could not create the guitar looper.")) }
-                    }
-                }
+                let node = try await Self.makeLoopUnit()
                 try checkLifecycle(token)
                 trace("loop instantiated")
                 guard let unit = node.auAudioUnit as? MLGuitarLoopAudioUnit else { throw AudioFailure(message: "Unexpected guitar processing unit.") }
@@ -335,12 +329,12 @@ import CoreAudio
             #if os(iOS)
             configuredRoute = Self.currentRoute
             #endif
-            let stillPlaying = resume && session == fileSession && intent == fileIntent && filePlaying
-            filePlaying = stillPlaying
-            if file != nil { schedule(from: filePosition, play: stillPlaying) }
-            p.volume = fileVolume
+            let stillPlaying = resume && session == backing.session && intent == backing.intent && backing.playing
+            backing.playing = stillPlaying
+            if backing.asset != nil { schedule(from: backing.position, play: stillPlaying) }
+            p.volume = backing.volume
         } catch {
-            if self.engine === e { shutdownAudio(); filePlaying = false }
+            if self.engine === e { shutdownAudio(); backing.playing = false }
             throw error
         }
     }
@@ -356,16 +350,7 @@ import CoreAudio
             try await rebuild(capture: false, useSystemBuffer: true)
         }
         guard let engine else { throw LoopFileError.transfer }
-        if !Self.registered {
-            AUAudioUnit.registerSubclass(MLGuitarLoopAudioUnit.self, as: Self.description, name: "Mac Looper: Guitar Loop", version: 1)
-            Self.registered = true
-        }
-        let node: AVAudioUnit = try await withCheckedThrowingContinuation { continuation in
-            AVAudioUnit.instantiate(with: Self.description, options: []) { node, error in
-                if let node { continuation.resume(returning: node) }
-                else { continuation.resume(throwing: error ?? LoopFileError.transfer) }
-            }
-        }
+        let node = try await Self.makeLoopUnit()
         try checkLifecycle(token)
         guard self.engine === engine, let unit = node.auAudioUnit as? MLGuitarLoopAudioUnit else { throw LoopFileError.transfer }
         let format = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 2)!
@@ -387,6 +372,19 @@ import CoreAudio
             engine.detach(node); engine.detach(silence); throw error
         }
     }
+    private static func makeLoopUnit() async throws -> AVAudioUnit {
+        if !Self.registered {
+            AUAudioUnit.registerSubclass(MLGuitarLoopAudioUnit.self, as: Self.description, name: "Mac Looper: Guitar Loop", version: 1)
+            Self.registered = true
+        }
+        return try await withCheckedThrowingContinuation { continuation in
+            AVAudioUnit.instantiate(with: Self.description, options: []) { node, error in
+                if let node { continuation.resume(returning: node) }
+                else { continuation.resume(throwing: error ?? AudioFailure(message: "Could not create the guitar looper.")) }
+            }
+        }
+    }
+
     func snapshotLoop(bpm: Double, bars: Int) async throws -> SavedLoop {
         let token = lifecycle
         try await configuration.acquire(); defer { configuration.release() }
@@ -458,21 +456,21 @@ import CoreAudio
     private static let description = AudioComponentDescription(componentType: kAudioUnitType_Effect, componentSubType: 0x6D6C6C70, componentManufacturer: 0x4D614C70, componentFlags: 0, componentFlagsMask: 0)
 
     func loadFile(_ asset: PlaybackAsset, session: UUID, volume: Float, repeating: Bool) {
-        fileIntent = UUID(); fileGeneration = UUID(); player?.stop()
-        file = asset; fileSession = session; filePosition = 0; filePlaying = false; fileScheduled = false
-        fileVolume = min(1, max(0, volume)); fileRepeat = repeating
-        player?.volume = fileVolume
+        backing.intent = UUID(); backing.generation = UUID(); player?.stop()
+        backing.asset = asset; backing.session = session; backing.position = 0; backing.playing = false; backing.scheduled = false
+        backing.volume = min(1, max(0, volume)); backing.repeating = repeating
+        player?.volume = backing.volume
     }
     func requestFilePlay(session: UUID) -> UUID? {
-        guard !suspended, fileSession == session, file != nil else { return nil }
-        fileIntent = UUID(); return fileIntent
+        guard !suspended, backing.session == session, backing.asset != nil else { return nil }
+        backing.intent = UUID(); return backing.intent
     }
     func playFile(session: UUID, output: AudioDevice, requestedIntent: UUID? = nil, useSystemBuffer: Bool = false) async throws {
-        guard !suspended, fileSession == session, file != nil else { return }
-        if let requestedIntent { guard fileIntent == requestedIntent else { return } }
-        else { fileIntent = UUID() }
-        let intent = fileIntent, token = lifecycle
-        func current() -> Bool { fileSession == session && fileIntent == intent && lifecycle == token && !Task.isCancelled }
+        guard !suspended, backing.session == session, backing.asset != nil else { return }
+        if let requestedIntent { guard backing.intent == requestedIntent else { return } }
+        else { backing.intent = UUID() }
+        let intent = backing.intent, token = lifecycle
+        func current() -> Bool { backing.session == session && backing.intent == intent && lifecycle == token && !Task.isCancelled }
         do {
             try await configuration.acquire(); defer { configuration.release() }
             guard current() else { return }
@@ -484,14 +482,14 @@ import CoreAudio
             guard playbackSetup != nil || output.uid == "ios-system-output" else { throw AudioFailure(message: "Choose an available output in Audio Settings.") }
             #endif
             if self.output?.uid != output.uid || engine == nil {
-                self.output = output; filePlaying = false
+                self.output = output; backing.playing = false
                 try await rebuild(capture: false, useSystemBuffer: useSystemBuffer)
                 guard current() else { return }
             }
-            guard let engine, let player, let file else { throw AudioFailure(message: "The audio player could not start.") }
+            guard let engine, let player, let file = backing.asset else { throw AudioFailure(message: "The audio player could not start.") }
             if !engine.isRunning { try MLAudioGraphTools.start(engine) }
-            if filePosition >= file.duration { filePosition = 0; fileScheduled = false }
-            if !fileScheduled { schedule(from: filePosition, play: true) } else { player.play(); filePlaying = true }
+            if backing.position >= file.duration { backing.position = 0; backing.scheduled = false }
+            if !backing.scheduled { schedule(from: backing.position, play: true) } else { player.play(); backing.playing = true }
         } catch {
             // A failure from an obsolete Play must not become the new track's error.
             guard current() else { return }
@@ -499,64 +497,71 @@ import CoreAudio
         }
     }
     func pauseFile(session: UUID) {
-        guard fileSession == session else { return }
-        fileIntent = UUID(); filePosition = position(); player?.pause(); filePlaying = false
+        guard backing.session == session else { return }
+        backing.intent = UUID(); backing.position = position(); player?.pause(); backing.playing = false
     }
     func stopFile(session: UUID) {
-        guard fileSession == session else { return }
-        fileIntent = UUID(); fileGeneration = UUID(); player?.stop(); filePosition = 0; filePlaying = false; fileScheduled = false
+        guard backing.session == session else { return }
+        backing.intent = UUID(); backing.generation = UUID(); player?.stop(); backing.position = 0; backing.playing = false; backing.scheduled = false
     }
     func seekFile(session: UUID, to seconds: Double) {
-        guard fileSession == session, let file, seconds.isFinite else { return }
-        filePosition = min(file.duration, max(0, seconds))
-        if player != nil, engine?.isRunning == true { schedule(from: filePosition, play: filePlaying) }
-        else { fileScheduled = false }
+        guard backing.session == session, let file = backing.asset, seconds.isFinite else { return }
+        backing.position = min(file.duration, max(0, seconds))
+        if player != nil, engine?.isRunning == true { schedule(from: backing.position, play: backing.playing) }
+        else { backing.scheduled = false }
     }
     func configureFile(session: UUID, volume: Float, repeating: Bool) {
-        guard fileSession == session else { return }
-        fileVolume = min(1, max(0, volume)); player?.volume = fileVolume
-        if fileRepeat != repeating {
-            filePosition = position(); fileRepeat = repeating
-            if fileScheduled { schedule(from: filePosition, play: filePlaying) }
+        guard backing.session == session else { return }
+        backing.volume = min(1, max(0, volume)); player?.volume = backing.volume
+        if backing.repeating != repeating {
+            backing.position = position(); backing.repeating = repeating
+            if backing.scheduled { schedule(from: backing.position, play: backing.playing) }
         }
     }
+    func fileOutputAvailable(_ device: AudioDevice) -> Bool {
+        playbackSetup != nil || AudioDevices.alive(device.id)
+    }
     func fileSnapshot(session: UUID) -> FilePlaybackSnapshot? {
-        guard fileSession == session, let file else { return nil }
-        return FilePlaybackSnapshot(duration: file.duration, position: position(), playing: filePlaying && player?.isPlaying == true)
+        guard backing.session == session, let file = backing.asset else { return nil }
+        return FilePlaybackSnapshot(duration: file.duration, position: position(),
+                                    playing: backing.playing && player?.isPlaying == true,
+                                    intendsToPlay: backing.playing)
     }
     func unloadFile(session: UUID? = nil) {
-        if let session, fileSession != session { return }
-        fileIntent = UUID(); fileGeneration = UUID(); player?.stop(); file = nil; fileSession = nil; filePlaying = false; filePosition = 0; fileScheduled = false
+        if let session, backing.session != session { return }
+        backing.intent = UUID(); backing.generation = UUID(); player?.stop(); backing.asset = nil; backing.session = nil; backing.playing = false; backing.position = 0; backing.scheduled = false
     }
     private func position() -> Double {
-        guard let file else { return 0 }
-        guard filePlaying, let player, let time = player.lastRenderTime, let played = player.playerTime(forNodeTime: time) else { return filePosition }
-        let seconds = Double(segmentStart + played.sampleTime) / file.file.processingFormat.sampleRate
-        return fileRepeat && file.duration > 0 ? seconds.truncatingRemainder(dividingBy: file.duration) : min(file.duration, max(0, seconds))
+        guard let file = backing.asset else { return 0 }
+        guard backing.playing, let player, let time = player.lastRenderTime,
+              time.isSampleTimeValid || time.isHostTimeValid,
+              let played = player.playerTime(forNodeTime: time) else { return backing.position }
+        let seconds = Double(backing.segmentStart + played.sampleTime) / file.file.processingFormat.sampleRate
+        return backing.repeating && file.duration > 0 ? seconds.truncatingRemainder(dividingBy: file.duration) : min(file.duration, max(0, seconds))
     }
     private func schedule(from seconds: Double, play: Bool) {
-        guard let file, let player else { return }
-        fileGeneration = UUID(); let generation = fileGeneration
-        player.stop(); fileScheduled = false
+        guard let file = backing.asset, let player else { return }
+        backing.generation = UUID(); let generation = backing.generation
+        player.stop(); backing.scheduled = false
         let rate = file.file.processingFormat.sampleRate
-        segmentStart = min(file.file.length, max(0, AVAudioFramePosition(seconds * rate)))
-        filePosition = Double(segmentStart) / rate
-        guard segmentStart < file.file.length else { filePlaying = false; return }
-        fileScheduled = true
-        enqueue(start: segmentStart, generation: generation)
-        if fileRepeat { enqueue(start: 0, generation: generation) }
-        filePlaying = play
+        backing.segmentStart = min(file.file.length, max(0, AVAudioFramePosition(seconds * rate)))
+        backing.position = Double(backing.segmentStart) / rate
+        guard backing.segmentStart < file.file.length else { backing.playing = false; return }
+        backing.scheduled = true
+        enqueue(start: backing.segmentStart, generation: generation)
+        if backing.repeating { enqueue(start: 0, generation: generation) }
+        backing.playing = play
         if play { player.play() }
     }
     private func enqueue(start: AVAudioFramePosition, generation: UUID) {
-        guard let file, let player else { return }
-        let repeating = fileRepeat
+        guard let file = backing.asset, let player else { return }
+        let repeating = backing.repeating
         player.scheduleSegment(file.file, startingFrame: start, frameCount: AVAudioFrameCount(file.file.length - start), at: nil,
                                completionCallbackType: repeating ? .dataConsumed : .dataPlayedBack) { [weak self] _ in
             Task { @MainActor in
-                guard let self, self.fileGeneration == generation else { return }
-                if self.fileRepeat { self.enqueue(start: 0, generation: generation) }
-                else if let file = self.file { self.filePosition = file.duration; self.filePlaying = false; self.fileScheduled = false }
+                guard let self, self.backing.generation == generation else { return }
+                if self.backing.repeating { self.enqueue(start: 0, generation: generation) }
+                else if let file = self.backing.asset { self.backing.position = file.duration; self.backing.playing = false; self.backing.scheduled = false }
             }
         }
     }

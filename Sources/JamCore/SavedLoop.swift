@@ -18,16 +18,25 @@ public struct SavedLoop: Codable, Sendable {
         leftPCM = left.withUnsafeBytes { Data($0) }; rightPCM = right.withUnsafeBytes { Data($0) }
         try validate()
     }
-    public func encoded() throws -> Data {
+    private enum CodingKeys: String, CodingKey { case version, sampleRate, bpm, bars, leftPCM, rightPCM }
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        version = try values.decode(Int.self, forKey: .version)
+        sampleRate = try values.decode(Double.self, forKey: .sampleRate)
+        bpm = try values.decode(Double.self, forKey: .bpm)
+        bars = try values.decode(Int.self, forKey: .bars)
+        leftPCM = try values.decode(Data.self, forKey: .leftPCM)
+        rightPCM = try values.decode(Data.self, forKey: .rightPCM)
         try validate()
+    }
+    public func encoded() throws -> Data {
         let encoder = PropertyListEncoder(); encoder.outputFormat = .binary
         return try encoder.encode(self)
     }
     public static func decode(_ data: Data) throws -> SavedLoop {
         guard data.count <= maximumFileBytes else { throw LoopFileError.invalid }
         do {
-            let loop = try PropertyListDecoder().decode(Self.self, from: data)
-            try loop.validate(); return loop
+            return try PropertyListDecoder().decode(Self.self, from: data)
         } catch { throw LoopFileError.invalid }
     }
     public func channels() -> (left: [Float], right: [Float]) {

@@ -2,7 +2,7 @@ import JamDesignKit
 import SwiftUI
 
 struct AM4RemoteView: View {
-    @ObservedObject var midi: AM4Connection
+    let midi: AM4Connection
     @State private var navigationError: String?
     @Environment(\.displayScale) private var displayScale
     @State private var selection: Int?
@@ -70,7 +70,7 @@ struct AM4RemoteView: View {
                             }
                         }.listStyle(.plain).scrollContentBackground(.hidden).tint(.gray).accentColor(.gray)
                             .contentMargins(.horizontal, 0, for: .scrollContent)
-                            .disabled(!midi.isConnected || midi.isLoadingPresets || midi.isApplyingGain || midi.isNavigating)
+                            .disabled(!midi.isConnected || midi.isLoadingPresets || midi.isEditingHardware || midi.isNavigating)
                             .onAppear {
                                 if let current = midi.location { proxy.scrollTo(current, anchor: .center) }
                             }
@@ -250,7 +250,7 @@ struct AM4RemoteView: View {
                                         selectedBlock = BlockSelection(id: index, type: type)
                                     }
                                 })
-                                .disabled(type == 0 || midi.isApplyingGain || midi.isNavigating)
+                                .disabled(type == 0 || midi.isEditingHardware || midi.isNavigating)
                                 .accessibilityValue(state == nil ? "Reading status" : (active ? "Active" : "Bypassed"))
                                 .accessibilityAction(named: Text(active ? "Bypass block" : "Enable block")) {
                                     guard state != nil else { return }
@@ -283,7 +283,7 @@ struct AM4RemoteView: View {
                             .background(index == snapshot.scene ? JamDesign.selection : JamDesign.card, in: RoundedRectangle(cornerRadius: 8))
                             .contentShape(RoundedRectangle(cornerRadius: 6))
                         }.buttonStyle(AM4ButtonStyle(isSelected: index == snapshot.scene))
-                            .disabled(midi.isNavigating || midi.isApplyingGain || midi.isLoadingPresets)
+                            .disabled(midi.isNavigating || midi.isEditingHardware || midi.isLoadingPresets)
                             .accessibilityLabel("Scene \(index + 1), \(snapshot.sceneNames[index])")
                     }
                 } else {
@@ -314,7 +314,7 @@ private enum BlockLabel {
 }
 
 private struct BlockPanel: View {
-    @ObservedObject var midi: AM4Connection
+    let midi: AM4Connection
     let blockID: UInt32
     let close: () -> Void
     @State private var page = "Amp"
@@ -331,7 +331,7 @@ private struct BlockPanel: View {
         VStack(spacing: 0) {
             AM4EditorHeader(title: BlockLabel.name(blockID),
                 subtitle: midi.ampControls.map { "\(AM4Message.locationLabel($0.context.location)) · Scene \($0.context.scene + 1)" },
-                busy: midi.isApplyingGain, close: close) {
+                busy: midi.isEditingHardware, close: close) {
                     if blockID == 0x3A { ampSelectionMenus }
                 }
             Divider()
@@ -354,7 +354,7 @@ private struct BlockPanel: View {
                     } else { ProgressView().controlSize(.small) }
                     Spacer()
                 }.padding(.horizontal, 24).padding(.vertical, 10)
-                    .disabled(midi.isApplyingGain || midi.isNavigating || !midi.isConnected)
+                    .disabled(midi.isEditingHardware || midi.isNavigating || !midi.isConnected)
                 Divider()
                 HStack(spacing: 0) {
                     ScrollView {
@@ -374,7 +374,7 @@ private struct BlockPanel: View {
                             }
                         }.padding(.vertical, 14).padding(.horizontal, 8)
                     }.frame(width: 148).background(.white.opacity(0.025))
-                        .disabled(midi.isApplyingGain)
+                        .disabled(midi.isEditingHardware)
                     Divider()
                     ScrollView {
                         VStack(alignment: .leading, spacing: 28) {
@@ -417,7 +417,7 @@ private struct BlockPanel: View {
                     Button {
                         Task { await midi.showAmpPage(page) }
                     } label: { Label("Refresh", systemImage: "arrow.clockwise") }
-                        .buttonStyle(AM4NativeButtonStyle()).accessibilityLabel("Refresh Amp controls").disabled(midi.isApplyingGain)
+                        .buttonStyle(AM4NativeButtonStyle()).accessibilityLabel("Refresh Amp controls").disabled(midi.isEditingHardware)
                 }.padding(.horizontal, 20).padding(.vertical, 8)
             } else {
                 Text("This block does not support editing.")
@@ -448,7 +448,7 @@ private struct BlockPanel: View {
                     }.equatable().frame(maxWidth: 220)
             } else { ProgressView("Reading amp…").controlSize(.small) }
         }
-        .disabled(midi.ampControls?.context.channel == nil || !midi.isConnected || midi.isApplyingGain || midi.isNavigating || midi.isLoadingPresets)
+        .disabled(midi.ampControls?.context.channel == nil || !midi.isConnected || midi.isEditingHardware || midi.isNavigating || midi.isLoadingPresets)
         .alert("Amp selection failed", isPresented: Binding(
             get: { selectionFailure != nil }, set: { if !$0 { selectionFailure = nil } })) {
                 Button("OK", role: .cancel) { selectionFailure = nil }
@@ -479,7 +479,7 @@ private struct AmpControlSection: Identifiable {
 }
 
 private struct AmpParameterRow: View {
-    @ObservedObject var midi: AM4Connection
+    let midi: AM4Connection
     let control: AM4AmpControl
     let definition: AM4ParameterDefinition
     let actual: AM4ParameterValue
@@ -567,7 +567,7 @@ private struct AmpParameterRow: View {
             }
             if let failure { Text(failure).font(.caption2).foregroundStyle(.red).multilineTextAlignment(.center) }
         }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            .disabled(submitting || midi.isApplyingGain || midi.isNavigating || state.locked(control))
+            .disabled(submitting || midi.isEditingHardware || midi.isNavigating || state.locked(control))
             .onAppear { normalized = actual.normalized }
             .onChange(of: actual) { _, value in
                 if !editing && !submitting { normalized = value.normalized }
@@ -657,7 +657,7 @@ private extension AM4ParameterDefinition {
 }
 
 private struct EQBandStrip: View {
-    @ObservedObject var midi: AM4Connection
+    let midi: AM4Connection
     let controls: [AM4AmpControl]
     let state: ParameterEditorState
 
@@ -790,7 +790,7 @@ private enum ParameterEditorState {
 }
 
 private struct EffectPanel: View {
-    @ObservedObject var midi: AM4Connection
+    let midi: AM4Connection
     let slot: Int
     let blockID: Int
     let close: () -> Void
@@ -802,13 +802,13 @@ private struct EffectPanel: View {
         guard let state = midi.effectControls, state.context.block == blockID, state.context.slot == slot else { return nil }
         return state
     }
-    private var busy: Bool { midi.isApplyingGain || midi.isNavigating || !midi.isConnected }
+    private var busy: Bool { midi.isEditingHardware || midi.isNavigating || !midi.isConnected }
 
     var body: some View {
         VStack(spacing: 0) {
             AM4EditorHeader(title: blockID == 119 ? "Drive 2" : effect.name,
                 subtitle: state.map { "\(AM4Message.locationLabel($0.context.location)) · Scene \($0.context.scene + 1)" },
-                busy: midi.isApplyingGain, close: close) { effectSelectionMenus }
+                busy: midi.isEditingHardware, close: close) { effectSelectionMenus }
             Divider()
             HStack(spacing: 10) {
                 Text("Channel").font(.subheadline).foregroundStyle(.secondary)

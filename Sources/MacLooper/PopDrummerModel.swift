@@ -82,8 +82,8 @@ typealias PluginEditorController = UIViewController
     private var windowDelegate: DrummerWindowDelegate?
     #endif
     private var stateURL: URL {
-        if let index = CommandLine.arguments.firstIndex(of: "--plugin-state"), CommandLine.arguments.count > index + 1 {
-            return URL(fileURLWithPath: CommandLine.arguments[index + 1])
+        if let path = LaunchOptions.value("--plugin-state") {
+            return URL(fileURLWithPath: path)
         }
         return FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("MacLooper/PopDrummer-state.plist")
@@ -107,7 +107,7 @@ typealias PluginEditorController = UIViewController
                     try await Task.sleep(for: .milliseconds(100))
                     matches = manager.components(matching: requested)
                 }
-                if CommandLine.arguments.contains("--drummer-check") {
+                if LaunchOptions.has("--drummer-check") {
                     let any = AudioComponentDescription(componentType: 0, componentSubType: 0, componentManufacturer: 0, componentFlags: 0, componentFlagsMask: 0)
                     for c in manager.components(matching: any) where c.name.localizedCaseInsensitiveContains("drummer") || c.manufacturerName.localizedCaseInsensitiveContains("lumbeat") {
                         print("Available plugin: \(c.name), type=\(String(c.audioComponentDescription.componentType, radix: 16)), sub=\(String(c.audioComponentDescription.componentSubType, radix: 16)), maker=\(String(c.audioComponentDescription.componentManufacturer, radix: 16))")
@@ -120,7 +120,7 @@ typealias PluginEditorController = UIViewController
                 }
                 guard generation == loadGeneration, !Task.isCancelled else { return }
                 guard node.auAudioUnit.outputBusses.count > 0 else { throw AudioFailure(message: "Pop Drummer has no audio output.") }
-                if instrumentLoader == nil, !CommandLine.arguments.contains("--fresh-plugin"), let data = try? Data(contentsOf: self.stateURL),
+                if instrumentLoader == nil, !LaunchOptions.has("--fresh-plugin"), let data = try? Data(contentsOf: self.stateURL),
                    let state = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any] {
                     self.pendingState = state
                 }
@@ -178,10 +178,11 @@ typealias PluginEditorController = UIViewController
     private func observeRhythms() {
         if let rhythmObserver { rhythmTree?.removeParameterObserver(rhythmObserver) }
         rhythmTree = node?.auAudioUnit.parameterTree
-        rhythmObserver = rhythmTree?.token(byAddingParameterObserver: { [weak self] _, _ in
+        let grooveAddress = rhythmTree?.allParameters.first { $0.identifier == "Param_Groove" }?.address
+        rhythmObserver = rhythmTree?.token(byAddingParameterObserver: { [weak self] address, _ in
             Task { @MainActor [weak self] in
                 guard let self else { return }
-                self.refreshRhythms()
+                if address == grooveAddress { self.refreshRhythms() }
                 self.rhythmSaveTask?.cancel()
                 self.rhythmSaveTask = Task { @MainActor [weak self] in
                     do { try await Task.sleep(for: .milliseconds(300)) } catch { return }
@@ -289,15 +290,18 @@ typealias PluginEditorController = UIViewController
         window.setContentSize(NSSize(width: min(available.width - 60, preferred.width > 300 ? preferred.width : 1000),
                                      height: min(available.height - 100, preferred.height > 300 ? preferred.height : 720)))
         window.minSize = NSSize(width: 640, height: 500)
-        let delegate = DrummerWindowDelegate { [weak self] in self?.saveState() }
+        let delegate = DrummerWindowDelegate { [weak self] in self?.editorDidClose() }
         window.delegate = delegate; windowDelegate = delegate
         editorWindow = window; window.center(); window.makeKeyAndOrderFront(nil)
         #else
         showingEditor = true
         #endif
     }
-    func saveState() {
+    func editorDidClose() {
         refreshRhythms()
+        saveState()
+    }
+    func saveState() {
         guard instrumentLoader == nil, pendingState == nil, node?.auAudioUnit.renderResourcesAllocated == true,
               let state = node?.auAudioUnit.fullState,
               PropertyListSerialization.propertyList(state, isValidFor: .binary) else { return }

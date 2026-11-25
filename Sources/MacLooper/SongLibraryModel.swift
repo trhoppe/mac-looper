@@ -2,9 +2,19 @@ import Foundation
 import SwiftUI
 import JamCore
 
+@MainActor @Observable private final class SongBrowserState {
+    var songs: [LibrarySong] = []
+    var query = ""
+    var status = "Choose your library in Settings"
+}
+
 @MainActor final class SongLibraryModel: ObservableObject {
     @Published private(set) var library: JustChordsLibrary? { didSet { updateSongs() } }
-    @Published private(set) var songs: [LibrarySong] = []
+    private let browser = SongBrowserState()
+    private(set) var songs: [LibrarySong] {
+        get { browser.songs }
+        set { if browser.songs != newValue { browser.songs = newValue } }
+    }
     @Published var selectedSongID: String?
     @Published var playlistID: String? {
         didSet {
@@ -13,14 +23,24 @@ import JamCore
             if let id = selectedSongID, !orderedSongs.contains(where: { $0.id == id }) { selectedSongID = nil }
         }
     }
-    @Published var query = "" { didSet { if query != oldValue { filterSongs() } } }
+    var query: String {
+        get { browser.query }
+        set {
+            guard browser.query != newValue else { return }
+            browser.query = newValue
+            filterSongs()
+        }
+    }
     @Published var sortOrder: SongSortOrder {
         didSet {
             defaults.set(sortOrder.rawValue, forKey: "songSortOrder")
             if sortOrder != oldValue { updateSongs() }
         }
     }
-    @Published private(set) var status = "Choose your library in Settings"
+    private(set) var status: String {
+        get { browser.status }
+        set { if browser.status != newValue { browser.status = newValue } }
+    }
     @Published private(set) var error: String?
     @Published var editing = false {
         didSet { if !editing && refreshRequested { Task { await refresh() } } }
