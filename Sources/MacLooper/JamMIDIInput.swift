@@ -39,7 +39,7 @@ import JamCore
             }
             guard !actions.isEmpty else { return }
             let received = actions
-            Task { @MainActor in
+            DispatchQueue.main.async {
                 guard let self, self.generation == token else { return }
                 self.receive(received)
             }

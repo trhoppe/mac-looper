@@ -13,7 +13,7 @@ typedef struct {
     _Atomic BOOL strict;
     _Atomic int error;
     _Atomic UInt64 callbacks;
-    __unsafe_unretained MLPluginTransport *transport;
+    void *transport;
 } MLRenderContext;
 static void silence(AudioBufferList *list) {
     for (UInt32 i = 0; i < list->mNumberBuffers; i++) if (list->mBuffers[i].mData) memset(list->mBuffers[i].mData, 0, list->mBuffers[i].mDataByteSize);
@@ -65,7 +65,7 @@ static void silence(AudioBufferList *list) {
         if (!output->mBuffers[1].mData) output->mBuffers[1].mData = c->right;
         output->mBuffers[0].mDataByteSize = output->mBuffers[1].mDataByteSize = n * sizeof(float);
         int64_t offset = c->transport && time && (time->mFlags & kAudioTimeStampSampleTimeValid)
-            ? [c->transport framesUntilDownbeatAtSampleTime:time->mSampleTime] : -1;
+            ? MLFramesUntilDownbeat(c->transport, time->mSampleTime) : -1;
         tl_process_timed(c->core, c->input->mBuffers[il].mData, c->input->mBuffers[ir].mData,
                    output->mBuffers[0].mData, output->mBuffers[1].mData, n, offset);
         // The output is loop playback, never live input. Do not propagate an input-silent flag.
@@ -112,7 +112,6 @@ static void silence(AudioBufferList *list) {
     atomic_store(&c->error, 0);
     return YES;
 }
-- (void)deallocateRenderResources { [super deallocateRenderResources]; }
 - (TLCore *)core { return _context->core; }
 - (UInt32)inputLeft { return atomic_load(&_context->il); }
 - (void)setInputLeft:(UInt32)v { atomic_store(&_context->il, v); }
@@ -120,7 +119,7 @@ static void silence(AudioBufferList *list) {
 - (void)setInputRight:(UInt32)v { atomic_store(&_context->ir, v); }
 - (BOOL)require32Frames { return atomic_load(&_context->strict); }
 - (MLPluginTransport *)syncTransport { return _syncTransport; }
-- (void)setSyncTransport:(MLPluginTransport *)transport { _syncTransport = transport; _context->transport = transport; }
+- (void)setSyncTransport:(MLPluginTransport *)transport { _syncTransport = transport; _context->transport = [transport renderContext]; }
 - (void)setRequire32Frames:(BOOL)v { atomic_store(&_context->strict, v); }
 - (OSStatus)renderError { return atomic_load(&_context->error); }
 - (UInt64)callbackCount { return atomic_load(&_context->callbacks); }

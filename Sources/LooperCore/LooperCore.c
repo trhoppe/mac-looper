@@ -27,6 +27,7 @@ struct TLCore {
     _Atomic int publishedState;
     _Atomic uint32_t publishedLength, publishedRecorded, publishedPosition;
     _Atomic uint64_t publishedCycles;
+    _Atomic float meterInput, meterOutput;
     _Atomic float peak, outputPeak, waveform[WAVE_BINS];
 };
 _Static_assert(ATOMIC_INT_LOCK_FREE == 2, "Realtime atomics must be lock free");
@@ -56,6 +57,7 @@ TLCore *tl_create(double rate, uint32_t capacity) {
     atomic_init(&c->publishedState, TL_EMPTY); atomic_init(&c->publishedLength, 0);
     atomic_init(&c->publishedRecorded, 0); atomic_init(&c->publishedPosition, 0);
     atomic_init(&c->publishedCycles, 0); atomic_init(&c->peak, 0); atomic_init(&c->outputPeak, 0);
+    atomic_init(&c->meterInput, 0); atomic_init(&c->meterOutput, 0);
     for (int b = 0; b < WAVE_BINS; b++) atomic_init(&c->waveform[b], 0);
     // Float atomics must also be lock-free on the runtime architecture.
     if (!atomic_is_lock_free(&c->threshold)) { tl_destroy(c); return NULL; }
@@ -95,6 +97,18 @@ TLSnapshot tl_snapshot(TLCore *c) {
     return (TLSnapshot){atomic_load(&c->publishedState), atomic_load(&c->publishedLength),
         atomic_load(&c->publishedRecorded), atomic_load(&c->publishedPosition),
         atomic_load(&c->peak), atomic_load(&c->outputPeak), atomic_load(&c->publishedCycles)};
+}
+TLMeterPeaks tl_take_meter_peaks(TLCore *c) {
+    if (!c) return (TLMeterPeaks){0};
+    return (TLMeterPeaks){atomic_exchange_explicit(&c->meterInput, 0, memory_order_relaxed),
+                          atomic_exchange_explicit(&c->meterOutput, 0, memory_order_relaxed)};
+}
+static void accumulate_peak(_Atomic float *meter, float peak) {
+    float previous = atomic_load_explicit(meter, memory_order_relaxed);
+    // The UI can only replace the value with zero. With one render writer,
+    // a strong CAS can therefore fail at most once.
+    while (peak > previous &&
+           !atomic_compare_exchange_strong_explicit(meter, &previous, peak, memory_order_relaxed, memory_order_relaxed)) {}
 }
 float tl_waveform(TLCore *c, uint32_t bin) {
     return c && bin < WAVE_BINS ? atomic_load_explicit(&c->waveform[bin], memory_order_relaxed) : 0;
@@ -173,6 +187,7 @@ static void suspend_now(TLCore *c) {
     atomic_store(&c->publishedState, c->state); atomic_store(&c->publishedLength, c->length);
     atomic_store(&c->publishedRecorded, c->recorded); atomic_store(&c->publishedPosition, c->position);
     atomic_store(&c->publishedCycles, c->cycles); atomic_store(&c->peak, 0); atomic_store(&c->outputPeak, 0);
+    atomic_store(&c->meterInput, 0); atomic_store(&c->meterOutput, 0);
 }
 void tl_suspend(TLCore *c) {
     if (!c) return;
@@ -244,6 +259,7 @@ bool tl_load_loop(TLCore *c, const float *left, const float *right, uint32_t fra
     atomic_store(&c->publishedLength, frames); atomic_store(&c->publishedRecorded, frames);
     atomic_store(&c->publishedPosition, 0); atomic_store(&c->publishedCycles, 0);
     atomic_store(&c->publishedState, TL_STOPPED); atomic_store(&c->peak, 0); atomic_store(&c->outputPeak, 0);
+    atomic_store(&c->meterInput, 0); atomic_store(&c->meterOutput, 0);
     atomic_store(&c->publishedCommandRead, atomic_load(&c->commandRead));
     return true;
 }
@@ -319,5 +335,7 @@ void tl_process_timed(TLCore *c, const float *left, const float *right, float *o
     atomic_store(&c->publishedCommandRead, atomic_load_explicit(&c->commandRead, memory_order_relaxed));
     atomic_store_explicit(&c->peak, peak, memory_order_relaxed);
     atomic_store_explicit(&c->outputPeak, outputPeak, memory_order_relaxed);
+    accumulate_peak(&c->meterInput, peak);
+    accumulate_peak(&c->meterOutput, outputPeak);
     atomic_fetch_sub(&c->readers, 1);
 }

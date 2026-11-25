@@ -8,6 +8,20 @@ import UniformTypeIdentifiers
 import JamCore
 import AM4RemoteKit
 
+enum LaunchOptions {
+    private static let parsed: (flags: Set<String>, values: [String: String]) = {
+        let arguments = Array(CommandLine.arguments.dropFirst())
+        var values: [String: String] = [:]
+        for (flag, value) in zip(arguments, arguments.dropFirst())
+            where flag.hasPrefix("--") && values[flag] == nil {
+            values[flag] = value
+        }
+        return (Set(arguments), values)
+    }()
+    static func has(_ flag: String) -> Bool { parsed.flags.contains(flag) }
+    static func value(_ flag: String) -> String? { parsed.values[flag] }
+}
+
 #if os(macOS)
 @MainActor final class AppDelegate: NSObject, NSApplicationDelegate {
     var model: LooperModel?
@@ -55,29 +69,29 @@ import AM4RemoteKit
     private var files: AudioFilePlayerModel { session.files }
     private var library: SongLibraryModel { session.library }
     init() {
-        if CommandLine.arguments.contains("--smoke-test") || CommandLine.arguments.contains("--drummer-check") { setbuf(stdout, nil) }
-        if let index = CommandLine.arguments.firstIndex(of: "--audio-check"), CommandLine.arguments.count > index + 1 {
+        if LaunchOptions.has("--smoke-test") || LaunchOptions.has("--drummer-check") { setbuf(stdout, nil) }
+        if let audioPath = LaunchOptions.value("--audio-check") {
             do {
-                let asset = try PlaybackAsset(URL(fileURLWithPath: CommandLine.arguments[index + 1]))
+                let asset = try PlaybackAsset(URL(fileURLWithPath: audioPath))
                 print("PASS: decoded \(asset.duration) seconds at \(Int(asset.file.processingFormat.sampleRate)) Hz / \(asset.file.processingFormat.channelCount) channels")
                 exit(0)
             } catch { fputs("\(error.localizedDescription)\n", stderr); exit(1) }
         }
-        if let index = CommandLine.arguments.firstIndex(of: "--library-check"), CommandLine.arguments.count > index + 1 {
+        if let libraryPath = LaunchOptions.value("--library-check") {
             do {
-                let data = try Data(contentsOf: URL(fileURLWithPath: CommandLine.arguments[index + 1]))
+                let data = try Data(contentsOf: URL(fileURLWithPath: libraryPath))
                 let value = try JustChordsLibrary(data: data)
                 for song in value.songs { _ = ChordProDocument(source: song.chordPro, transpose: song.transposition) }
                 print("PASS: \(value.songs.count) songs, \(value.playlists.count) playlists, \(value.tags.count) tags; exact JSON bytes preserved: \(data == value.originalData)")
                 exit(0)
             } catch { fputs("\(error.localizedDescription)\n", stderr); exit(1) }
         }
-        if CommandLine.arguments.contains("--am4-resources-check") {
+        if LaunchOptions.has("--am4-resources-check") {
             // Standalone bundle check: no MIDI connection or hardware writes.
             print("PASS: AM4 resources: \(AM4AmpCatalog.shared.models.count) amps, \(AM4EffectsCatalog.shared.effects.count) effect editors, \(AM4AmpLibrary.shared.entries.count) amp library entries, \(AM4EffectsLibrary.shared.entries.count) effect library entries")
             exit(0)
         }
-        if CommandLine.arguments.contains("--devices") {
+        if LaunchOptions.has("--devices") {
             do {
                 for d in try AudioDevices.list() {
                     print("\(d.name) | input \(d.inputs) | output \(d.outputs) | \(Int(d.rate)) Hz | \(d.uid)")
@@ -96,31 +110,31 @@ import AM4RemoteKit
                     delegate.model = model; delegate.library = library; delegate.remote = session.remote; delegate.files = files
                     #endif
                     #if DEBUG && os(macOS)
-                    if let index = CommandLine.arguments.firstIndex(of: "--render-preview"), CommandLine.arguments.count > index + 1 {
-                        if let folderIndex = CommandLine.arguments.firstIndex(of: "--audio-folder"), CommandLine.arguments.count > folderIndex + 1 {
-                            files.openFolder(URL(fileURLWithPath: CommandLine.arguments[folderIndex + 1]))
+                    if let previewPath = LaunchOptions.value("--render-preview") {
+                        if let folderPath = LaunchOptions.value("--audio-folder") {
+                            files.openFolder(URL(fileURLWithPath: folderPath))
                         }
-                        if let songIndex = CommandLine.arguments.firstIndex(of: "--preview-song"), CommandLine.arguments.count > songIndex + 1 {
+                        if let songTitle = LaunchOptions.value("--preview-song") {
                             for _ in 0..<200 where library.library == nil { try? await Task.sleep(for: .milliseconds(20)) }
-                            library.selectedSongID = library.library?.songs.first(where: { $0.title.localizedCaseInsensitiveCompare(CommandLine.arguments[songIndex + 1]) == .orderedSame })?.id
+                            library.selectedSongID = library.library?.songs.first(where: { $0.title.localizedCaseInsensitiveCompare(songTitle) == .orderedSame })?.id
                         }
                         do {
-                            try await AppPreview.write(to: URL(fileURLWithPath: CommandLine.arguments[index + 1]), files: files)
+                            try await AppPreview.write(to: URL(fileURLWithPath: previewPath), files: files)
                             files.shutdown(); exit(0)
                         } catch { fputs("\(error.localizedDescription)\n", stderr); files.shutdown(); exit(1) }
                     }
                     #endif
-                    if CommandLine.arguments.contains("--drummer-check") {
+                    if LaunchOptions.has("--drummer-check") {
                         do { try await DrummerDiagnostics.run(); exit(0) }
                         catch { fputs("FAIL: \(error.localizedDescription)\n", stderr); exit(1) }
                     }
-                    if CommandLine.arguments.contains("--am4-check") {
+                    if LaunchOptions.has("--am4-check") {
                         do {
-                            for line in try await AM4RemoteDiagnostics.run(session: session.remote, exerciseControls: CommandLine.arguments.contains("--am4-exercise-controls")) { print(line) }
+                            for line in try await AM4RemoteDiagnostics.run(session: session.remote, exerciseControls: LaunchOptions.has("--am4-exercise-controls")) { print(line) }
                             session.remote.stop(); exit(0)
                         } catch { fputs("FAIL: \(error.localizedDescription)\n", stderr); session.remote.stop(); exit(1) }
                     }
-                    if CommandLine.arguments.contains("--smoke-test") {
+                    if LaunchOptions.has("--smoke-test") {
                         print("Smoke: requesting loop audio")
                         await model.startAutomatically()
                         print("Smoke: loop audio returned running=\(model.running) error=\(model.error ?? "none")")
@@ -128,7 +142,7 @@ import AM4RemoteKit
                         let player = FilePlayback(), token = UUID()
                         var fileExpected = false
                         var restartContinued = true
-                        let drumsExpected = CommandLine.arguments.contains("--smoke-drums")
+                        let drumsExpected = LaunchOptions.has("--smoke-drums")
                         let drums = AudioEngineHost.shared.drums
                         var drumVerified = !drumsExpected
                         if drumsExpected {
@@ -143,12 +157,12 @@ import AM4RemoteKit
                             drumVerified = drums.playing && firstBeat > 1 && secondBeat > firstBeat + 1 && secondBeat < firstBeat + 2.5 && drums.transport.renderedFrames == 32 && drums.transport.transportQueries > before + 500
                             print("Smoke: muted drums follow 120 → 90 BPM: \(drumVerified); plugin error=\(drums.error ?? "none")")
                         }
-                        if let index = CommandLine.arguments.firstIndex(of: "--smoke-file"), CommandLine.arguments.count > index + 1 {
+                        if let audioPath = LaunchOptions.value("--smoke-file") {
                             fileExpected = true
                             do {
                                 guard let output = model.output else { throw AudioFailure(message: "No output selected.") }
                                 print("Smoke: loading file")
-                                _ = try await player.load(URL(fileURLWithPath: CommandLine.arguments[index + 1]), session: token, volume: 0, repeating: true)
+                                _ = try await player.load(URL(fileURLWithPath: audioPath), session: token, volume: 0, repeating: true)
                                 print("Smoke: playing file")
                                 try await player.play(session: token, output: output)
                                 print("Smoke: file play returned")
@@ -158,13 +172,12 @@ import AM4RemoteKit
                                 restartContinued = restarted?.playing == true && (restarted?.position ?? 1) < 0.2
                             } catch { model.error = error.localizedDescription }
                         }
-                        if CommandLine.arguments.contains("--smoke-am4") {
+                        if LaunchOptions.has("--smoke-am4") {
                             do {
-                                for line in try await AM4RemoteDiagnostics.run(session: session.remote, exerciseControls: CommandLine.arguments.contains("--am4-exercise-controls")) { print("Smoke MIDI: " + line) }
+                                for line in try await AM4RemoteDiagnostics.run(session: session.remote, exerciseControls: LaunchOptions.has("--am4-exercise-controls")) { print("Smoke MIDI: " + line) }
                             } catch { model.error = error.localizedDescription }
                         }
-                        let durationIndex = CommandLine.arguments.firstIndex(of: "--smoke-seconds")
-                        let duration = durationIndex.flatMap { CommandLine.arguments.count > $0 + 1 ? Double(CommandLine.arguments[$0 + 1]) : nil } ?? 3
+                        let duration = LaunchOptions.value("--smoke-seconds").flatMap(Double.init) ?? 3
                         try? await Task.sleep(for: .seconds(duration.isFinite ? min(120, max(3, duration)) : 3))
                         let file = await player.snapshot(session: token)
                         if drumsExpected {
@@ -183,9 +196,9 @@ import AM4RemoteKit
                         exit(success ? 0 : 1)
                     }
                     // Hosted unit tests exercise DSP without opening physical I/O.
-                    if NSClassFromString("XCTestCase") == nil && !CommandLine.arguments.contains("--editor-check-folder") {
+                    if NSClassFromString("XCTestCase") == nil && !LaunchOptions.has("--editor-check-folder") {
                         await model.startAutomatically()
-                        if CommandLine.arguments.contains("--open-drums") { await AudioEngineHost.shared.drums.openEditor() }
+                        if LaunchOptions.has("--open-drums") { await AudioEngineHost.shared.drums.openEditor() }
                     }
 
                 }
@@ -193,14 +206,14 @@ import AM4RemoteKit
         .commands { JamCommands(session: session) }
     }
 
-    @SceneBuilder private func mainWindow<Content: View>(@ViewBuilder content: () -> Content) -> some Scene {
+    @SceneBuilder private func mainWindow<Content: View>(@ViewBuilder content: @escaping () -> Content) -> some Scene {
         #if os(macOS)
         // Finder opens another track in the existing player window.
         Window("Mac Jams", id: "main", content: content)
             .defaultSize(width: 1320, height: 860)
             .windowResizability(.contentMinSize)
         #else
-        WindowGroup("Mac Jams", content: content)
+        WindowGroup("Mac Jams", makeContent: content)
         #endif
     }
 }
@@ -216,11 +229,16 @@ import AM4RemoteKit
     private var lifecycle: IPadAudioLifecycle?
     #endif
     init() {
-        if let index = CommandLine.arguments.firstIndex(of: "--editor-check-folder"), CommandLine.arguments.count > index + 1 {
+        #if DEBUG && targetEnvironment(simulator)
+        let fixturePath = Self.phoneTestLibraryPath()
+        #else
+        let fixturePath: String? = nil
+        #endif
+        if let folderPath = LaunchOptions.value("--editor-check-folder") ?? fixturePath {
             // UI validation uses an isolated fixture and defaults, never user songs.
-            let folder = URL(fileURLWithPath: CommandLine.arguments[index + 1], isDirectory: true)
+            let folder = URL(fileURLWithPath: folderPath, isDirectory: true)
             let io: LibraryFiles
-            if CommandLine.arguments.contains("--simulate-library-conflict") {
+            if LaunchOptions.has("--simulate-library-conflict") {
                 // Opt-in UI fixture, confined to the explicitly supplied test folder.
                 // This does not create/resolve actual iCloud file versions.
                 var resolved = false
@@ -252,6 +270,20 @@ import AM4RemoteKit
         if NSClassFromString("XCTestCase") == nil { lifecycle = IPadAudioLifecycle(model: model, files: files) }
         #endif
     }
+    #if DEBUG && targetEnvironment(simulator)
+    private static func phoneTestLibraryPath() -> String? {
+        guard let json = LaunchOptions.value("--phone-test-library") else { return nil }
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        do {
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            try Data(json.utf8).write(to: folder.appendingPathComponent("library.json"))
+            return folder.path
+        } catch {
+            return nil
+        }
+    }
+    #endif
+
 }
 
 @MainActor private final class JamCommandAvailability: ObservableObject {

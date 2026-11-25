@@ -135,7 +135,7 @@ struct DrummerEditorPresentation: ViewModifier {
     func body(content: Content) -> some View {
         #if os(iOS)
         content
-        .sheet(isPresented: $drums.showingEditor, onDismiss: { drums.saveState() }) {
+        .sheet(isPresented: $drums.showingEditor, onDismiss: { drums.editorDidClose() }) {
             VStack(spacing: 0) {
                 HStack { Text("Drummer").font(.headline); Spacer(); Button("Done") { drums.showingEditor = false } }.padding()
                 if let editor = drums.editor { PluginEditorView(controller: editor) }

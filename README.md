@@ -19,28 +19,27 @@ open "build/Mac Jams.app"
 Requires macOS 14 or newer and Xcode or the Swift command line tools to build. The script
 uses `/Applications/Xcode.app` when available without changing the system's developer setting.
 The resulting app runs independently of Xcode. The script replaces the executable
-atomically, avoiding an in-place overwrite of a running app; relaunch to use a new build. Open `MacLooper.xcodeproj` for native Mac/iPad targets, or `Package.swift` for
+atomically, avoiding an in-place overwrite of a running app; relaunch to use a new build. Open `MacLooper.xcodeproj` for native Mac and universal iOS targets, or `Package.swift` for
 shared-code development. Use the packaged Mac app for normal use.
 
 ### iPhone and iPad
 
 The **MacLooper-iPad** scheme builds a universal iOS app. On iPhone the bottom tabs keep Songs, Chart, Jam, Tools, and AM4 within reach. Selecting a song opens its chart. Jam groups the looper, player, drummer, tempo, and mix. Tools contains chord diagrams, scales, and audio settings. AM4 has separate Presets and Controls views. Switching tabs keeps the audio session running.
 
-
 Requires iOS or iPadOS 18 or newer. Open `MacLooper.xcodeproj`, select **MacLooper-iPad**,
-and choose your iPad as the destination. In Xcode Settings → Accounts, sign in to
+and choose your iPhone or iPad as the destination. In Xcode Settings → Accounts, sign in to
 your Apple Account; select your development team under Signing & Capabilities if
-needed. Unlock the connected iPad and press Run. The iPad app uses the distinct
+needed. Unlock the connected device and press Run. The iOS app uses the distinct
 `com.thoppe.maclooper` identifier; it does not replace AM4 Remote.
 
 `./scripts/build-ipad.sh` builds a signed device app after account setup. Simulator
-testing does not require signing. Select the iPad scheme and an iPad simulator,
+testing does not require signing. Select the iPad scheme and an iPhone or iPad simulator,
 then Product → Test.
 
-The iPad uses the connected USB interface and iPadOS audio routing. **AM4 Proxy is
+The iOS app uses the connected USB interface and system audio routing. **AM4 Proxy is
 a Mac driver, not an iPad output choice.** The default capture choice requires a USB
-input rather than silently using the iPad microphone. The app requests and verifies
-32 samples for loop capture. iPadOS can choose a larger quantum; the app accepts
+input rather than silently using the iPad microphone. On iPhone you can browse charts before connecting a USB interface. The app
+requests and verifies 32 samples for loop capture. iPadOS can choose a larger quantum; the app accepts
 that actual buffer and shows the render size in Audio Settings.
 There is no buffer selector. The Mac retains its strict 32-sample requirement.
 
@@ -172,7 +171,8 @@ The source lives in `Packages/AM4RemoteKit`, imported from the original local
 `am4-remote` checkout without modifying that project. It includes its catalogs,
 saved Amp/effect libraries and protocol tests. There is no runtime dependency on
 the other checkout or on a work account. Physical Mac/iPad use Core MIDI directly;
-the optional localhost helper remains a simulator development facility.
+the optional localhost helper can be enabled in the simulator with the
+`--am4-simulator-helper` launch argument.
 
 One session owns the MIDI connection. It starts on first opening the remote;
 closing pauses polling without interrupting a pending verified operation. MIDI

@@ -17,7 +17,7 @@ import CoreAudio
         Self.dumpHardware("after loading")
         guard let node = drums.node else { throw AudioFailure(message: drums.error ?? "Pop Drummer was not loaded.") }
 
-        if !CommandLine.arguments.contains("--no-editor") {
+        if !LaunchOptions.has("--no-editor") {
             let editor: PluginEditorController? = await withCheckedContinuation { c in
                 node.auAudioUnit.requestViewController { c.resume(returning: $0) }
             }
@@ -29,11 +29,11 @@ import CoreAudio
             let index = Int(parameter.value)
             print("Parameter \(parameter.identifier): \(parameter.value), name=\(names.indices.contains(index) ? names[index] : "not in list"), names=\(names.count)")
         }
-        if CommandLine.arguments.contains("--factory-groove") {
+        if LaunchOptions.has("--factory-groove") {
             for p in node.auAudioUnit.parameterTree?.allParameters ?? [] where p.identifier == "Param_Groove" || p.identifier == "Param_DrumKit" { p.value = p.minValue }
             try await Task.sleep(for: .seconds(1))
         }
-        if CommandLine.arguments.contains("--native-driver") { try await runNative(drums: drums, node: node); return }
+        if LaunchOptions.has("--native-driver") { try await runNative(drums: drums, node: node); return }
         let quantum: AVAudioFrameCount = 32
         let rate = 48000.0
         let engine = AVAudioEngine(), format = AVAudioFormat(standardFormatWithSampleRate: rate, channels: 2)!
@@ -69,7 +69,7 @@ import CoreAudio
         _ = try await render(100) // Let the AU observe a stopped host before its first Play.
         Self.dumpHardware("after stopped renders")
         drums.tempo = 120; drums.setPlaying(true); gain.volume = 1
-        if CommandLine.arguments.contains("--visible-editor") { try await Task.sleep(for: .seconds(2)) }
+        if LaunchOptions.has("--visible-editor") { try await Task.sleep(for: .seconds(2)) }
         let first = try await render(Int(rate * 3) / Int(quantum)), beatAt120 = drums.transport.beatPosition
         drums.tempo = 90
         let second = try await render(Int(rate * 2) / Int(quantum)), beatAt90 = drums.transport.beatPosition
@@ -105,7 +105,7 @@ import CoreAudio
             node.auAudioUnit.requestViewController { continuation.resume(returning: $0 != nil) }
         }
         guard customUI else { throw AudioFailure(message: "Pop Drummer did not provide its editor.") }
-        if CommandLine.arguments.contains("--save-plugin-state"), CommandLine.arguments.contains("--plugin-state") { drums.saveState() }
+        if LaunchOptions.has("--save-plugin-state"), LaunchOptions.has("--plugin-state") { drums.saveState() }
         print("PASS: installed Pop Drummer AUv3 renders audio, follows 120 → 90 BPM, stops silently, and supplies its full editor.")
     }
 }
@@ -161,7 +161,7 @@ extension DrummerDiagnostics {
         defer { drums.setPlaying(false); engine.stop(); engine.detach(node) }
         try await Task.sleep(for: .seconds(1))
         drums.tempo = 120; drums.setPlaying(true)
-        let first = try await collect(CommandLine.arguments.contains("--visible-editor") ? 30 : 3), beat1 = meter.beatPosition
+        let first = try await collect(LaunchOptions.has("--visible-editor") ? 30 : 3), beat1 = meter.beatPosition
         drums.tempo = 90
         let second = try await collect(2), beat2 = meter.beatPosition
         drums.setPlaying(false); mixer.outputVolume = 0

@@ -27,6 +27,23 @@ final class DSP {
 }
 
 final class LooperCoreTests: XCTestCase {
+    func testMeterRetainsTransientBetweenDisplayReadsWithoutChangingSnapshot() {
+        let dsp = DSP()
+        dsp.render([0.9] + Array(repeating: 0, count: 31))
+        for _ in 0..<50 { dsp.silence(32) }
+        XCTAssertEqual(dsp.snapshot.peak, 0)
+        XCTAssertEqual(tl_take_meter_peaks(dsp.core).input, 0.9, accuracy: 0.0001)
+        XCTAssertEqual(tl_take_meter_peaks(dsp.core).input, 0)
+        dsp.makeLoop()
+        _ = tl_take_meter_peaks(dsp.core)
+        dsp.silence(512)
+        dsp.silence(32)
+        let lastOutput = dsp.snapshot.outputPeak
+        XCTAssertGreaterThan(tl_take_meter_peaks(dsp.core).output, 0)
+        XCTAssertEqual(tl_take_meter_peaks(dsp.core).output, 0)
+        XCTAssertEqual(dsp.snapshot.outputPeak, lastOutput)
+    }
+
     func testBarDurationAtCommonAndFractionalTempos() {
         XCTAssertEqual(tl_loop_frames(48000, 120, 2, 4), 192000)
         XCTAssertEqual(tl_loop_frames(48000, 120, 4, 4), 384000)

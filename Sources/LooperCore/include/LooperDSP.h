@@ -23,6 +23,9 @@ bool tl_command(TLCore *core, int command, uint32_t length);
 void tl_set_threshold(TLCore *core, float linear);
 void tl_set_volume(TLCore *core, float volume);
 TLSnapshot tl_snapshot(TLCore *core);
+// One display consumer drains these peaks. Snapshot inspection remains non-destructive.
+typedef struct { float input, output; } TLMeterPeaks;
+TLMeterPeaks tl_take_meter_peaks(TLCore *core);
 float tl_waveform(TLCore *core, uint32_t bin);
 uint32_t tl_loop_frames(double rate, double bpm, uint32_t bars, uint32_t beats);
 // Control-thread suspension only AFTER rendering is paused and callbacks have

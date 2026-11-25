@@ -1,5 +1,6 @@
 #import <AudioToolbox/AudioToolbox.h>
 NS_ASSUME_NONNULL_BEGIN
+int64_t MLFramesUntilDownbeat(void * _Nullable context, double sampleTime);
 // Configure/attach/detach while the audio graph is stopped. Render callbacks use
 // preallocated C state and lock-free controls; they never call into Swift/UI.
 @interface MLPluginTransport : NSObject
@@ -20,6 +21,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)endRenderFrames:(UInt32)frames;
 // Render-thread query in the engine sample-time domain, independent of which
 // mixer branch is pulled first. -1 means stopped.
+- (void *)renderContext;
 - (int64_t)framesUntilDownbeatAtSampleTime:(double)sampleTime;
 - (void)beginRenderFrames:(UInt32)frames atSampleTime:(double)sampleTime;
 @end

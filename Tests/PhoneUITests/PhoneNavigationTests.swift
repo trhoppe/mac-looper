@@ -19,6 +19,31 @@ final class PhoneNavigationTests: XCTestCase {
         }
     }
 
+    @MainActor func testSelectingAndEditingSongOnPhone() throws {
+        try XCTSkipUnless(UIDevice.current.userInterfaceIdiom == .phone)
+        continueAfterFailure = false
+        XCUIDevice.shared.orientation = .portrait
+        let app = XCUIApplication()
+        app.launchArguments = ["--phone-test-library",
+            #"{"songs":[{"id":"fixture-song","title":"Phone Test Song","rawData":"{title: Phone Test Song}\n{key: C}\n[C]One chord"}],"playlists":[]}"#]
+        app.launch()
+        XCTAssertTrue(app.staticTexts["Phone Test Song"].waitForExistence(timeout: 10))
+        app.staticTexts["Phone Test Song"].tap()
+        let options = app.buttons["Chart options"]
+        XCTAssertTrue(options.waitForExistence(timeout: 5))
+        options.tap()
+        app.buttons["Edit song"].tap()
+        XCTAssertTrue(app.buttons["Song details"].waitForExistence(timeout: 5))
+        app.buttons["Song details"].tap()
+        let name = app.textFields["Song name"]
+        XCTAssertTrue(name.waitForExistence(timeout: 5))
+        name.tap()
+        name.typeText(" Edited")
+        app.buttons["Done"].tap()
+        app.buttons["Save"].tap()
+        XCTAssertTrue(app.staticTexts["Phone Test Song Edited"].waitForExistence(timeout: 5))
+    }
+
     @MainActor func testPhoneWorkspacesInPortraitAndLandscape() throws {
         try XCTSkipUnless(UIDevice.current.userInterfaceIdiom == .phone)
         continueAfterFailure = false

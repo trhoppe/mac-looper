@@ -23,7 +23,8 @@ import JamCore
     @Published var inputChannel = 0
     @Published var bpm = 120.0 { didSet { host.drums.tempo = bpm } }
     @Published var bars = 4
-    @Published var thresholdDB = -30.0 { didSet { if let core { tl_set_threshold(core, Float(pow(10, thresholdDB / 20))) } } }
+    @Published var thresholdDB = -30.0 { didSet { if let core { tl_set_threshold(core, thresholdLinear) } } }
+    private var thresholdLinear: Float { Float(pow(10, thresholdDB / 20)) }
     @Published var volume = 1.0 { didSet { if let core { tl_set_volume(core, Float(volume)) } } }
     @Published private(set) var audioPaused = false
     private var lifecyclePolicy = AudioLifecyclePolicy()
@@ -88,17 +89,40 @@ import JamCore
     private var lastAutomaticRoute: String?
     private var routeTask: Task<Void, Never>?
     private var scanningDevices = false
+    private var rescanDevices = false
+    #if os(macOS)
+    private var deviceListener: AudioObjectPropertyListenerBlock?
+
+    private func observeDevices() {
+        guard deviceListener == nil else { return }
+        var address = AudioDevices.address(kAudioHardwarePropertyDevices)
+        let listener: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
+            MainActor.assumeIsolated { self?.refreshDevicesWhileRunning() }
+        }
+        if AudioObjectAddPropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject), &address, .main, listener) == noErr {
+            deviceListener = listener
+        }
+    }
+    private func stopObservingDevices() {
+        guard let deviceListener else { return }
+        var address = AudioDevices.address(kAudioHardwarePropertyDevices)
+        AudioObjectRemovePropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject), &address, .main, deviceListener)
+        self.deviceListener = nil
+    }
+    #endif
 
     init(loopFiles: LoopFiles = LoopFiles(), host: AudioEngineHost? = nil) {
         self.host = host ?? AudioEngineHost.shared
         self.loopFiles = loopFiles
         refreshDevices()
         #if os(macOS)
-        if CommandLine.arguments.contains("--smoke-direct"), let direct = outputs.first(where: \.isAM4) { outputUID = direct.uid }
+        if LaunchOptions.has("--smoke-direct"), let direct = outputs.first(where: \.isAM4) { outputUID = direct.uid }
         #endif
-        timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.poll() }
+        let timer = Timer(timeInterval: 1.0 / 30, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.poll() }
         }
+        self.timer = timer
+        RunLoop.main.add(timer, forMode: .common)
     }
     var audioCallbackCount: UInt64 { host.callbacks }
     var audioCallbackFrames: UInt32 { host.callbackFrames }
@@ -158,7 +182,7 @@ import JamCore
     }
     private func refreshDevicesWhileRunning() {
         #if os(macOS)
-        guard !scanningDevices else { return }
+        guard !scanningDevices else { rescanDevices = true; return }
         scanningDevices = true
         Task { [weak self] in
             let result = await Task.detached(priority: .utility) { Result { try AudioDevices.list() } }.value
@@ -169,6 +193,10 @@ import JamCore
             case .failure(let error): self.error = error.localizedDescription
             }
             self.reconnectIfAvailable()
+            if self.rescanDevices {
+                self.rescanDevices = false
+                self.refreshDevicesWhileRunning()
+            }
         }
         #else
         refreshDevices(); reconnectIfAvailable()
@@ -176,10 +204,19 @@ import JamCore
     }
     // Startup connects the route, but never arms a loop or starts backing playback.
     func startAutomatically() async {
+        #if os(macOS)
+        observeDevices()
+        #endif
         guard !automaticAudio else { return }
         automaticAudio = true
         lastAutomaticRoute = automaticRouteKey
-        if !fileBusy && !hasLoop { await startAudio() }
+        if !fileBusy && !hasLoop && canAutomaticallyStartCapture { await startAudio() }
+    }
+    private var canAutomaticallyStartCapture: Bool {
+        #if os(iOS)
+        if UIDevice.current.userInterfaceIdiom == .phone { return hasLoop || automaticRouteKey != nil }
+        #endif
+        return true
     }
     private var automaticRouteKey: String? {
         guard let input, let output else { return nil }
@@ -201,7 +238,7 @@ import JamCore
         routeTask = Task {
             do { try await Task.sleep(for: .milliseconds(150)) } catch { return }
             lastAutomaticRoute = automaticRouteKey
-            await startAudio()
+            if canAutomaticallyStartCapture { await startAudio() }
         }
     }
     private func reconnectIfAvailable() {
@@ -231,6 +268,11 @@ import JamCore
                 running = true; audioPaused = false; lastCallbacks = 0; stalledTicks = 0
                 return
             }
+            #if os(iOS)
+            if UIDevice.current.userInterfaceIdiom == .phone, inputUID == "ios-default-input", automaticRouteKey == nil {
+                throw AudioFailure(message: "Connect a USB guitar interface or choose an input in Audio Settings.")
+            }
+            #endif
             let permission = AVCaptureDevice.authorizationStatus(for: .audio)
             if permission == .notDetermined {
                 guard await AVCaptureDevice.requestAccess(for: .audio) else {
@@ -247,8 +289,8 @@ import JamCore
             guard token == generation else { await host.stopLoop(); return }
             sampleRate = host.sampleRate
             guard let core else { throw AudioFailure(message: "The guitar processor did not initialize.") }
-            tl_set_threshold(core, Float(pow(10, thresholdDB / 20))); tl_set_volume(core, Float(volume))
-            if !CommandLine.arguments.contains("--smoke-test") {
+            tl_set_threshold(core, thresholdLinear); tl_set_volume(core, Float(volume))
+            if !LaunchOptions.has("--smoke-test") {
                 UserDefaults.standard.set(inputUID, forKey: "inputUID"); UserDefaults.standard.set(outputUID, forKey: "outputUID")
             }
             running = true; audioPaused = false; lastCallbacks = 0; stalledTicks = 0
@@ -271,7 +313,8 @@ import JamCore
             if state == TL_EMPTY { waveform = [Float](repeating: 0, count: 256) }
             meterDB = -90; outputDB = -90
             error = "Audio paused. Playback stays stopped when you return."
-        case .reconnect: Task { await startAudio() }
+        case .reconnect:
+            if canAutomaticallyStartCapture { Task { await startAudio() } }
         case .reset:
             generation += 1; routeTask?.cancel(); stopTask?.cancel()
             host.resetAudioService(); running = false; starting = false; audioPaused = false
@@ -375,9 +418,17 @@ import JamCore
     func openLoop(_ url: URL) async {
         // Finder/Files may deliver an open event while startup is still
         // connecting capture. Keep that intent instead of silently dropping it.
-        for _ in 0..<1500 {
-            if !starting { break }
-            do { try await Task.sleep(for: .milliseconds(20)) } catch { return }
+        if starting {
+            let (updates, continuation) = AsyncStream<Void>.makeStream()
+            let subscription = $starting.filter { !$0 }.sink { _ in continuation.finish() }
+            await withTaskGroup(of: Void.self) { group in
+                group.addTask { for await _ in updates {} }
+                group.addTask { try? await Task.sleep(for: .seconds(30)) }
+                await group.next()
+                group.cancelAll()
+            }
+            subscription.cancel()
+            guard !Task.isCancelled else { return }
         }
         guard canRecall else {
             if busy { loopFileFailure = "Finish recording before opening a saved loop." }
@@ -416,22 +467,28 @@ import JamCore
         error = nil
         state = Int32(TL_STOPPED)
         if let core {
-            tl_set_volume(core, Float(volume)); tl_set_threshold(core, Float(pow(10, thresholdDB / 20)))
+            tl_set_volume(core, Float(volume)); tl_set_threshold(core, thresholdLinear)
             let snapshot = tl_snapshot(core); length = Int(snapshot.length); recorded = Int(snapshot.recorded)
             waveform = (0..<256).map { tl_waveform(core, UInt32($0)) }
         }
         progress = 0; cycles = 0
     }
     func shutdown() {
+        #if os(macOS)
+        stopObservingDevices()
+        #endif
         generation += 1
         midi.stop()
         automaticAudio = false; routeTask?.cancel(); stopTask?.cancel(); timer?.invalidate(); host.shutdown(); running = false
     }
+    private static func decibels(_ peak: Float) -> Double { max(-90, 20 * log10(max(Double(peak), 0.00003))) }
     private func poll() {
         guard lifecyclePolicy.mayConnect, !audioPaused else { return }
         ticks += 1
         if ticks % 60 == 0 {
-            refreshDevicesWhileRunning()
+            #if os(macOS)
+            if deviceListener == nil { refreshDevicesWhileRunning() }
+            #endif
             if running, (!host.isRunning || (output.map { !AudioDevices.alive($0.id) } ?? true)) {
                 stopAudio(); error = "The audio device disconnected or its sample rate changed. Reconnect the interface or use Retry Connection in Settings."
             }
@@ -458,10 +515,11 @@ import JamCore
         if cycles != s.cycles { cycles = s.cycles }
         let nextProgress = s.length == 0 ? 0 : Double(s.state == TL_RECORDING ? s.recorded : s.position) / Double(s.length)
         if progress != nextProgress { progress = nextProgress }
-        let newDB = max(-90, 20 * log10(max(Double(s.peak), 0.00003)))
+        let peaks = tl_take_meter_peaks(core)
+        let newDB = Self.decibels(peaks.input)
         let nextMeter = max(newDB, meterDB - 2.0)
         if meterDB != nextMeter { meterDB = nextMeter }
-        let nextOutput = max(-90, 20 * log10(max(Double(s.outputPeak), 0.00003)))
+        let nextOutput = Self.decibels(peaks.output)
         if outputDB != nextOutput { outputDB = nextOutput }
         if stateChanged || (state == TL_RECORDING && ticks % 3 == 0) {
             waveform = state == TL_EMPTY ? [Float](repeating: 0, count: 256) : (0..<256).map { tl_waveform(core, UInt32($0)) }

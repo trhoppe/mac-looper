@@ -1,45 +1,49 @@
 import Foundation
-import Combine
+import Observation
 import CoreMIDI
 #if AM4_SIMULATOR_HELPER
 import Network
 #endif
 
-@MainActor
-final class AM4Connection: ObservableObject {
-    @Published private(set) var status = "Connecting to AM4…"
-    @Published private(set) var isConnected = false
-    @Published private(set) var snapshot: AM4Snapshot?
-    @Published private(set) var location: Int?
-    @Published private(set) var presets: [AM4Preset] = []
-    @Published private(set) var isLoadingPresets = false
-    @Published private(set) var log: [String] = []
-    @Published private(set) var helperStatus = ""
-    @Published private(set) var amp: AM4AmpState?
-    @Published private(set) var effectControls: AM4EffectControls?
+@MainActor @Observable
+final class AM4Connection {
+    private static let connectionDiagnostics = ProcessInfo.processInfo.arguments.contains("--connection-diagnostics")
+    private static let ampPageDiagnostics = ProcessInfo.processInfo.arguments.contains("--amp-page-diagnostics")
+    private static let libraryBankDiagnostics = ProcessInfo.processInfo.arguments.contains("--library-bank-diagnostics")
+    private static let traceEnabled = ProcessInfo.processInfo.arguments.contains("--am4-trace")
+    private static let simulatorHelperEnabled = ProcessInfo.processInfo.arguments.contains("--am4-simulator-helper")
+    private(set) var status = "Connecting to AM4…"
+    private(set) var isConnected = false
+    private(set) var snapshot: AM4Snapshot?
+    private(set) var location: Int?
+    private(set) var presets: [AM4Preset] = []
+    private(set) var isLoadingPresets = false
+    private(set) var log: [String] = []
+    private(set) var amp: AM4AmpState?
+    private(set) var effectControls: AM4EffectControls?
     private var effectResetValue: AM4ParameterValue?
     private(set) var effectPage: AM4EffectPageSelection?
-    @Published private(set) var ampControls: AM4AmpControls?
-    @Published private(set) var isNavigating = false
-    @Published private(set) var navigationStatus = ""
-    @Published private(set) var blocks: AM4BlocksState?
-    @Published private(set) var blockStatus = ""
-    @Published private(set) var usbPlayback: AM4USBPlaybackLevel?
-    @Published private(set) var usbPlaybackStatus = ""
+    private(set) var ampControls: AM4AmpControls?
+    private(set) var isNavigating = false
+    private(set) var navigationStatus = ""
+    private(set) var blocks: AM4BlocksState?
+    private(set) var blockStatus = ""
+    private(set) var usbPlayback: AM4USBPlaybackLevel?
+    private(set) var usbPlaybackStatus = ""
     private var ampResetValue: AM4ParameterValue?
     private(set) var ampPage: String?
     private var inspectedAmpPages = false
     private var inspectedLibraryBanks = false
-    @Published private(set) var gainStatus = ""
-    @Published private(set) var isApplyingGain = false
+    private(set) var gainStatus = ""
+    private(set) var isEditingHardware = false
 
-    @Published private(set) var hasUnsavedPresetChanges = false
-    @Published private(set) var isSavingPreset = false
-    @Published private(set) var presetSaveStatus = ""
+    private(set) var hasUnsavedPresetChanges = false
+    private(set) var isSavingPreset = false
+    private(set) var presetSaveStatus = ""
     private var lastPresetEdit: TimeInterval?
     private var helperSupportsPresetSave = false
     var canSavePreset: Bool {
-        let idle = isConnected && !isLoadingPresets && !isApplyingGain && !isNavigating && !isSavingPreset && hasUnsavedPresetChanges
+        let idle = isConnected && !isLoadingPresets && !isEditingHardware && !isNavigating && !isSavingPreset && hasUnsavedPresetChanges
         #if targetEnvironment(simulator)
         return idle && helperSupportsPresetSave
         #else
@@ -80,11 +84,15 @@ final class AM4Connection: ObservableObject {
     func start() {
         guard worker == nil else { return }
         #if targetEnvironment(simulator)
+        guard Self.simulatorHelperEnabled else {
+            status = "Connect an AM4 on a physical device."
+            return
+        }
         worker = Task { [weak self] in
             while !Task.isCancelled {
                 guard let self else { return }
                 if self.pollingEnabled { await self.readHelper() }
-                try? await Task.sleep(nanoseconds: 500_000_000)
+                try? await Task.sleep(for: .seconds(2))
             }
         }
         #else
@@ -136,7 +144,7 @@ final class AM4Connection: ObservableObject {
             return self.deviceState
         })
         helper = server
-        server.onStatus = { [weak self] in self?.helperStatus = $0 }
+        server.onStatus = { [weak self] in self?.append($0) }
         server.start()
         #endif
         connectUSB()
@@ -146,19 +154,10 @@ final class AM4Connection: ObservableObject {
                 guard !Task.isCancelled, let self else { return }
                 guard self.pollingEnabled else { continue }
                 if self.source == 0 { self.connectUSB() }
-                else if self.isConnected, !self.isLoadingPresets, !self.isApplyingGain, !self.isNavigating { self.refreshUSB() }
+                else if self.isConnected, !self.isLoadingPresets, !self.isEditingHardware, !self.isNavigating { self.refreshUSB() }
             }
         }
         #endif
-    }
-
-    func retry() {
-        #if AM4_SIMULATOR_HELPER
-        // Keep the listener alive so the simulator can observe reconnection.
-        if worker != nil { connectUSB(); return }
-        #endif
-        stop()
-        start()
     }
 
     func stop() {
@@ -167,7 +166,6 @@ final class AM4Connection: ObservableObject {
         #if AM4_SIMULATOR_HELPER
         helper?.stop()
         helper = nil
-        helperStatus = ""
         #endif
         disconnectUSB()
     }
@@ -176,7 +174,7 @@ final class AM4Connection: ObservableObject {
         AM4DeviceState(version: 9, status: status, connected: isConnected,
                        loadingPresets: isLoadingPresets, location: location,
                        snapshot: snapshot, presets: presets, amp: amp, ampControls: ampControls, effectControls: effectControls, effectResetValue: effectResetValue, ampResetValue: ampResetValue, blocks: blocks, blockStatus: blockStatus, usbPlayback: usbPlayback, usbPlaybackStatus: usbPlaybackStatus,
-                       navigationStatus: navigationStatus, navigationBusy: isNavigating, gainStatus: gainStatus, gainBusy: isApplyingGain, presetEdited: hasUnsavedPresetChanges,
+                       navigationStatus: navigationStatus, navigationBusy: isNavigating, gainStatus: gainStatus, gainBusy: isEditingHardware, presetEdited: hasUnsavedPresetChanges,
                        presetSaveSupported: true, presetSaveBusy: isSavingPreset, presetSaveStatus: presetSaveStatus)
     }
 
@@ -206,7 +204,7 @@ final class AM4Connection: ObservableObject {
                     packet = UnsafePointer(MIDIPacketNext(packet))
                 }
                 let received = bytes
-                Task { @MainActor in
+                DispatchQueue.main.async {
                     guard let self, self.session == token else { return }
                     self.receive(received)
                 }
@@ -251,24 +249,30 @@ final class AM4Connection: ObservableObject {
     }
 
     private func refreshUSB() {
-        guard isConnected, refreshTask == nil, !isApplyingGain, !isNavigating, !isLoadingPresets else { return }
+        guard isConnected, refreshTask == nil, !isEditingHardware, !isNavigating, !isLoadingPresets else { return }
         let token = session
         refreshTask = Task { [weak self] in
             guard let self else { return }
             defer { if self.session == token { self.refreshTask = nil } }
             do {
+                #if AM4_SIMULATOR_HELPER
                 do { _ = try await self.readUSBPlayback() }
                 catch {
                     self.usbPlayback = nil
                     self.usbPlaybackStatus = error.localizedDescription
                 }
+                #endif
                 do { _ = try await self.readBlocksUSB() }
                 catch {
                     self.blocks = nil
                     self.blockStatus = error.localizedDescription
                 }
+                #if AM4_SIMULATOR_HELPER
                 _ = try await self.readAmpUSB()
-                if ProcessInfo.processInfo.arguments.contains("--library-bank-diagnostics"), !self.inspectedLibraryBanks, let context = self.amp?.context {
+                #else
+                if Self.libraryBankDiagnostics { _ = try await self.readAmpUSB() }
+                #endif
+                if Self.libraryBankDiagnostics, !self.inspectedLibraryBanks, let context = self.amp?.context {
                     self.inspectedLibraryBanks = true
                     for block in [58, 62] {
                         let bank = try await self.readEffectBankUSB(block)
@@ -276,7 +280,7 @@ final class AM4Connection: ObservableObject {
                         print("[LIBBANK] block=\(block) channel=\(context.channel ?? -1) words=[\(values)]")
                     }
                 }
-                if ProcessInfo.processInfo.arguments.contains("--amp-page-diagnostics"), !self.inspectedAmpPages {
+                if Self.ampPageDiagnostics, !self.inspectedAmpPages {
                     self.inspectedAmpPages = true
                     for page in AM4AmpCatalog.shared.pages {
                         self.ampPage = page.id
@@ -326,14 +330,23 @@ final class AM4Connection: ObservableObject {
         pending?.continuation.resume(with: result)
     }
 
+    private func readLocationAndSnapshot() async throws -> (Int, AM4Snapshot) {
+        let location = try await query(AM4Message.locationRequest) { $0.location != nil }.location!
+        let snapshot = try await query(AM4Message.snapshotRequest) { $0.snapshot != nil }.snapshot!
+        return (location, snapshot)
+    }
+
+    func readCurrentGain() async throws -> AM4AmpState? {
+        await refreshTask?.value
+        return try await readAmpUSB()
+    }
+
     private func readAmpUSB() async throws -> AM4AmpState? {
-        let firstLocation = try await query(AM4Message.locationRequest) { $0.location != nil }.location!
-        let firstSnapshot = try await query(AM4Message.snapshotRequest) { $0.snapshot != nil }.snapshot!
+        let (firstLocation, firstSnapshot) = try await readLocationAndSnapshot()
         guard firstSnapshot.blockIDs.contains(0x3A) else { amp = nil; return nil }
         let firstChannel = try await readAmpChannelUSB()
         let gain = try await query(AM4Message.ampGainRequest) { $0.ampGain != nil }.ampGain!
-        let lastLocation = try await query(AM4Message.locationRequest) { $0.location != nil }.location!
-        let lastSnapshot = try await query(AM4Message.snapshotRequest) { $0.snapshot != nil }.snapshot!
+        let (lastLocation, lastSnapshot) = try await readLocationAndSnapshot()
         let lastChannel = try await readAmpChannelUSB()
         guard firstChannel == lastChannel, firstLocation == lastLocation, firstSnapshot.scene == lastSnapshot.scene,
               firstSnapshot.blockIDs == lastSnapshot.blockIDs else {
@@ -344,26 +357,18 @@ final class AM4Connection: ObservableObject {
                                                        blocks: lastSnapshot.blockIDs, channel: lastChannel), gain: gain)
         if amp != state {
             append("Active Amp Gain: \(String(format: "%.2f", state.gain)) at \(AM4Message.locationLabel(state.context.location)), scene \(state.context.scene + 1).")
-            if !isApplyingGain { gainStatus = "Read from AM4" }
+            if !isEditingHardware { gainStatus = "Read from AM4" }
         }
-        amp = state
+        if amp != state { amp = state }
         return state
-    }
-
-    func refreshGain() {
-        #if targetEnvironment(simulator)
-        Task { await readHelper() }
-        #else
-        refreshUSB()
-        #endif
     }
 
     func changeGain(_ command: AM4GainCommand) async throws {
         guard command.isValid else { throw ConnectionError.message("Gain must be between 0 and 10.") }
-        guard isConnected, !isApplyingGain, !isNavigating else { throw ConnectionError.message("Wait for the AM4 connection.") }
-        isApplyingGain = true
+        guard isConnected, !isEditingHardware, !isNavigating else { throw ConnectionError.message("Wait for the AM4 connection.") }
+        isEditingHardware = true
         gainStatus = "Checking current amp…"
-        defer { isApplyingGain = false }
+        defer { isEditingHardware = false }
         do {
             #if targetEnvironment(simulator)
             var request = URLRequest(url: URL(string: "http://127.0.0.1:32174/amp/gain")!)
@@ -427,7 +432,7 @@ final class AM4Connection: ObservableObject {
     func showAmpPage(_ page: String?) async {
         // Clearing a subscription is UI cleanup, not a hardware operation.
         // It must remain possible while a verified edit/navigation finishes.
-        guard page == nil || (AM4AmpCatalog.shared.page(page!) != nil && !isApplyingGain && !isNavigating) else { return }
+        guard page == nil || (AM4AmpCatalog.shared.page(page!) != nil && !isEditingHardware && !isNavigating) else { return }
         if page != nil { effectPage = nil; effectControls = nil }
         ampPage = page
         ampControls = nil
@@ -450,7 +455,7 @@ final class AM4Connection: ObservableObject {
         }
         let reply = try await query(AM4Message.parameterRequest(definition)) { $0.isParameterResponse(definition) }
         guard let value = reply.parameterValue(definition) else {
-            if ProcessInfo.processInfo.arguments.contains("--amp-page-diagnostics") {
+            if Self.ampPageDiagnostics {
                 let raw = AM4Message.unpack(Array(reply.payload.dropFirst(10)), count: 40) ?? []
                 print("[AMPINVALID] \(definition.symbol) \(raw.map { String(format: "%02X", $0) }.joined(separator: " "))")
             }
@@ -548,8 +553,7 @@ final class AM4Connection: ObservableObject {
     }
 
     private func readContext() async throws -> AM4AmpContext {
-        let location = try await query(AM4Message.locationRequest) { $0.location != nil }.location!
-        let snapshot = try await query(AM4Message.snapshotRequest) { $0.snapshot != nil }.snapshot!
+        let (location, snapshot) = try await readLocationAndSnapshot()
         let channel = try await readAmpChannelUSB()
         let context = AM4AmpContext(location: location, scene: snapshot.scene, blocks: snapshot.blockIDs, channel: channel)
         guard context.isValid else { throw ConnectionError.message("The current preset has no Amp block.") }
@@ -593,24 +597,24 @@ final class AM4Connection: ObservableObject {
         guard state.isValid else { throw ConnectionError.message("AM4 returned invalid Amp controls.") }
         if ampPage == page {
             let changed = ampControls?.model != state.model || ampControls?.page != page || ampControls?.context != state.context
-            ampControls = state
+            if ampControls != state { ampControls = state }
             if changed {
                 append("Amp controls: \(state.modelName), \(page), \(visible.count) controls at \(AM4Message.locationLabel(last.location)).")
-                if !isApplyingGain { gainStatus = "Read from AM4" }
+                if !isEditingHardware { gainStatus = "Read from AM4" }
             }
         }
         return state
     }
 
     func selectAmp(_ command: AM4AmpSelection) async throws {
-        guard command.isValid, isConnected, !isApplyingGain, !isNavigating, !isLoadingPresets,
+        guard command.isValid, isConnected, !isEditingHardware, !isNavigating, !isLoadingPresets,
               let page = ampPage else {
             throw ConnectionError.message("Wait for the Amp controls to finish loading.")
         }
-        isApplyingGain = true
+        isEditingHardware = true
         ampResetValue = nil
         gainStatus = command.model == nil ? "Loading Amp library preset…" : "Changing amp type…"
-        defer { isApplyingGain = false }
+        defer { isEditingHardware = false }
         do {
             #if targetEnvironment(simulator)
             let state = try await helperRequest(path: "/amp/select", body: JSONEncoder().encode(command))
@@ -673,13 +677,13 @@ final class AM4Connection: ObservableObject {
     }
 
     func changeAmpParameter(_ edit: AM4AmpEdit) async throws {
-        guard edit.isValid, isConnected, !isApplyingGain, !isNavigating, !isLoadingPresets else {
+        guard edit.isValid, isConnected, !isEditingHardware, !isNavigating, !isLoadingPresets else {
             throw ConnectionError.message("Wait for the Amp controls to finish loading.")
         }
-        isApplyingGain = true
+        isEditingHardware = true
         gainStatus = "Checking current amp…"
         ampResetValue = nil
-        defer { isApplyingGain = false }
+        defer { isEditingHardware = false }
         do {
             #if targetEnvironment(simulator)
             let state = try await helperRequest(path: "/amp/parameter", body: JSONEncoder().encode(edit))
@@ -765,8 +769,8 @@ final class AM4Connection: ObservableObject {
             throw ConnectionError.message(presetSaveStatus)
         }
         let token = session
-        isSavingPreset = true; isApplyingGain = true; presetSaveStatus = "Checking preset…"
-        defer { isSavingPreset = false; isApplyingGain = false }
+        isSavingPreset = true; isEditingHardware = true; presetSaveStatus = "Checking preset…"
+        defer { isSavingPreset = false; isEditingHardware = false }
         do {
             #if targetEnvironment(simulator)
             let state = try await helperRequest(path: "/preset/save", body: JSONEncoder().encode(command))
@@ -813,7 +817,7 @@ final class AM4Connection: ObservableObject {
     }
 
     func navigate(_ command: AM4NavigationCommand) async throws {
-        guard command.isValid, isConnected, !isLoadingPresets, !isApplyingGain, !isNavigating else {
+        guard command.isValid, isConnected, !isLoadingPresets, !isEditingHardware, !isNavigating else {
             throw ConnectionError.message("Wait for the current AM4 operation to finish.")
         }
         isNavigating = true
@@ -837,8 +841,7 @@ final class AM4Connection: ObservableObject {
             navigationStatus = state.navigationStatus
             #else
             await refreshTask?.value
-            let currentLocation = try await query(AM4Message.locationRequest) { $0.location != nil }.location!
-            let currentSnapshot = try await query(AM4Message.snapshotRequest) { $0.snapshot != nil }.snapshot!
+            let (currentLocation, currentSnapshot) = try await readLocationAndSnapshot()
             if let target = command.preset, target == currentLocation {
                 navigationStatus = "Already on \(AM4Message.locationLabel(target))"; return
             }
@@ -854,8 +857,7 @@ final class AM4Connection: ObservableObject {
             var previous: AM4Snapshot?
             for _ in 0..<12 {
                 try await Task.sleep(nanoseconds: 100_000_000)
-                let first = try await query(AM4Message.locationRequest) { $0.location != nil }.location!
-                let observed = try await query(AM4Message.snapshotRequest) { $0.snapshot != nil }.snapshot!
+                let (first, observed) = try await readLocationAndSnapshot()
                 let last = try await query(AM4Message.locationRequest) { $0.location != nil }.location!
                 let reached = first == last && command.isConfirmed(location: first, scene: observed.scene)
                 if reached, previous == observed {
@@ -879,8 +881,7 @@ final class AM4Connection: ObservableObject {
     }
 
     private func readBlockContext() async throws -> AM4BlockContext {
-        let first = try await query(AM4Message.locationRequest) { $0.location != nil }.location!
-        let snapshot = try await query(AM4Message.snapshotRequest) { $0.snapshot != nil }.snapshot!
+        let (first, snapshot) = try await readLocationAndSnapshot()
         let last = try await query(AM4Message.locationRequest) { $0.location != nil }.location!
         guard first == last else { throw ConnectionError.message("Preset changed while reading block status.") }
         return AM4BlockContext(location: last, scene: snapshot.scene, blocks: snapshot.blockIDs)
@@ -901,11 +902,11 @@ final class AM4Connection: ObservableObject {
         let state = AM4BlocksState(context: last, blocks: values)
         guard state.isValid else { throw ConnectionError.message("AM4 returned invalid block status.") }
         if blocks != state {
-            if !isApplyingGain { blockStatus = "" }
+            if !isEditingHardware { blockStatus = "" }
             append("Blocks at \(AM4Message.locationLabel(last.location)), scene \(last.scene + 1): " +
                    values.map { "slot \($0.slot + 1) \($0.bypassed ? "bypassed" : "active")" }.joined(separator: ", "))
         }
-        blocks = state
+        if blocks != state { blocks = state }
         return state
     }
 
@@ -918,12 +919,12 @@ final class AM4Connection: ObservableObject {
     }
 
     func changeBlockBypass(_ command: AM4BlockBypassCommand) async throws {
-        guard command.isValid, isConnected, !isLoadingPresets, !isApplyingGain, !isNavigating else {
+        guard command.isValid, isConnected, !isLoadingPresets, !isEditingHardware, !isNavigating else {
             throw ConnectionError.message("Wait for the current AM4 operation to finish.")
         }
-        isApplyingGain = true
+        isEditingHardware = true
         blockStatus = command.bypassed ? "Bypassing block…" : "Enabling block…"
-        defer { isApplyingGain = false }
+        defer { isEditingHardware = false }
         do {
             #if targetEnvironment(simulator)
             let state = try await helperRequest(path: "/blocks/bypass", body: JSONEncoder().encode(command))
@@ -976,19 +977,19 @@ final class AM4Connection: ObservableObject {
         }
         if usbPlayback != value {
             append("Global USB 1/2 playback: \(value.text)")
-            if !isApplyingGain { usbPlaybackStatus = "Read from AM4" }
+            if !isEditingHardware { usbPlaybackStatus = "Read from AM4" }
         }
         usbPlayback = value
         return value
     }
 
     func changeUSBPlayback(_ command: AM4USBPlaybackCommand) async throws {
-        guard command.isValid, isConnected, !isApplyingGain, !isNavigating, !isLoadingPresets else {
+        guard command.isValid, isConnected, !isEditingHardware, !isNavigating, !isLoadingPresets else {
             throw ConnectionError.message("Wait for the current AM4 operation to finish.")
         }
-        isApplyingGain = true
+        isEditingHardware = true
         usbPlaybackStatus = "Checking USB playback volume…"
-        defer { isApplyingGain = false }
+        defer { isEditingHardware = false }
         do {
             #if targetEnvironment(simulator)
             let state = try await helperRequest(path: "/usb/playback", body: JSONEncoder().encode(command))
@@ -1054,13 +1055,13 @@ final class AM4Connection: ObservableObject {
         for message in stream.receive(bytes) {
             if let result = message.location {
                 if location != result { hasUnsavedPresetChanges = false; lastPresetEdit = nil; presetSaveStatus = ""; amp = nil; ampControls = nil; effectControls = nil; effectResetValue = nil; blocks = nil; ampResetValue = nil; if !isNavigating { navigationStatus = "" } }
-                location = result
+                if location != result { location = result }
             }
             if let result = message.snapshot {
                 if snapshot?.scene != result.scene || snapshot?.blockIDs != result.blockIDs { amp = nil; ampControls = nil; effectControls = nil; effectResetValue = nil; blocks = nil; ampResetValue = nil; if !isNavigating { navigationStatus = "" } }
-                snapshot = result
+                if snapshot != result { snapshot = result }
                 if let edited = result.edited, edited || lastPresetEdit.map({ ProcessInfo.processInfo.systemUptime - $0 >= 2 }) != false {
-                    hasUnsavedPresetChanges = edited
+                    if hasUnsavedPresetChanges != edited { hasUnsavedPresetChanges = edited }
                 }
             }
             if let pending = pendingQuery, pending.matches(message) { finishQuery(.success(message)) }
@@ -1084,7 +1085,7 @@ final class AM4Connection: ObservableObject {
                     append("Preset catalog complete: \(presets.count) slots. Current: \(location.map(AM4Message.locationLabel) ?? "unknown") / \(snapshot?.name ?? "unknown").")
                 }
             }
-            append("RX 0x\(String(message.function, radix: 16)) · \(message.payload.count) payload bytes")
+            if Self.connectionDiagnostics { append("RX 0x\(String(message.function, radix: 16)) · \(message.payload.count) payload bytes") }
         }
     }
 
@@ -1141,40 +1142,46 @@ final class AM4Connection: ObservableObject {
                   data.count < 128_000 else { throw ConnectionError.message("Unexpected helper response.") }
             let state = try JSONDecoder().decode(AM4DeviceState.self, from: data)
             guard state.isValid else { throw ConnectionError.message("Helper version mismatch. Restart the simulator helper and rebuild the iPad app.") }
-            status = state.status
-            if !isNavigating { navigationStatus = state.navigationStatus }
-            isConnected = state.connected
-            if !isApplyingGain {
-                amp = state.amp
-                ampControls = state.ampControls
-                effectControls = state.effectControls
-                effectResetValue = state.effectResetValue
-                ampResetValue = state.ampResetValue
-                blocks = state.blocks
-                blockStatus = state.blockStatus
-                usbPlayback = state.usbPlayback
-                usbPlaybackStatus = state.usbPlaybackStatus
-                gainStatus = state.gainStatus
+            if status != state.status { status = state.status }
+            if !isNavigating, navigationStatus != state.navigationStatus { navigationStatus = state.navigationStatus }
+            if isConnected != state.connected { isConnected = state.connected }
+            if !isEditingHardware {
+                if amp != state.amp { amp = state.amp }
+                if ampControls != state.ampControls { ampControls = state.ampControls }
+                if effectControls != state.effectControls { effectControls = state.effectControls }
+                if effectResetValue != state.effectResetValue { effectResetValue = state.effectResetValue }
+                if ampResetValue != state.ampResetValue { ampResetValue = state.ampResetValue }
+                if blocks != state.blocks { blocks = state.blocks }
+                if blockStatus != state.blockStatus { blockStatus = state.blockStatus }
+                if usbPlayback != state.usbPlayback { usbPlayback = state.usbPlayback }
+                if usbPlaybackStatus != state.usbPlaybackStatus { usbPlaybackStatus = state.usbPlaybackStatus }
+                if gainStatus != state.gainStatus { gainStatus = state.gainStatus }
             }
-            isLoadingPresets = state.loadingPresets
-            snapshot = state.snapshot
+            if isLoadingPresets != state.loadingPresets { isLoadingPresets = state.loadingPresets }
+            if snapshot != state.snapshot { snapshot = state.snapshot }
             helperSupportsPresetSave = state.presetSaveSupported == true
-            if !isSavingPreset { hasUnsavedPresetChanges = state.presetEdited ?? state.snapshot?.edited ?? false; presetSaveStatus = state.presetSaveStatus ?? "" }
-            location = state.location
-            presets = state.presets
+            if !isSavingPreset {
+                let edited = state.presetEdited ?? state.snapshot?.edited ?? false
+                let saveStatus = state.presetSaveStatus ?? ""
+                if hasUnsavedPresetChanges != edited { hasUnsavedPresetChanges = edited }
+                if presetSaveStatus != saveStatus { presetSaveStatus = saveStatus }
+            }
+            if location != state.location { location = state.location }
+            if presets != state.presets { presets = state.presets }
         } catch {
             guard !Task.isCancelled else { return }
+            let waiting = "Waiting for the AM4 simulator helper on your Mac."
+            guard status != waiting else { return }
             isConnected = false; isLoadingPresets = false
             snapshot = nil; location = nil; presets = []; amp = nil; ampControls = nil; effectControls = nil; effectResetValue = nil; blocks = nil; usbPlayback = nil
-            status = "Waiting for simulator helper. Run Tools/run-simulator-helper.sh on your Mac."
+            status = waiting
         }
     }
     #endif
 
     private func append(_ entry: String) {
-        log.append(entry)
-        if log.count > 60 { log.removeFirst(log.count - 60) }
-        if ProcessInfo.processInfo.arguments.contains("--connection-diagnostics") {
+        log = Array(log.suffix(59)) + [entry]
+        if Self.connectionDiagnostics {
             print("[AM4] \(entry)")
         }
     }
@@ -1204,7 +1211,7 @@ final class AM4Connection: ObservableObject {
 extension AM4Connection {
     func showEffectPage(_ selection: AM4EffectPageSelection) async throws {
         guard selection.isValid else { return }
-        if selection.page != nil && (isApplyingGain || isNavigating) { return }
+        if selection.page != nil && (isEditingHardware || isNavigating) { return }
         if selection.page == nil {
             if effectPage?.block == selection.block && effectPage?.slot == selection.slot { effectPage = nil; effectControls = nil }
         } else {
@@ -1229,8 +1236,7 @@ extension AM4Connection {
     }
 
     private func readEffectContextUSB(slot: Int, block: Int) async throws -> AM4EffectContext {
-        let location = try await query(AM4Message.locationRequest) { $0.location != nil }.location!
-        let snapshot = try await query(AM4Message.snapshotRequest) { $0.snapshot != nil }.snapshot!
+        let (location, snapshot) = try await readLocationAndSnapshot()
         guard (0..<4).contains(slot), snapshot.blockIDs[slot] == UInt32(block), snapshot.blockIDs.filter({ $0 == UInt32(block) }).count == 1 else {
             throw ConnectionError.message("The selected block changed. Reopen its editor.")
         }
@@ -1242,7 +1248,7 @@ extension AM4Connection {
 
     private func readEffectValueUSB(_ key: String, block: Int) async throws -> AM4ParameterValue {
         guard let definition = AM4EffectsCatalog.shared.effect(block)?.definition(key, addressedTo: block) else { throw ConnectionError.message("Unknown effect control.") }
-        let trace = ProcessInfo.processInfo.arguments.contains("--am4-trace")
+        let trace = Self.traceEnabled
         if trace { print("AM4 read effect \(key) \(definition.symbol)") }
         do {
             let message = try await query(AM4Message.parameterRequest(definition)) { message in
@@ -1279,15 +1285,15 @@ extension AM4Connection {
         guard state.isValid else { throw ConnectionError.message("The AM4 returned invalid effect controls.") }
         if effectPage?.slot == selection.slot && effectPage?.block == selection.block && effectPage?.page == page {
             if effectControls != state { effectControls = state }
-            if !isApplyingGain { gainStatus = "Read from AM4" }
+            if !isEditingHardware { gainStatus = "Read from AM4" }
         }
         return state
     }
 
     func changeEffectParameter(_ edit: AM4EffectEdit) async throws {
-        guard edit.isValid, isConnected, !isApplyingGain, !isNavigating, !isLoadingPresets else { throw ConnectionError.message("Wait for the block controls to finish loading.") }
-        isApplyingGain = true; effectResetValue = nil; gainStatus = "Checking current block…"
-        defer { isApplyingGain = false }
+        guard edit.isValid, isConnected, !isEditingHardware, !isNavigating, !isLoadingPresets else { throw ConnectionError.message("Wait for the block controls to finish loading.") }
+        isEditingHardware = true; effectResetValue = nil; gainStatus = "Checking current block…"
+        defer { isEditingHardware = false }
         do {
             #if targetEnvironment(simulator)
             let state = try await helperRequest(path: "/effect/parameter", body: JSONEncoder().encode(edit))
@@ -1325,9 +1331,9 @@ extension AM4Connection {
     }
 
     func selectEffect(_ command: AM4EffectSelection) async throws {
-        guard command.isValid, isConnected, !isApplyingGain, !isNavigating, !isLoadingPresets else { throw ConnectionError.message("Wait for the block controls to finish loading.") }
-        isApplyingGain = true; effectResetValue = nil; gainStatus = "Loading selection…"
-        defer { isApplyingGain = false }
+        guard command.isValid, isConnected, !isEditingHardware, !isNavigating, !isLoadingPresets else { throw ConnectionError.message("Wait for the block controls to finish loading.") }
+        isEditingHardware = true; effectResetValue = nil; gainStatus = "Loading selection…"
+        defer { isEditingHardware = false }
         do {
             #if targetEnvironment(simulator)
             let state = try await helperRequest(path: "/effect/select", body: JSONEncoder().encode(command))
@@ -1392,231 +1398,6 @@ extension AM4Connection {
     }
 }
 
-#if AM4_SIMULATOR_HELPER
-/// Loopback-only helper with validated, read-back-verified Amp operations.
-@MainActor
-private final class AM4LocalHelper {
-    var onStatus: ((String) -> Void)?
-    private var listener: NWListener?
-    private var connections: [UUID: NWConnection] = [:]
-    private let state: () -> AM4DeviceState?
-    private let setGain: (AM4GainCommand) async throws -> AM4DeviceState
-    private let selectPage: (String?) async throws -> AM4DeviceState
-    private let editAmp: (AM4AmpEdit) async throws -> AM4DeviceState
-    private let selectAmp: (AM4AmpSelection) async throws -> AM4DeviceState
-    private let selectEffectPage: (AM4EffectPageSelection) async throws -> AM4DeviceState
-    private let editEffect: (AM4EffectEdit) async throws -> AM4DeviceState
-    private let selectEffect: (AM4EffectSelection) async throws -> AM4DeviceState
-    private let navigate: (AM4NavigationCommand) async throws -> AM4DeviceState
-    private let bypassBlock: (AM4BlockBypassCommand) async throws -> AM4DeviceState
-    private let setUSBPlayback: (AM4USBPlaybackCommand) async throws -> AM4DeviceState
-    private let savePreset: (AM4PresetSaveCommand) async throws -> AM4DeviceState
 
-    init(state: @escaping () -> AM4DeviceState?,
-         setGain: @escaping (AM4GainCommand) async throws -> AM4DeviceState,
-         selectPage: @escaping (String?) async throws -> AM4DeviceState,
-         editAmp: @escaping (AM4AmpEdit) async throws -> AM4DeviceState,
-         selectAmp: @escaping (AM4AmpSelection) async throws -> AM4DeviceState,
-         selectEffectPage: @escaping (AM4EffectPageSelection) async throws -> AM4DeviceState,
-         editEffect: @escaping (AM4EffectEdit) async throws -> AM4DeviceState,
-         selectEffect: @escaping (AM4EffectSelection) async throws -> AM4DeviceState,
-         navigate: @escaping (AM4NavigationCommand) async throws -> AM4DeviceState,
-         bypassBlock: @escaping (AM4BlockBypassCommand) async throws -> AM4DeviceState,
-         setUSBPlayback: @escaping (AM4USBPlaybackCommand) async throws -> AM4DeviceState,
-         savePreset: @escaping (AM4PresetSaveCommand) async throws -> AM4DeviceState) {
-        self.state = state
-        self.setGain = setGain
-        self.selectPage = selectPage
-        self.editAmp = editAmp
-        self.selectAmp = selectAmp
-        self.selectEffectPage = selectEffectPage
-        self.editEffect = editEffect
-        self.selectEffect = selectEffect
-        self.navigate = navigate
-        self.bypassBlock = bypassBlock
-        self.setUSBPlayback = setUSBPlayback; self.savePreset = savePreset
-    }
 
-    func start() {
-        do {
-            let parameters = NWParameters.tcp
-            parameters.requiredLocalEndpoint = .hostPort(host: "127.0.0.1", port: 32174)
-            let listener = try NWListener(using: parameters)
-            self.listener = listener
-            listener.stateUpdateHandler = { [weak self] event in
-                Task { @MainActor in
-                    switch event {
-                    case .ready: self?.onStatus?("Helper ready · localhost:32174")
-                    case .failed(let error): self?.onStatus?("Helper unavailable: \(error.localizedDescription). Close any older Mac helper.")
-                    default: break
-                    }
-                }
-            }
-            listener.newConnectionHandler = { [weak self] connection in
-                Task { @MainActor in self?.accept(connection) }
-            }
-            listener.start(queue: .main)
-        } catch { onStatus?("Helper could not start: \(error.localizedDescription)") }
-    }
-
-    func stop() {
-        listener?.cancel(); listener = nil
-        let active = Array(connections.values)
-        connections.removeAll()
-        for connection in active { connection.cancel() }
-    }
-
-    private func accept(_ connection: NWConnection) {
-        guard connections.count < 16 else { connection.cancel(); return }
-        let id = UUID()
-        connections[id] = connection
-        connection.start(queue: .main)
-        read(connection, id: id, buffer: Data())
-        Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 20_000_000_000)
-            self?.finish(id)
-        }
-    }
-
-    private func read(_ connection: NWConnection, id: UUID, buffer: Data) {
-        connection.receive(minimumIncompleteLength: 1, maximumLength: 4096) { [weak self] data, _, complete, error in
-            Task { @MainActor in
-                guard let self, self.connections[id] != nil else { return }
-                var buffer = buffer
-                if let data { buffer.append(data) }
-                guard buffer.count <= 36_864, error == nil else { self.finish(id); return }
-                guard let separator = buffer.range(of: Data("\r\n\r\n".utf8)) else {
-                    if complete { self.finish(id) }
-                    else { self.read(connection, id: id, buffer: buffer) }
-                    return
-                }
-                let lines = String(decoding: buffer[..<separator.lowerBound], as: UTF8.self)
-                    .components(separatedBy: "\r\n")
-                var headers: [String: String] = [:]
-                for line in lines.dropFirst() {
-                    guard let colon = line.firstIndex(of: ":") else {
-                        self.respond(id, status: "400 Bad Request", body: Data()); return
-                    }
-                    let name = line[..<colon].lowercased()
-                    guard headers[name] == nil else {
-                        self.respond(id, status: "400 Bad Request", body: Data()); return
-                    }
-                    headers[name] = line[line.index(after: colon)...].trimmingCharacters(in: .whitespaces)
-                }
-                guard headers["transfer-encoding"] == nil,
-                      let length = Int(headers["content-length"] ?? "0"), (0...32_768).contains(length) else {
-                    self.respond(id, status: "400 Bad Request", body: Data()); return
-                }
-                let end = separator.upperBound + length
-                guard buffer.count >= end else {
-                    if complete { self.finish(id) }
-                    else { self.read(connection, id: id, buffer: buffer) }
-                    return
-                }
-                guard buffer.count == end else {
-                    self.respond(id, status: "400 Bad Request", body: Data()); return
-                }
-                let line = lines.first ?? ""
-                if line == "GET /state HTTP/1.1" || line == "GET /state HTTP/1.0" {
-                    guard length == 0, let state = self.state(), let body = try? JSONEncoder().encode(state) else {
-                        self.respond(id, status: "503 Service Unavailable", body: Data()); return
-                    }
-                    self.respond(id, status: "200 OK", body: body)
-                } else if line == "POST /amp/gain HTTP/1.1" {
-                    guard headers["x-am4-client"] == "AM4Remote/2", headers["origin"] == nil,
-                          headers["content-type"] == "application/json",
-                          let command = try? JSONDecoder().decode(AM4GainCommand.self, from:
-                            buffer.subdata(in: separator.upperBound..<end)), command.isValid else {
-                        self.respond(id, status: "400 Bad Request", body: Data()); return
-                    }
-                    do {
-                        let state = try await self.setGain(command)
-                        self.respond(id, status: "200 OK", body: try JSONEncoder().encode(state))
-                    } catch {
-                        let body = (try? JSONEncoder().encode(AM4ControlError(message: error.localizedDescription))) ?? Data()
-                        self.respond(id, status: "409 Conflict", body: body)
-                    }
-                } else if line == "POST /amp/page HTTP/1.1" || line == "POST /amp/parameter HTTP/1.1" || line == "POST /amp/select HTTP/1.1" || line == "POST /effect/page HTTP/1.1" || line == "POST /effect/parameter HTTP/1.1" || line == "POST /effect/select HTTP/1.1" || line == "POST /navigate HTTP/1.1" || line == "POST /blocks/bypass HTTP/1.1" || line == "POST /usb/playback HTTP/1.1" || line == "POST /preset/save HTTP/1.1" {
-                    guard headers["x-am4-client"] == "AM4Remote/9", headers["origin"] == nil,
-                          headers["content-type"] == "application/json" else {
-                        self.respond(id, status: "400 Bad Request", body: Data()); return
-                    }
-                    let body = buffer.subdata(in: separator.upperBound..<end)
-                    do {
-                        let result: AM4DeviceState
-                        if line == "POST /preset/save HTTP/1.1" {
-                            guard let command = try? JSONDecoder().decode(AM4PresetSaveCommand.self, from: body), command.isValid else {
-                                self.respond(id, status: "400 Bad Request", body: Data()); return
-                            }
-                            result = try await self.savePreset(command)
-                        } else if line == "POST /effect/page HTTP/1.1" {
-                            guard let command = try? JSONDecoder().decode(AM4EffectPageSelection.self, from: body), command.isValid else {
-                                self.respond(id, status: "400 Bad Request", body: Data()); return
-                            }
-                            result = try await self.selectEffectPage(command)
-                        } else if line == "POST /effect/parameter HTTP/1.1" {
-                            guard let command = try? JSONDecoder().decode(AM4EffectEdit.self, from: body), command.isValid else {
-                                self.respond(id, status: "400 Bad Request", body: Data()); return
-                            }
-                            result = try await self.editEffect(command)
-                        } else if line == "POST /effect/select HTTP/1.1" {
-                            guard let command = try? JSONDecoder().decode(AM4EffectSelection.self, from: body), command.isValid else {
-                                self.respond(id, status: "400 Bad Request", body: Data()); return
-                            }
-                            result = try await self.selectEffect(command)
-                        } else if line == "POST /amp/page HTTP/1.1" {
-                            guard let selection = try? JSONDecoder().decode(AM4PageSelection.self, from: body),
-                                  selection.page == nil || AM4AmpCatalog.shared.page(selection.page!) != nil else {
-                                self.respond(id, status: "400 Bad Request", body: Data()); return
-                            }
-                            result = try await self.selectPage(selection.page)
-                        } else if line == "POST /amp/select HTTP/1.1" {
-                            guard let command = try? JSONDecoder().decode(AM4AmpSelection.self, from: body), command.isValid else {
-                                self.respond(id, status: "400 Bad Request", body: Data()); return
-                            }
-                            result = try await self.selectAmp(command)
-                        } else if line == "POST /usb/playback HTTP/1.1" {
-                            guard let command = try? JSONDecoder().decode(AM4USBPlaybackCommand.self, from: body), command.isValid else {
-                                self.respond(id, status: "400 Bad Request", body: Data()); return
-                            }
-                            result = try await self.setUSBPlayback(command)
-                        } else if line == "POST /blocks/bypass HTTP/1.1" {
-                            guard let command = try? JSONDecoder().decode(AM4BlockBypassCommand.self, from: body), command.isValid else {
-                                self.respond(id, status: "400 Bad Request", body: Data()); return
-                            }
-                            result = try await self.bypassBlock(command)
-                        } else if line == "POST /navigate HTTP/1.1" {
-                            guard let command = try? JSONDecoder().decode(AM4NavigationCommand.self, from: body), command.isValid else {
-                                self.respond(id, status: "400 Bad Request", body: Data()); return
-                            }
-                            result = try await self.navigate(command)
-                        } else {
-                            guard let edit = try? JSONDecoder().decode(AM4AmpEdit.self, from: body), edit.isValid else {
-                                self.respond(id, status: "400 Bad Request", body: Data()); return
-                            }
-                            result = try await self.editAmp(edit)
-                        }
-                        self.respond(id, status: "200 OK", body: try JSONEncoder().encode(result))
-                    } catch {
-                        let body = (try? JSONEncoder().encode(AM4ControlError(message: error.localizedDescription))) ?? Data()
-                        self.respond(id, status: "409 Conflict", body: body)
-                    }
-                } else { self.respond(id, status: "404 Not Found", body: Data()) }
-            }
-        }
-    }
-
-    private func respond(_ id: UUID, status: String, body: Data) {
-        guard let connection = connections[id] else { return }
-        var response = Data("HTTP/1.1 \(status)\r\nContent-Type: application/json\r\nCache-Control: no-store\r\nConnection: close\r\nContent-Length: \(body.count)\r\n\r\n".utf8)
-        response.append(body)
-        connection.send(content: response, completion: .contentProcessed { [weak self] _ in
-            Task { @MainActor in self?.finish(id) }
-        })
-    }
-
-    private func finish(_ id: UUID) { connections.removeValue(forKey: id)?.cancel() }
-}
-#endif
-
-private struct AM4PageSelection: Codable { let page: String? }
+struct AM4PageSelection: Codable { let page: String? }

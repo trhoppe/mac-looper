@@ -13,7 +13,15 @@ import SwiftUI
         if active && isPresented && connectAutomatically { connection.start() }
     }
     public init(connectAutomatically: Bool = true) { self.connectAutomatically = connectAutomatically }
+    private static let preloadCatalogs = Task.detached(priority: .utility) {
+        _ = AM4AmpCatalog.shared
+        _ = AM4EffectsCatalog.shared
+        _ = AM4AmpLibrary.shared
+        _ = AM4EffectsLibrary.shared
+    }
+
     public func present() {
+        _ = Self.preloadCatalogs
         connection.pollingEnabled = applicationActive
         isPresented = true
         if connectAutomatically && applicationActive { connection.start() }
