@@ -391,9 +391,20 @@ import CoreAudio
         let token = lifecycle
         try await configuration.acquire(); defer { configuration.release() }
         try checkLifecycle(token)
-        guard let unit = loopUnit else { throw LoopFileError.unavailable }
+        guard let unit = loopUnit, let core = unit.core else { throw LoopFileError.unavailable }
+        var frames = tl_pin_snapshot(core)
+        // Allow a just-submitted transport command to finish one render quantum.
+        for _ in 0..<8 where frames == 0 {
+            try await Task.sleep(for: .milliseconds(1))
+            try checkLifecycle(token)
+            frames = tl_pin_snapshot(core)
+        }
+        guard frames > 0 else { throw LoopFileError.unavailable }
+        defer { tl_unpin_snapshot(core); withExtendedLifetime(unit) {} }
         let transfer = LoopAudioTransfer(unit: unit)
-        let loop = try await Task.detached(priority: .userInitiated) { try transfer.copy(bpm: bpm, bars: bars) }.value
+        let loop = try await Task.detached(priority: .userInitiated) { [frames] in
+            try transfer.copy(frames: frames, bpm: bpm, bars: bars)
+        }.value
         try checkLifecycle(token)
         return loop
     }

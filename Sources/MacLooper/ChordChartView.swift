@@ -38,8 +38,7 @@ private struct ChartPresentation: View, Equatable {
             if let song {
                 // Parse inside the equatable boundary, after unchanged inputs
                 // have been skipped by SwiftUI.
-                let document = ChordProDocument(source: song.chordPro, transpose: song.chartTransposition,
-                                                flats: song.chartKey?.contains("b") == true)
+                let document = library.chartDocument(for: song)
                 ViewThatFits(in: .horizontal) {
                     HStack(alignment: .top, spacing: 16) {
                         songTitle(song, document: document)

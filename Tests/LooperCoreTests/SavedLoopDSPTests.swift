@@ -51,6 +51,30 @@ final class SavedLoopDSPTests: XCTestCase {
         XCTAssertEqual(l, Array(repeating: 0.5, count: 1501)); XCTAssertEqual(r, Array(repeating: -0.5, count: 1501))
         XCTAssertEqual(dsp.snapshot.state, Int32(TL_STOPPED))
     }
+    func testMaximumLengthSnapshotKeepsRenderingAndHonorsStop() throws {
+        let frames = 3_072_000
+        let dsp = DSP(capacity: UInt32(frames))
+        load(dsp, frames: frames)
+        XCTAssertTrue(tl_command(dsp.core, Int32(TL_CMD_PLAY_STOP), 0))
+        dsp.silence(256)
+        XCTAssertEqual(tl_pin_snapshot(dsp.core), UInt32(frames))
+        XCTAssertFalse(tl_command(dsp.core, Int32(TL_CMD_CLEAR), 0))
+        var left = [Float](repeating: 0, count: frames), right = left
+        for _ in 0..<100 {
+            XCTAssertTrue(dsp.silence(32).0.allSatisfy { $0 > 0 })
+        }
+        XCTAssertEqual(dsp.snapshot.position, 3456)
+        XCTAssertTrue(tl_command(dsp.core, Int32(TL_CMD_PLAY_STOP), 0))
+        dsp.silence(32)
+        XCTAssertEqual(dsp.snapshot.state, Int32(TL_STOPPED))
+        XCTAssertTrue(tl_copy_snapshot(dsp.core, &left, &right, UInt32(frames)))
+        tl_unpin_snapshot(dsp.core)
+        XCTAssertEqual(left.last, 0.5)
+        XCTAssertEqual(right.last, -0.5)
+        XCTAssertTrue(tl_command(dsp.core, Int32(TL_CMD_CLEAR), 0))
+        XCTAssertEqual(tl_pin_snapshot(dsp.core), 0, "A queued Clear invalidates the snapshot")
+    }
+
     func testRecordingDoesNotWaitForDrummerAndInvalidLoadPreservesTake() {
         let dsp = DSP()
         XCTAssertTrue(tl_command(dsp.core, Int32(TL_CMD_RECORD), 1501)); _ = render(dsp, 32, offset: 90000)

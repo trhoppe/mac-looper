@@ -245,7 +245,10 @@ preserved. Opening restores the shared BPM and leaves playback stopped. An
 unsaved take gets a replacement confirmation. Recalled loops can play without a
 capture input. Cloud-only files download before opening; an unavailable download
 or conflicting cloud version leaves the current take in place. iCloud transfers
-can take time; Refresh the collection after the other device finishes uploading.
+can take time. Stop, MIDI transport, and the playhead stay available during the
+download. Recording or clearing a take during a download cancels that recall.
+Saving a completed take copies its stereo samples while playback continues.
+Refresh the collection after the other device finishes uploading.
 
 When Drummer is running, **Play / CC24** queues a recalled loop for the next
 **beat 1 of a 4/4 bar**. Its badge says **Waiting**; Stop / CC24 cancels the queued

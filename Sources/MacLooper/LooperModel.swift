@@ -6,6 +6,15 @@ import CoreAudio
 import LooperCore
 import JamCore
 
+@MainActor @Observable final class LoopTelemetry {
+    var progress = 0.0
+    var recorded = 0
+    var meterDB = -90.0
+    var outputDB = -90.0
+    var waveform = [Float](repeating: 0, count: 256)
+    var cycles: UInt64 = 0
+}
+
 @MainActor final class LooperModel: ObservableObject {
     let midi = JamMIDIInput()
     @Published var devices: [AudioDevice] = []
@@ -37,17 +46,37 @@ import JamCore
     private var recalled = false
     private var loopIsSaved = false
     private var takeID = UUID()
-    private var controlsAvailable: Bool { !fileBusy && pendingRecall == nil }
+    @Published private(set) var restoringLoop = false
+    var controlsAvailable: Bool { !restoringLoop && pendingRecall == nil }
     @Published var state = Int32(TL_EMPTY)
-    @Published var progress = 0.0
-    @Published var recorded = 0
+    let telemetry = LoopTelemetry()
+    var progress: Double {
+        get { telemetry.progress }
+        set { telemetry.progress = newValue }
+    }
+    var recorded: Int {
+        get { telemetry.recorded }
+        set { telemetry.recorded = newValue }
+    }
     @Published var length = 0
-    @Published var meterDB = -90.0
-    @Published var outputDB = -90.0
-    @Published var waveform = [Float](repeating: 0, count: 256)
+    var meterDB: Double {
+        get { telemetry.meterDB }
+        set { telemetry.meterDB = newValue }
+    }
+    var outputDB: Double {
+        get { telemetry.outputDB }
+        set { telemetry.outputDB = newValue }
+    }
+    var waveform: [Float] {
+        get { telemetry.waveform }
+        set { telemetry.waveform = newValue }
+    }
     @Published var sampleRate = 48000.0
-    @Published var cycles: UInt64 = 0
-    private let host = AudioEngineHost.shared
+    var cycles: UInt64 {
+        get { telemetry.cycles }
+        set { telemetry.cycles = newValue }
+    }
+    private let host: AudioEngineHost
     private var core: OpaquePointer? { host.core }
     private var stopTask: Task<Void, Never>?
     private var timer: Timer?
@@ -60,7 +89,8 @@ import JamCore
     private var routeTask: Task<Void, Never>?
     private var scanningDevices = false
 
-    init(loopFiles: LoopFiles = LoopFiles()) {
+    init(loopFiles: LoopFiles = LoopFiles(), host: AudioEngineHost? = nil) {
+        self.host = host ?? AudioEngineHost.shared
         self.loopFiles = loopFiles
         refreshDevices()
         #if os(macOS)
@@ -79,8 +109,8 @@ import JamCore
     var hasLoop: Bool { state == TL_PLAYING || state == TL_STOPPED || state == TL_WAITING }
     var canEditTiming: Bool { state == TL_EMPTY && !starting && controlsAvailable }
     var canRecord: Bool { controlsAvailable && !starting && !audioPaused && (state == TL_EMPTY || state == TL_ARMED || state == TL_RECORDING) }
-    var canSave: Bool { hasLoop && !starting && !audioPaused && controlsAvailable }
-    var canRecall: Bool { !busy && !starting && !audioPaused && controlsAvailable }
+    var canSave: Bool { !fileBusy && hasLoop && !starting && !audioPaused && controlsAvailable }
+    var canRecall: Bool { !fileBusy && !busy && !starting && !audioPaused && controlsAvailable }
     var acceptsMIDI: Bool { lifecyclePolicy.mayConnect && !audioPaused && controlsAvailable }
     var busy: Bool { state == TL_ARMED || state == TL_RECORDING }
     var plannedFrames: UInt32 { tl_loop_frames(sampleRate, bpm, UInt32(bars), 4) }
@@ -266,14 +296,14 @@ import JamCore
     func arm() async {
         guard controlsAvailable else { return }
         if !running || !host.captureEnabled { await startAudio() }
-        guard running, let core, state == TL_EMPTY else { return }
+        guard controlsAvailable, running, let core, state == TL_EMPTY else { return }
         if !tl_command(core, Int32(TL_CMD_ARM), plannedFrames) { error = "Audio controls are busy. Try again." }
         else { newTake(); state = Int32(TL_ARMED); length = Int(plannedFrames) }
     }
     func record() async {
         guard controlsAvailable else { return }
         if !running || !host.captureEnabled { await startAudio() }
-        guard running, let core else { return }
+        guard controlsAvailable, running, let core else { return }
         // The audio thread decides start/finish, avoiding races with the 30 Hz display.
         if !tl_command(core, Int32(TL_CMD_RECORD), plannedFrames) { error = "Audio controls are busy. Try again." }
         else if state == TL_EMPTY || state == TL_ARMED { if state == TL_EMPTY { newTake() }; state = Int32(TL_RECORDING); length = Int(plannedFrames) }
@@ -327,9 +357,8 @@ import JamCore
         do {
             guard let folder = loopLibraryFolder else { throw LoopStorageError.chooseLibrary }
             let loop = try await host.snapshotLoop(bpm: tempo, bars: count)
-            let data = try await Task.detached(priority: .userInitiated) { try loop.encoded() }.value
             guard id == takeID else { return }
-            saveRequest = LoopSaveRequest(id: id, data: data, name: loopName ?? "Loop \(Int(tempo)) BPM", libraryFolder: folder)
+            saveRequest = LoopSaveRequest(id: id, loop: loop, name: loopName ?? "Loop \(Int(tempo)) BPM", libraryFolder: folder)
         } catch { loopFileFailure = error.localizedDescription }
     }
     func storeLoop(_ request: LoopSaveRequest, name: String) async {
@@ -338,7 +367,7 @@ import JamCore
         fileBusy = true
         defer { fileBusy = false }
         do {
-            let file = try await loopFiles.save(request.data, name: name, in: request.libraryFolder)
+            let file = try await loopFiles.save(request.loop, name: name, in: request.libraryFolder)
             if request.id == takeID { loopIsSaved = true; loopName = file.name; savedLoopURL = file.url }
             await refreshSavedLoops()
         } catch { loopFileFailure = error.localizedDescription }
@@ -356,10 +385,12 @@ import JamCore
             return
         }
         fileBusy = true
+        let initialTake = takeID, initialGeneration = generation, revision = loopFolderRevision
         let access = url.startAccessingSecurityScopedResource()
         defer { if access { url.stopAccessingSecurityScopedResource() }; fileBusy = false }
         do {
             let loop = try await loopFiles.read(url)
+            guard initialTake == takeID, initialGeneration == generation, revision == loopFolderRevision, !busy, !starting, lifecyclePolicy.mayConnect else { return }
             let recall = LoopRecall(loop: loop, name: url.deletingPathExtension().lastPathComponent, url: url)
             if hasLoop && !loopIsSaved { pendingRecall = recall }
             else { try await applyRecall(recall) }
@@ -373,6 +404,8 @@ import JamCore
     }
     private func applyRecall(_ recall: LoopRecall) async throws {
         guard lifecyclePolicy.mayConnect, let output else { throw AudioFailure(message: "Choose an output in Audio Settings before opening a loop.") }
+        restoringLoop = true
+        defer { restoringLoop = false }
         if let stopTask { await stopTask.value; self.stopTask = nil }
         try await host.prepareLoopRecall(output: output)
         try await host.restoreLoop(recall.loop)
@@ -390,6 +423,7 @@ import JamCore
         progress = 0; cycles = 0
     }
     func shutdown() {
+        generation += 1
         midi.stop()
         automaticAudio = false; routeTask?.cancel(); stopTask?.cancel(); timer?.invalidate(); host.shutdown(); running = false
     }
@@ -403,7 +437,7 @@ import JamCore
             }
             reconnectIfAvailable()
         }
-        guard running, !fileBusy, let core else { return }
+        guard running, !restoringLoop, let core else { return }
         let callbacks = host.callbacks
         stalledTicks = callbacks == lastCallbacks ? stalledTicks + 1 : 0
         lastCallbacks = callbacks

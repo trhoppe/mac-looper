@@ -17,18 +17,15 @@ final class LoopAudioTransfer: @unchecked Sendable {
         }
         throw LoopFileError.transfer
     }
-    func copy(bpm: Double, bars: Int) throws -> SavedLoop {
-        let (rate, left, right) = try edit { core in
-            let frames = tl_snapshot(core).length
-            guard frames >= 16 else { throw LoopFileError.unavailable }
-            var left = [Float](repeating: 0, count: Int(frames)), right = left
-            let copied = left.withUnsafeMutableBufferPointer { l in
-                right.withUnsafeMutableBufferPointer { r in tl_copy_loop(core, l.baseAddress, r.baseAddress, frames) }
-            }
-            guard copied else { throw LoopFileError.unavailable }
-            return (tl_sample_rate(core), left, right)
+    func copy(frames: UInt32, bpm: Double, bars: Int) throws -> SavedLoop {
+        guard let core = unit.core else { throw LoopFileError.transfer }
+        var left = [Float](repeating: 0, count: Int(frames))
+        var right = [Float](repeating: 0, count: Int(frames))
+        let copied = left.withUnsafeMutableBufferPointer { l in
+            right.withUnsafeMutableBufferPointer { r in tl_copy_snapshot(core, l.baseAddress, r.baseAddress, frames) }
         }
-        return try SavedLoop(sampleRate: rate, bpm: bpm, bars: bars, left: left, right: right)
+        guard copied else { throw LoopFileError.unavailable }
+        return try SavedLoop(sampleRate: tl_sample_rate(core), bpm: bpm, bars: bars, left: left, right: right)
     }
     func load(_ loop: SavedLoop) throws {
         guard let core = unit.core else { throw LoopFileError.transfer }

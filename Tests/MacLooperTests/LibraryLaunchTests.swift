@@ -146,6 +146,10 @@ extension LibraryLaunchTests {
         model.playlistID = "p"
         XCTAssertEqual(model.songs.map(\.id), ["a"])
         XCTAssertEqual(model.selectedSong?.capo, "2", "Keep playlist-specific chart settings")
+        model.query = "missing"
+        XCTAssertTrue(model.songs.isEmpty)
+        XCTAssertEqual(model.selectedSong?.capo, "2")
+        model.query = ""
         model.playlistID = nil
         var draft = SongDraft(song: try XCTUnwrap(model.selectedSong))
         draft.title = "Edited"

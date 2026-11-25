@@ -140,7 +140,7 @@ struct JamDropdownPopup: View {
             let ceiling = max(8, top + 4), floor = geo.size.height * 0.9
             let aboveBottom = min(anchor.minY - 6, floor)
             let aboveAvailable = max(0, aboveBottom - ceiling), belowAvailable = max(0, floor - belowY)
-            let opensAbove = request.prefersAbove && !opensRight && belowAvailable < 200 && aboveAvailable > belowAvailable
+            let opensAbove = request.prefersAbove && !opensRight && belowAvailable < (request.height ?? aboveAvailable) && aboveAvailable > belowAvailable
             let available = opensAbove ? aboveAvailable : opensRight ? max(0, floor - ceiling) : belowAvailable
             let height = min(request.height ?? available, available)
             let y = opensAbove ? aboveBottom - height : opensRight ? ceiling : belowY

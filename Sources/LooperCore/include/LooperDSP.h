@@ -34,6 +34,11 @@ void tl_suspend(TLCore *core);
 bool tl_begin_edit(TLCore *core);
 void tl_end_edit(TLCore *core);
 double tl_sample_rate(TLCore *core);
+// Pin on the command producer with restores serialized. A nonzero frame count
+// grants a worker read-only access; the owner must unpin after copying.
+uint32_t tl_pin_snapshot(TLCore *core);
+bool tl_copy_snapshot(TLCore *core, float *left, float *right, uint32_t frames);
+void tl_unpin_snapshot(TLCore *core);
 bool tl_copy_loop(TLCore *core, float *left, float *right, uint32_t frames);
 bool tl_load_loop(TLCore *core, const float *left, const float *right, uint32_t frames);
 // No allocation, locks, UI dispatch, logging, or file access in this function.

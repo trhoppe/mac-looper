@@ -62,7 +62,8 @@ struct LooperPanel: View {
             .background(stateColor.opacity(0.1), in: Capsule())
     }
     private var waveform: some View {
-            Canvas { context, size in
+        let waveform = model.waveform, progress = model.progress
+        return Canvas { context, size in
                 for bar in 0...model.bars {
                     let x = size.width * Double(bar) / Double(model.bars)
                     var line = Path(); line.move(to: CGPoint(x: x, y: 0)); line.addLine(to: CGPoint(x: x, y: size.height))
@@ -72,13 +73,13 @@ struct LooperPanel: View {
                 var baseline = Path(); baseline.move(to: CGPoint(x: 0, y: mid)); baseline.addLine(to: CGPoint(x: size.width, y: mid))
                 context.stroke(baseline, with: .color(.white.opacity(0.1)), lineWidth: 1)
                 var peaks = Path()
-                for (i, value) in model.waveform.enumerated() where value > 0 {
+                for (i, value) in waveform.enumerated() where value > 0 {
                     let x = size.width * (Double(i) + 0.5) / 256, h = max(1, min(1, Double(value)) * mid)
                     peaks.move(to: CGPoint(x: x, y: mid - h)); peaks.addLine(to: CGPoint(x: x, y: mid + h))
                 }
                 context.stroke(peaks, with: .color(stateColor.opacity(0.9)), lineWidth: 2)
                 if model.hasLoop || model.state == TL_RECORDING {
-                    let x = size.width * min(1, max(0, model.progress))
+                    let x = size.width * min(1, max(0, progress))
                     var p = Path(); p.move(to: CGPoint(x: x, y: 0)); p.addLine(to: CGPoint(x: x, y: size.height))
                     context.stroke(p, with: .color(.white.opacity(0.8)), lineWidth: 1)
                 }
@@ -132,12 +133,12 @@ struct LooperPanel: View {
     private var playButton: some View {
         Button { model.playStop() } label: {
                 transportIcon(model.state == TL_PLAYING || model.state == TL_WAITING || model.busy ? "stop.fill" : "play.fill")
-            }.disabled((!model.hasLoop && !model.busy) || model.fileBusy || model.pendingRecall != nil)
+            }.disabled((!model.hasLoop && !model.busy) || !model.controlsAvailable)
                 .help(model.state == TL_WAITING ? "Cancel queued loop" : model.state == TL_PLAYING || model.busy ? "Stop loop" : "Play loop")
                 .accessibilityLabel(model.state == TL_PLAYING || model.state == TL_WAITING || model.busy ? "Stop loop" : "Play loop")
     }
     private var clearButton: some View {
-        Button { model.clear() } label: { transportIcon("trash") }.disabled((!model.running && !model.audioPaused) || model.state == TL_EMPTY || model.fileBusy || model.pendingRecall != nil)
+        Button { model.clear() } label: { transportIcon("trash") }.disabled((!model.running && !model.audioPaused) || model.state == TL_EMPTY || !model.controlsAvailable)
             .help("Clear loop").accessibilityLabel("Clear loop")
     }
     private func transportIcon(_ name: String) -> some View {

@@ -56,7 +56,15 @@ public actor LoopFiles {
     }
 
     public func save(_ data: Data, name: String, in library: URL) throws -> SavedLoopFile {
-        _ = try SavedLoop.decode(data) // Never put an invalid take into the shared library.
+        _ = try SavedLoop.decode(data)
+        return try write(data, name: name, in: library)
+    }
+
+    public func save(_ loop: SavedLoop, name: String, in library: URL) throws -> SavedLoopFile {
+        try write(loop.encoded(), name: name, in: library)
+    }
+
+    private func write(_ data: Data, name: String, in library: URL) throws -> SavedLoopFile {
         var title = name.trimmingCharacters(in: .whitespacesAndNewlines).precomposedStringWithCanonicalMapping
         if title.lowercased().hasSuffix(".jamloop") { title = String(title.dropLast(8)) }
         guard !title.isEmpty, !title.hasPrefix("."), title.utf8.count <= 140,

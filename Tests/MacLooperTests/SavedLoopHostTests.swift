@@ -18,13 +18,63 @@ final class SavedLoopHostTests: XCTestCase {
         _ = try await files.save(data, name: "First take", in: first)
         model.configureLoopLibrary(first); await model.refreshSavedLoops()
         XCTAssertEqual(model.savedLoops.map(\.name), ["First take"])
-        let request = LoopSaveRequest(id: UUID(), data: data, name: "Pending take", libraryFolder: first)
+        let request = LoopSaveRequest(id: UUID(), loop: try SavedLoop.decode(data), name: "Pending take", libraryFolder: first)
         model.configureLoopLibrary(second)
         XCTAssertTrue(model.savedLoops.isEmpty)
         await model.storeLoop(request, name: "Pending take")
         XCTAssertTrue(model.loopFileFailure?.contains("folder changed") == true)
         XCTAssertFalse(FileManager.default.fileExists(atPath: LoopFiles.folder(in: second).path))
     }
+    @MainActor func testPlaybackTelemetryDoesNotInvalidateTransportControls() {
+        let model = LooperModel()
+        defer { model.shutdown() }
+        var publications = 0
+        let subscription = model.objectWillChange.sink { publications += 1 }
+        for tick in 1...30 {
+            model.progress = Double(tick) / 30
+            model.meterDB = Double(-tick)
+        }
+        XCTAssertEqual(publications, 0)
+        model.bars = 2
+        XCTAssertEqual(publications, 1)
+        subscription.cancel()
+    }
+
+    @MainActor func testStopDuringCloudReadReachesPlayingCore() async throws {
+        let format = AVAudioFormat(standardFormatWithSampleRate: 48000, channels: 2)!
+        let host = AudioEngineHost(drums: PopDrummerModel(), playbackSetup: { engine in
+            try engine.enableManualRenderingMode(.realtime, format: format, maximumFrameCount: 512)
+            return 48000
+        })
+        let route = AudioDevice(id: 0, uid: "offline", name: "Offline", inputs: 0, outputs: 2, rate: 48000)
+        try await host.prepareLoopRecall(output: route)
+        let loop = try SavedLoop(sampleRate: 48000, bpm: 120, bars: 1,
+                                 left: Array(repeating: 0.2, count: 1024), right: Array(repeating: 0.1, count: 1024))
+        try await host.restoreLoop(loop)
+        let core = try XCTUnwrap(host.core)
+        let (started, signalStart) = AsyncStream<Void>.makeStream()
+        let (release, signalRelease) = AsyncStream<Void>.makeStream()
+        let model = LooperModel(loopFiles: LoopFiles(refreshCloudFile: { _ in
+            signalStart.finish()
+            for await _ in release {}
+            throw URLError(.notConnectedToInternet)
+        }), host: host)
+        defer { model.shutdown() }
+        XCTAssertTrue(tl_command(core, Int32(TL_CMD_PLAY_STOP), 0))
+        var l = [Float](repeating: 0, count: 32), r = l
+        tl_process(core, nil, nil, &l, &r, 32)
+        model.state = tl_snapshot(core).state
+        let opening = Task { await model.openLoop(URL(fileURLWithPath: "/offline.jamloop")) }
+        for await _ in started {}
+        XCTAssertTrue(model.fileBusy)
+        XCTAssertTrue(model.acceptsMIDI)
+        model.playStop()
+        tl_process(core, nil, nil, &l, &r, 32)
+        XCTAssertEqual(tl_snapshot(core).state, Int32(TL_STOPPED))
+        signalRelease.finish()
+        await opening.value
+    }
+
     @MainActor func testFailedCloudDownloadRetainsCurrentTake() async throws {
         let model = LooperModel(loopFiles: LoopFiles(refreshCloudFile: { _ in throw URLError(.notConnectedToInternet) }))
         defer { model.shutdown() }

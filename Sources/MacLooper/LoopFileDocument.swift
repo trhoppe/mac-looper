@@ -8,7 +8,7 @@ extension UTType {
 
 struct LoopSaveRequest: Identifiable {
     let id: UUID
-    let data: Data
+    let loop: SavedLoop
     let name: String
     let libraryFolder: URL
 }

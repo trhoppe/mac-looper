@@ -6,8 +6,14 @@ import JamCore
     @Published private(set) var library: JustChordsLibrary? { didSet { updateSongs() } }
     @Published private(set) var songs: [LibrarySong] = []
     @Published var selectedSongID: String?
-    @Published var playlistID: String? { didSet { if playlistID != oldValue { updateSongs() } } }
-    @Published var query = "" { didSet { if query != oldValue { updateSongs() } } }
+    @Published var playlistID: String? {
+        didSet {
+            guard playlistID != oldValue else { return }
+            updateSongs()
+            if let id = selectedSongID, !orderedSongs.contains(where: { $0.id == id }) { selectedSongID = nil }
+        }
+    }
+    @Published var query = "" { didSet { if query != oldValue { filterSongs() } } }
     @Published var sortOrder: SongSortOrder {
         didSet {
             defaults.set(sortOrder.rawValue, forKey: "songSortOrder")
@@ -70,12 +76,28 @@ import JamCore
         restoreBackingBookmarks()
         if loadOnLaunch { Task { await refresh() } }
     }
-    var selectedSong: LibrarySong? { songs.first(where: { $0.id == selectedSongID }) ?? library?.songs.first(where: { $0.id == selectedSongID }) }
+    private var orderedSongs: [LibrarySong] = []
+    var selectedSong: LibrarySong? { orderedSongs.first(where: { $0.id == selectedSongID }) ?? library?.songs.first(where: { $0.id == selectedSongID }) }
     // Rebuild only when browser inputs change, rather than on each selection,
     // layout or status update. All Songs needs no intermediate title sort.
     private func updateSongs() {
         let source = playlistID == nil ? library?.songs : library?.songs(in: playlistID)
-        songs = sortOrder.apply(to: source ?? [], query: query)
+        orderedSongs = sortOrder.apply(to: source ?? [], query: "")
+        filterSongs()
+    }
+    private func filterSongs() {
+        songs = SongSortOrder.filter(orderedSongs, query: query)
+    }
+
+    private var chartCache: (source: String, transpose: Int, flats: Bool, document: ChordProDocument)?
+    func chartDocument(for song: LibrarySong) -> ChordProDocument {
+        let source = song.chordPro, transpose = song.chartTransposition, flats = song.chartKey?.contains("b") == true
+        if let chartCache, chartCache.transpose == transpose, chartCache.flats == flats, chartCache.source == source {
+            return chartCache.document
+        }
+        let document = ChordProDocument(source: source, transpose: transpose, flats: flats)
+        chartCache = (source, transpose, flats, document)
+        return document
     }
 
     var destination: URL { folderURL.appendingPathComponent("library.json") }

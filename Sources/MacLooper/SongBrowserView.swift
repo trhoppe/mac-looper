@@ -10,8 +10,9 @@ struct SongBrowserView: View {
     @FocusState private var searchFocused: Bool
     private var selection: Binding<String?> {
         Binding(get: { library.selectedSongID }, set: { id in
+            guard let id else { return }
             library.selectedSongID = id
-            if id != nil { onSelectSong() }
+            onSelectSong()
         })
     }
     var body: some View {
@@ -86,8 +87,5 @@ struct SongBrowserView: View {
             .background(JamDesign.card)
             #endif
             .onAppear { searching = !library.query.isEmpty }
-            .onChange(of: library.playlistID) { _, _ in
-                if let id = library.selectedSongID, !library.songs.contains(where: { $0.id == id }) { library.selectedSongID = nil }
-            }
     }
 }

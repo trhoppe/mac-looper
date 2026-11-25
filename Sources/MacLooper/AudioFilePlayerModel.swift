@@ -5,14 +5,18 @@ import AppKit
 
 @MainActor final class AudioFilePlayerModel: ObservableObject {
     @Published private(set) var groups: [AudioFolderGroup] = [] {
-        didSet { tracks = groups.flatMap(\.tracks) }
+        didSet { tracks = groups.flatMap(\.tracks); updateSelectedIndex() }
     }
     private(set) var tracks: [AudioTrack] = []
     @Published private(set) var visibleGroups: [AudioFolderGroup] = []
     @Published private(set) var folder: URL?
     @Published private(set) var scanning = false
     @Published private(set) var loading = false
-    @Published private(set) var selected: AudioTrack?
+    @Published private(set) var selected: AudioTrack? { didSet { updateSelectedIndex() } }
+    private var selectedIndex: Int?
+    private func updateSelectedIndex() {
+        selectedIndex = selected.flatMap { track in tracks.firstIndex { $0.id == track.id } }
+    }
     @Published private(set) var duration = 0.0
     @Published private(set) var position = 0.0
     @Published private(set) var playing = false
@@ -186,11 +190,11 @@ import AppKit
     }
     func step(_ offset: Int) {
         let list = tracks
-        guard let selected, let index = list.firstIndex(where: { $0.id == selected.id }), list.indices.contains(index + offset) else { return }
+        guard let index = selectedIndex, list.indices.contains(index + offset) else { return }
         select(list[index + offset])
     }
     func canStep(_ offset: Int) -> Bool {
-        guard let selected, let index = tracks.firstIndex(where: { $0.id == selected.id }) else { return false }
+        guard let index = selectedIndex else { return false }
         return tracks.indices.contains(index + offset)
     }
     private func configure() {
