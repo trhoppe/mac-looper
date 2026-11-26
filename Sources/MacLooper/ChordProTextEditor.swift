@@ -32,11 +32,38 @@ private typealias SourceColor = UIColor
 }
 
 #if os(macOS)
+private final class ChordProClipView: NSClipView {
+    override func constrainBoundsRect(_ proposedBounds: NSRect) -> NSRect {
+        var bounds = super.constrainBoundsRect(proposedBounds)
+        bounds.origin.x = 0
+        return bounds
+    }
+}
+
+private final class ChordProScrollView: NSScrollView {
+    override func tile() {
+        super.tile()
+        guard let view = documentView as? NSTextView, let container = view.textContainer else { return }
+        let width = contentSize.width
+        guard width > 0 else { return }
+        let textWidth = max(1, width - 2 * view.textContainerInset.width)
+        if view.frame.width != width {
+            view.setFrameSize(NSSize(width: width, height: view.frame.height))
+        }
+        if container.containerSize.width != textWidth {
+            container.containerSize = NSSize(width: textWidth, height: CGFloat.greatestFiniteMagnitude)
+        }
+    }
+}
+
 struct ChordProTextEditor: NSViewRepresentable {
     @Binding var text: String
     func makeCoordinator() -> Coordinator { Coordinator(self) }
     func makeNSView(context: Context) -> NSScrollView {
-        let scroll = NSScrollView()
+        let scroll = ChordProScrollView()
+        scroll.contentView = ChordProClipView()
+        scroll.horizontalScrollElasticity = .none
+        scroll.hasHorizontalScroller = false
         scroll.hasVerticalScroller = true; scroll.autohidesScrollers = true
         let view = NSTextView(frame: NSRect(x: 0, y: 0, width: 600, height: 400))
         view.delegate = context.coordinator
@@ -51,8 +78,7 @@ struct ChordProTextEditor: NSViewRepresentable {
         view.backgroundColor = SourceHighlight.background
         view.textContainerInset = NSSize(width: 16, height: 16)
         view.isVerticallyResizable = true; view.isHorizontallyResizable = false
-        view.autoresizingMask = [.width]; view.textContainer?.widthTracksTextView = true
-        view.textContainer?.containerSize = NSSize(width: 600, height: CGFloat.greatestFiniteMagnitude)
+        view.textContainer?.widthTracksTextView = false
         view.minSize = .zero; view.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
         view.setAccessibilityLabel("ChordPro source")
         view.string = text

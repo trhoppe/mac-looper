@@ -10,6 +10,7 @@ struct FilePlaybackSnapshot: Sendable {
 
 // File opening runs on this actor; the shared engine owns playback and mixing.
 actor FilePlayback {
+    static let speedRange = 50.0...100.0
     private let host: AudioEngineHost?
     init(host: AudioEngineHost? = nil) { self.host = host }
     @MainActor private var engine: AudioEngineHost { host ?? .shared }

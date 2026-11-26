@@ -10,17 +10,28 @@ public struct RecoveredSongDraft: Codable, Identifiable, Sendable {
     public let newSong: Bool?
     public let originalPlaylistIDs: Set<String>?
     public let playlistIDs: Set<String>?
+    public let savedLoopName: String?
+    public let backingTrackPath: String?
+    public let backingImport: SongBackingImport?
+    private let hasMediaSnapshot: Bool?
     public let updatedAt: Date
     public var id: String { originalFields["id"]?.text ?? "" }
     public var draft: SongDraft {
         var value = newSong == true ? SongDraft(newSongID: id) : SongDraft(song: LibrarySong(fields: originalFields), playlistIDs: originalPlaylistIDs)
         if let playlistIDs { value.playlistIDs = playlistIDs }
+        if hasMediaSnapshot == true {
+            value.savedLoopName = savedLoopName
+            value.backingTrackPath = backingTrackPath
+            value.backingImport = backingImport
+        }
         value.chordPro = chordPro
         return value
     }
     public init(draft: SongDraft, library: URL, updatedAt: Date = Date()) {
         self.library = Self.identity(library); originalFields = draft.original.fields
         chordPro = draft.chordPro; self.updatedAt = updatedAt
+        hasMediaSnapshot = true
+        savedLoopName = draft.savedLoopName; backingTrackPath = draft.backingTrackPath; backingImport = draft.backingImport
         newSong = draft.isNew; originalPlaylistIDs = draft.originalPlaylistIDs; playlistIDs = draft.playlistIDs
     }
     public static func identity(_ library: URL) -> String { library.standardizedFileURL.resolvingSymlinksInPath().path }

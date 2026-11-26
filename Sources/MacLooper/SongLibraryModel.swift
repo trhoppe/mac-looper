@@ -219,7 +219,14 @@ import JamCore
             if refreshRequested && !editing { Task { await refresh() } }
         }
         do {
-            let next = try await io.save(draft, to: destination)
+            var source: URL?
+            if let pending = draft.backingImport {
+                guard let url = Self.resolve(pending.bookmark), AudioLibrary.isAudio(url) else {
+                    throw SongEditError.validation("Choose the backing track again before saving.")
+                }
+                source = url
+            }
+            let next = try await io.save(draft, to: destination, importingBacking: source)
             guard token == revision else { throw SongEditError.conflict }
             library = next; lastBytes = next.originalData; error = nil
             status = "\(next.songs.count) songs · saved to Mac Jams"
@@ -273,7 +280,13 @@ import JamCore
             } catch { if token == revision { self.error = error.localizedDescription } }
         }
     }
+    func prepareSongBacking(_ url: URL) async throws { try await io.prepareSongBacking(url) }
+
     func backingURL(songID: String) -> URL? {
+        if let path = library?.songs.first(where: { $0.id == songID })?.backingTrackPath {
+            guard path.hasPrefix("Backing Tracks/") else { return nil }
+            return LibraryFiles.songMediaURL(relativePath: path, in: folderURL)
+        }
         if let path = backingLinks[songID], path.hasPrefix(folderURL.path + "/") { return URL(fileURLWithPath: path) }
         if let data = bookmarkStore[songID], let url = Self.resolve(data) { retainAccess(url); return url }
         return backingLinks[songID].map { URL(fileURLWithPath: $0) }

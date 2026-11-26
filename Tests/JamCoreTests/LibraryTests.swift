@@ -97,3 +97,50 @@ extension LibraryTests {
         XCTAssertEqual(links["valid"], own.appendingPathComponent("Backing Tracks/file.wav"))
     }
 }
+
+extension LibraryTests {
+    func testSongMediaImportAndRemovalPreserveTheChart() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let source = root.appendingPathComponent("Practice Track.wav")
+        let destination = root.appendingPathComponent("library.json")
+        try Data([1, 2, 3]).write(to: source)
+        try fixture.write(to: destination)
+        let initial = try JustChordsLibrary(data: fixture)
+        let io = LibraryFiles()
+        var draft = SongDraft(song: initial.songs[0])
+        draft.savedLoopName = "Take.jamloop"
+        let saved = try await io.save(draft, to: destination, importingBacking: source)
+        let song = saved.songs[0]
+        XCTAssertEqual(song.chordPro, initial.songs[0].chordPro)
+        XCTAssertEqual(song.savedLoopName, "Take.jamloop")
+        let path = try XCTUnwrap(song.backingTrackPath)
+        let copy = try XCTUnwrap(LibraryFiles.songMediaURL(relativePath: path, in: root))
+        XCTAssertEqual(copy.lastPathComponent, source.lastPathComponent)
+        XCTAssertEqual(try Data(contentsOf: copy), try Data(contentsOf: source))
+
+        var removal = SongDraft(song: song)
+        removal.savedLoopName = nil
+        removal.backingTrackPath = ""
+        let removed = try await io.save(removal, to: destination)
+        XCTAssertNil(removed.songs[0].savedLoopName)
+        XCTAssertEqual(removed.songs[0].backingTrackPath, "")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: copy.path))
+    }
+
+    func testSongMediaMergesIndependentEditsAndRejectsConflictingLoopChanges() throws {
+        let library = try JustChordsLibrary(data: fixture)
+        var attachment = SongDraft(song: library.songs[0])
+        attachment.savedLoopName = "First.jamloop"
+        let withLoop = try library.applying(attachment)
+        var other = SongDraft(song: library.songs[0])
+        other.backingTrackPath = "Backing Tracks/Another.wav"
+        let combined = try withLoop.applying(other)
+        XCTAssertEqual(combined.songs[0].savedLoopName, "First.jamloop")
+        XCTAssertEqual(combined.songs[0].backingTrackPath, other.backingTrackPath)
+        attachment.savedLoopName = "Second.jamloop"
+        XCTAssertThrowsError(try combined.applying(attachment))
+        XCTAssertNil(LibraryFiles.songLoopURL(named: "../Escape.jamloop", in: URL(fileURLWithPath: "/tmp")))
+    }
+}

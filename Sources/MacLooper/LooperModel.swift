@@ -415,7 +415,10 @@ import JamCore
             await refreshSavedLoops()
         } catch { loopFileFailure = error.localizedDescription }
     }
-    func openLoop(_ url: URL) async {
+    func savedLoopBPM(_ url: URL) async throws -> Double {
+        try await loopFiles.read(url).bpm
+    }
+    func openLoop(_ url: URL, forSong songID: String? = nil) async {
         // Finder/Files may deliver an open event while startup is still
         // connecting capture. Keep that intent instead of silently dropping it.
         if starting {
@@ -430,6 +433,7 @@ import JamCore
             subscription.cancel()
             guard !Task.isCancelled else { return }
         }
+        guard !Task.isCancelled else { return }
         guard canRecall else {
             if busy { loopFileFailure = "Finish recording before opening a saved loop." }
             else if starting { loopFileFailure = "Audio is still connecting. Try opening the loop again in a moment." }
@@ -441,11 +445,13 @@ import JamCore
         defer { if access { url.stopAccessingSecurityScopedResource() }; fileBusy = false }
         do {
             let loop = try await loopFiles.read(url)
+            try Task.checkCancellation()
             guard initialTake == takeID, initialGeneration == generation, revision == loopFolderRevision, !busy, !starting, lifecyclePolicy.mayConnect else { return }
-            let recall = LoopRecall(loop: loop, name: url.deletingPathExtension().lastPathComponent, url: url)
+            let recall = LoopRecall(loop: loop, name: url.deletingPathExtension().lastPathComponent, url: url, songID: songID)
             if hasLoop && !loopIsSaved { pendingRecall = recall }
             else { try await applyRecall(recall) }
-        } catch { loopFileFailure = error.localizedDescription }
+        } catch is CancellationError {
+        } catch { if !Task.isCancelled { loopFileFailure = error.localizedDescription } }
     }
     func confirmRecall() async {
         guard let recall = pendingRecall else { return }

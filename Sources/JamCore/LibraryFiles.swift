@@ -80,36 +80,68 @@ extension LibraryFiles {
 }
 
 public extension LibraryFiles {
+    static func songMediaURL(relativePath: String, in folder: URL) -> URL? {
+        // Work with path components so a provider's /var and /private/var
+        // aliases work even before it downloads a file.
+        let parts = relativePath.split(separator: "/", omittingEmptySubsequences: false)
+        guard !parts.isEmpty, parts.allSatisfy({ !$0.isEmpty && $0 != "." && $0 != ".." && !$0.contains("\0") }) else { return nil }
+        var result = folder
+        for part in parts {
+            result.appendPathComponent(String(part))
+            if (try? result.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink) == true { return nil }
+        }
+        return result
+    }
+
+    static func songLoopURL(named name: String, in folder: URL) -> URL? {
+        guard !name.contains("/"), !name.hasPrefix("."), name.lowercased().hasSuffix(".jamloop") else { return nil }
+        return songMediaURL(relativePath: "Loops/" + name, in: folder)
+    }
+
+    func prepareSongBacking(_ url: URL) async throws {
+        try await refreshCloudFile(url)
+        try Task.checkCancellation()
+    }
+
     func backingTracks(in folder: URL) throws -> [String: URL] {
         let manifest = folder.appendingPathComponent("backing-tracks.json")
         guard FileManager.default.fileExists(atPath: manifest.path) else { return [:] }
         let values = try JSONDecoder().decode([String: String].self, from: Data(contentsOf: manifest))
-        return values.reduce(into: [:]) { result, item in
-            // Validate relative components without canonicalizing the sandbox root.
-            // iPadOS can spell the same container /var or /private/var; comparing
-            // standardized string prefixes can reject valid, not-yet-downloaded files.
-            let parts = item.value.split(separator: "/", omittingEmptySubsequences: false)
-            guard !parts.isEmpty, parts.allSatisfy({ !$0.isEmpty && $0 != "." && $0 != ".." }) else { return }
-            var url = folder
-            for part in parts {
-                url.appendPathComponent(String(part))
-                if (try? url.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink) == true { return }
-            }
-            result[item.key] = url
+        return values.compactMapValues { Self.songMediaURL(relativePath: $0, in: folder) }
+    }
+
+    internal func copySongBacking(_ source: URL, into folder: URL) throws -> (url: URL, path: String) {
+        let relative = "Backing Tracks/\(UUID().uuidString)/\(source.lastPathComponent)"
+        let destination = try copyBacking(source, relativePath: relative, into: folder)
+        return (destination, relative)
+    }
+
+    private func copyBacking(_ source: URL, relativePath: String, into folder: URL) throws -> URL {
+        guard source.isFileURL, let destination = Self.songMediaURL(relativePath: relativePath, in: folder) else {
+            throw LibraryError.invalidFormat
         }
+        let access = source.startAccessingSecurityScopedResource()
+        defer { if access { source.stopAccessingSecurityScopedResource() } }
+        let parent = destination.deletingLastPathComponent()
+        try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
+        var coordinationError: NSError?, copyError: Error?
+        NSFileCoordinator().coordinate(readingItemAt: source, options: [], writingItemAt: destination, options: [], error: &coordinationError) { read, write in
+            do {
+                let values = try read.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
+                guard values.isRegularFile == true, values.isSymbolicLink != true else { throw LibraryError.invalidFormat }
+                try FileManager.default.copyItem(at: read, to: write)
+            } catch { copyError = error }
+        }
+        if let error = coordinationError ?? copyError { throw error }
+        return destination
     }
 
     func attachBacking(_ source: URL, songID: String, in folder: URL) throws -> URL {
         let safeID = String(songID.filter { $0.isLetter || $0.isNumber || $0 == "-" }.prefix(80))
         guard !safeID.isEmpty else { throw LibraryError.invalidFormat }
         let relative = "Backing Tracks/\(safeID)/\(UUID().uuidString.prefix(8))-\(source.lastPathComponent)"
-        let destination = folder.appendingPathComponent(relative)
-        try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
-        var error: NSError?, copyError: Error?
-        NSFileCoordinator().coordinate(readingItemAt: source, options: [], writingItemAt: destination, options: [], error: &error) { read, write in
-            do { try FileManager.default.copyItem(at: read, to: write) } catch { copyError = error }
-        }
-        if let error { throw error }; if let copyError { throw copyError }
+        let destination = try copyBacking(source, relativePath: relative, into: folder)
+        var error: NSError?
         let manifest = folder.appendingPathComponent("backing-tracks.json")
         var writeError: Error?
         NSFileCoordinator().coordinate(writingItemAt: manifest, options: .forReplacing, error: &error) { url in

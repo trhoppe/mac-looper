@@ -45,6 +45,9 @@ public struct LibrarySong: Identifiable, Equatable, Sendable {
         return isChordProNative ? "" : fields["artist"]?.text ?? ""
     }
     public var chordPro: String { fields["rawData"]?.text ?? "" }
+    public var savedLoopName: String? { fields["macJamsSavedLoop"]?.text }
+    // An explicit empty value clears a track even if an older manifest links it.
+    public var backingTrackPath: String? { fields["macJamsBackingTrack"]?.text }
     public var tags: [String] { fields["tags"]?.array.compactMap(\.text) ?? [] }
     public var tempo: Double? { metadata("tempo", legacy: "tempo").flatMap(Double.init) }
     public var duration: String? { metadata("duration", legacy: "duration") }

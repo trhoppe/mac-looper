@@ -26,6 +26,18 @@ public extension JustChordsLibrary {
                 guard latest == baseVoicings[chord] || latest == edited else { throw SongEditError.conflict }
                 mergedDraft.chordVoicings[chord] = edited
             }
+            if draft.savedLoopName != draft.original.savedLoopName {
+                guard current.savedLoopName == draft.original.savedLoopName || current.savedLoopName == draft.savedLoopName else {
+                    throw SongEditError.conflict
+                }
+                mergedDraft.savedLoopName = draft.savedLoopName
+            }
+            if draft.backingTrackPath != draft.original.backingTrackPath {
+                guard current.backingTrackPath == draft.original.backingTrackPath || current.backingTrackPath == draft.backingTrackPath else {
+                    throw SongEditError.conflict
+                }
+                mergedDraft.backingTrackPath = draft.backingTrackPath
+            }
             let edits = try mergedDraft.changes()
             if !edits.isEmpty {
                 try Self.patch(edits, into: &entries[index])
@@ -90,8 +102,18 @@ public extension LibraryFiles {
     }
     /// Coordinate one read-modify-write against iCloud. Other songs/fields changed
     /// since the editor opened are merged; edited-field conflicts keep the draft.
-    func save(_ draft: SongDraft, to destination: URL) throws -> JustChordsLibrary {
+    func save(_ draft: SongDraft, to destination: URL, importingBacking source: URL? = nil) throws -> JustChordsLibrary {
         guard !Self.isProtectedLibrary(destination) else { throw SongEditError.protectedLibrary }
+        var draft = draft
+        var stagedTrack: URL?
+        if let source {
+            let copy = try copySongBacking(source, into: destination.deletingLastPathComponent())
+            draft.backingTrackPath = copy.path
+            draft.backingImport = nil
+            stagedTrack = copy.url
+        } else if draft.backingImport != nil {
+            throw SongEditError.validation("Choose the backing track again before saving.")
+        }
         var coordinationError: NSError?, operationError: Error?, result: JustChordsLibrary?
         NSFileCoordinator().coordinate(writingItemAt: destination, options: .forReplacing, error: &coordinationError) { file in
             do {
@@ -110,6 +132,9 @@ public extension LibraryFiles {
                 result = updated
             } catch { operationError = error }
         }
+        // A successful library write owns the copy. A failed edit can be retried
+        // using the original bookmark without leaving abandoned copies.
+        if result == nil, let stagedTrack { try? FileManager.default.removeItem(at: stagedTrack.deletingLastPathComponent()) }
         if let coordinationError { throw coordinationError }
         if let operationError { throw operationError }
         guard let result else { throw LibraryError.invalidFormat }

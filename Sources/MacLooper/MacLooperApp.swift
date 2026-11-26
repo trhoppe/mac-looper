@@ -1,6 +1,9 @@
 import SwiftUI
 import Combine
 import LooperCore
+#if DEBUG && targetEnvironment(simulator)
+import AVFoundation
+#endif
 #if os(macOS)
 import AppKit
 import UniformTypeIdentifiers
@@ -277,6 +280,21 @@ enum LaunchOptions {
         do {
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
             try Data(json.utf8).write(to: folder.appendingPathComponent("library.json"))
+            if LaunchOptions.has("--phone-test-jam-media") {
+                let loops = LoopFiles.folder(in: folder)
+                let tracks = folder.appendingPathComponent("Backing Tracks/01234567-890A-4BCD-8EF0-123456789ABC", isDirectory: true)
+                try FileManager.default.createDirectory(at: loops, withIntermediateDirectories: true)
+                try FileManager.default.createDirectory(at: tracks, withIntermediateDirectories: true)
+                let silence = [Float](repeating: 0, count: 4096)
+                let loop = try SavedLoop(sampleRate: 48_000, bpm: 96, bars: 1, left: silence, right: silence)
+                try loop.encoded().write(to: loops.appendingPathComponent("Practice Take.jamloop"))
+                let format = AVAudioFormat(standardFormatWithSampleRate: 48_000, channels: 2)!
+                let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 4096)!
+                buffer.frameLength = 4096
+                for channel in 0..<2 { buffer.floatChannelData![channel].initialize(repeating: 0, count: 4096) }
+                let file = try AVAudioFile(forWriting: tracks.appendingPathComponent("Example Track.caf"), settings: format.settings)
+                try file.write(from: buffer)
+            }
             return folder.path
         } catch {
             return nil

@@ -44,6 +44,9 @@ import AppKit
     @Published var error: String?
     @Published private(set) var scanNotice: String?
     @Published var volume = 1.0 { didSet { configure() } }
+    @Published var speedPercent = 100.0 {
+        didSet { host.setFileSpeed(session: session, percent: speedPercent) }
+    }
     @Published var repeatTrack = false { didSet { configure() } }
     private var output: AudioDevice?
     private let host: AudioEngineHost
@@ -114,16 +117,25 @@ import AppKit
             if scanGeneration == generation { scanning = false; worker = nil }
         }
     }
-    func selectFile(_ url: URL, autoplay: Bool = false) {
+    func selectSongBacking(_ url: URL) {
+        if selected?.url.standardizedFileURL == url.standardizedFileURL { stop() }
+        selectFile(url, directoryLabel: "Backing Tracks")
+    }
+    func selectFile(_ url: URL, autoplay: Bool = false, directoryLabel: String? = nil) {
         guard url.isFileURL, AudioLibrary.isAudio(url) else {
             error = "Choose an audio file such as an MP3."
             return
         }
-        let track = tracks.first { $0.url.standardizedFileURL == url.standardizedFileURL }
-        select(AudioTrack(url: url, directory: track?.directory ?? url.deletingLastPathComponent().lastPathComponent), autoplay: autoplay)
+        let directory = directoryLabel ??
+            tracks.first { $0.url.standardizedFileURL == url.standardizedFileURL }?.directory ??
+            url.deletingLastPathComponent().lastPathComponent
+        select(AudioTrack(url: url, directory: directory), autoplay: autoplay)
     }
     func select(_ track: AudioTrack, autoplay: Bool = false) {
-        guard autoplay || selected?.id != track.id else { return }
+        guard autoplay || selected?.id != track.id || (!loading && !hasDuration) else {
+            if selected != track { selected = track }
+            return
+        }
         pauseForInterruption()
         let autoplayRequest = playRequest
         loadTask?.cancel()
@@ -136,6 +148,7 @@ import AppKit
             do {
                 let result = try await playback.load(track.url, session: token, volume: Float(volume), repeating: repeatTrack)
                 guard session == token, !Task.isCancelled else { return }
+                host.setFileSpeed(session: token, percent: speedPercent)
                 duration = result.duration; loading = false
                 if autoplay, playRequest == autoplayRequest { startPlayback() }
             } catch {

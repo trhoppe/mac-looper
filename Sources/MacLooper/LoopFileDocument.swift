@@ -18,4 +18,5 @@ struct LoopRecall: Identifiable {
     let loop: SavedLoop
     let name: String
     var url: URL? = nil
+    var songID: String? = nil
 }

@@ -26,6 +26,7 @@ import UIKit
     private var drumGain: MLDrumGainAudioUnit?
     private(set) var engine: AVAudioEngine?
     private var player: AVAudioPlayerNode?
+    private var backingTimePitch: AVAudioUnitTimePitch?
     private var loopNode: AVAudioUnit?
     private(set) var loopUnit: MLGuitarLoopAudioUnit?
     private(set) var captureEnabled = false
@@ -51,6 +52,7 @@ import UIKit
         var playing = false
         var repeating = false
         var volume: Float = 1.0
+        var rate: Float = 1.0
         var segmentStart: AVAudioFramePosition = 0
         var generation = UUID()
         var scheduled = false
@@ -200,6 +202,7 @@ import UIKit
         engine?.stop(); player?.stop()
         if let engine { removeDrummer(from: engine) }
         suspended = false
+        backingTimePitch = nil
         loopUnit = nil; loopNode = nil; player = nil; engine = nil; captureEnabled = false; backing.scheduled = false
         #if os(macOS)
         if let aggregate { AudioHardwareDestroyAggregateDevice(aggregate) }
@@ -278,9 +281,14 @@ import UIKit
             #endif
             let stereo = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 2)!
             trace("attach backing")
+            let timePitch = AVAudioUnitTimePitch()
             e.attach(p)
+            e.attach(timePitch)
+            backingTimePitch = timePitch
+            updateBackingRate()
             let backingFormat = AVAudioFormat(standardFormatWithSampleRate: 48000, channels: 2)!
-            try MLAudioGraphTools.connect(e, source: p, sourceBus: 0, destination: e.mainMixerNode, destinationBus: 1, format: backingFormat)
+            try MLAudioGraphTools.connect(e, source: p, sourceBus: 0, destination: timePitch, destinationBus: 0, format: backingFormat)
+            try MLAudioGraphTools.connect(e, source: timePitch, sourceBus: 0, destination: e.mainMixerNode, destinationBus: 1, format: backingFormat)
             if capture {
                 trace("instantiate loop")
                 let node = try await Self.makeLoopUnit()
@@ -419,7 +427,9 @@ import UIKit
         guard let unit = loopUnit else { throw LoopFileError.transfer }
         let transfer = LoopAudioTransfer(unit: unit)
         try await Task.detached(priority: .userInitiated) { try transfer.load(loop) }.value
-        try checkLifecycle(token)
+        // Once samples are committed, let the caller publish their metadata
+        // even if a newer song request canceled the previous task.
+        guard token == lifecycle else { throw CancellationError() }
     }
     func attachPreparedDrummer(to engine: AVAudioEngine) async throws {
         guard let node = drums.node, node.engine !== engine else { return }
@@ -524,6 +534,18 @@ import UIKit
             if backing.scheduled { schedule(from: backing.position, play: backing.playing) }
         }
     }
+    func setFileSpeed(session: UUID, percent: Double) {
+        guard backing.session == session, percent.isFinite else { return }
+        let bounds = FilePlayback.speedRange
+        let rate = Float(min(bounds.upperBound, max(bounds.lowerBound, percent)) / 100)
+        guard rate != backing.rate else { return }
+        backing.rate = rate
+        updateBackingRate()
+    }
+    private func updateBackingRate() {
+        backingTimePitch?.rate = backing.rate
+        backingTimePitch?.bypass = backing.rate == 1
+    }
     func fileOutputAvailable(_ device: AudioDevice) -> Bool {
         playbackSetup != nil || AudioDevices.alive(device.id)
     }
@@ -542,6 +564,7 @@ import UIKit
         guard backing.playing, let player, let time = player.lastRenderTime,
               time.isSampleTimeValid || time.isHostTimeValid,
               let played = player.playerTime(forNodeTime: time) else { return backing.position }
+        // The player is upstream of the time effect and reports source frames.
         let seconds = Double(backing.segmentStart + played.sampleTime) / file.file.processingFormat.sampleRate
         return backing.repeating && file.duration > 0 ? seconds.truncatingRemainder(dividingBy: file.duration) : min(file.duration, max(0, seconds))
     }

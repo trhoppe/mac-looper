@@ -14,6 +14,8 @@ final class SongEditorRecoveryTests: XCTestCase {
         let editor = SongEditorModel(draft: SongDraft(song: song), library: library)
         await editor.restore()
         editor.draft.title = "Unsaved name"
+        editor.draft.savedLoopName = "Practice.jamloop"
+        editor.draft.backingImport = SongBackingImport(bookmark: Data([1]), name: "Track.wav")
         editor.draft.chordPro += "\n[G]New line"
         try await editor.keepForLater()
         XCTAssertEqual(library.recoveredDrafts.count, 1)
@@ -40,6 +42,35 @@ final class SongEditorRecoveryTests: XCTestCase {
         XCTAssertNotNil(editor.recoveryError)
         XCTAssertEqual(editor.draft.title, "Still in editor")
     }
+    @MainActor func testSongSaveResolvesBackingBookmarkAndHonorsLegacyRemoval() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let source = root.appendingPathComponent("Example.wav")
+        try Data([1, 2, 3]).write(to: source)
+        let legacy = root.appendingPathComponent("Legacy.wav")
+        try Data([4]).write(to: legacy)
+        let json = #"{"songs":[{"id":"a","rawData":"{title: Song}","macJamsChordProVersion":1}],"playlists":[]}"#
+        try Data(json.utf8).write(to: root.appendingPathComponent("library.json"))
+        let library = SongLibraryModel(defaults: UserDefaults(suiteName: UUID().uuidString)!, loadOnLaunch: false,
+            folderOverride: root, readTracks: { _ in ["a": legacy] })
+        defer { library.shutdown() }
+        await library.refresh()
+        XCTAssertEqual(library.backingURL(songID: "a"), legacy)
+
+        var removal = SongDraft(song: try XCTUnwrap(library.songs.first))
+        removal.backingTrackPath = ""
+        try await library.save(removal)
+        XCTAssertNil(library.backingURL(songID: "a"))
+
+        var attachment = SongDraft(song: try XCTUnwrap(library.songs.first))
+        attachment.backingImport = SongBackingImport(bookmark: try XCTUnwrap(SongLibraryModel.bookmark(source)), name: source.lastPathComponent)
+        try await library.save(attachment)
+        let copied = try XCTUnwrap(library.backingURL(songID: "a"))
+        XCTAssertEqual(copied.lastPathComponent, source.lastPathComponent)
+        XCTAssertEqual(try Data(contentsOf: copied), try Data(contentsOf: source))
+    }
+
     @MainActor func testNewSongSaveSelectsCreatedSongAndRecoversItsPlaylists() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)

@@ -5,6 +5,7 @@ import JamDesignKit
 struct SavedLoopBrowser: View {
     @ObservedObject var model: LooperModel
     let close: () -> Void
+    var onChoose: ((SavedLoopFile) -> Void)? = nil
     @State private var query = ""
     @Environment(\.scenePhase) private var phase
 
@@ -45,7 +46,9 @@ struct SavedLoopBrowser: View {
                     }
                     ForEach(files) { file in
                         Button {
-                            close(); Task { await model.openLoop(file.url) }
+                            if let onChoose { onChoose(file) }
+                            else { Task { await model.openLoop(file.url) } }
+                            close()
                         } label: {
                             HStack(spacing: 10) {
                                 Image(systemName: "waveform").foregroundStyle(JamDesign.secondary)
@@ -55,18 +58,20 @@ struct SavedLoopBrowser: View {
                             }.font(.system(size: 14)).foregroundStyle(JamDesign.text)
                                 .frame(maxWidth: .infinity, alignment: .leading).padding(10)
                                 .browserRowHighlight(selected: file.url.standardizedFileURL == model.savedLoopURL?.standardizedFileURL, background: .clear)
-                        }.buttonStyle(JamPlainButtonStyle()).disabled(!model.canRecall)
+                        }.buttonStyle(JamPlainButtonStyle()).disabled(onChoose == nil && !model.canRecall)
                     }
                 }.padding(8)
             }
-            Divider()
-            Button {
-                close(); model.requestingLoopFile = true
-            } label: {
-                Label("Open a loop file…", systemImage: "folder")
-                    .font(.system(size: 13)).frame(maxWidth: .infinity, alignment: .leading).padding(14)
-            }.buttonStyle(JamPlainButtonStyle()).disabled(!model.canRecall)
-                .help("Open a loop saved elsewhere; Save copies it into the shared Loops folder")
+            if onChoose == nil {
+                Divider()
+                Button {
+                    close(); model.requestingLoopFile = true
+                } label: {
+                    Label("Open a loop file…", systemImage: "folder")
+                        .font(.system(size: 13)).frame(maxWidth: .infinity, alignment: .leading).padding(14)
+                }.buttonStyle(JamPlainButtonStyle()).disabled(!model.canRecall)
+                    .help("Open a loop saved elsewhere; Save copies it into the shared Loops folder")
+            }
         }.background(JamDesign.card)
             .task(id: model.loopLibraryFolder) { await model.refreshSavedLoops() }
             .onChange(of: phase) { _, value in if value == .active { Task { await model.refreshSavedLoops() } } }

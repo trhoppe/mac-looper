@@ -62,6 +62,7 @@ struct AudioFileRail: View {
                 audioOpenButton("Open audio file…", icon: "doc.badge.plus") { model.requestingFile = true }
                 folderButton
                 Spacer(minLength: 0)
+                PlayerSpeedControl(speed: $model.speedPercent)
                 VolumeControl(volume: $model.volume, name: "File player")
             }.padding(.horizontal, 16).padding(.top, 16).padding(.bottom, 18)
             player.padding(.horizontal, 16).padding(.bottom, 16)

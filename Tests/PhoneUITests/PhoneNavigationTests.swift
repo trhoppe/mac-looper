@@ -101,6 +101,68 @@ final class PhoneNavigationTests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Settings"].waitForNonExistence(timeout: 5))
     }
 
+    @MainActor func testSelectingSongLoadsLinkedJamMediaWithoutPlaying() throws {
+        try XCTSkipUnless(UIDevice.current.userInterfaceIdiom == .phone)
+        continueAfterFailure = false
+        XCUIDevice.shared.orientation = .portrait
+        let app = XCUIApplication()
+        app.launchArguments = ["--phone-test-jam-media", "--phone-test-library",
+            #"{"songs":[{"id":"linked","rawData":"{title: Linked Song}\n{tempo: 110}\n[C]Play","macJamsBackingTrack":"Backing Tracks/01234567-890A-4BCD-8EF0-123456789ABC/Example Track.caf"}],"playlists":[]}"#]
+        app.launch()
+        let song = app.staticTexts["Linked Song"]
+        XCTAssertTrue(song.waitForExistence(timeout: 10))
+        song.tap()
+        app.buttons["Edit song"].tap()
+        app.buttons["Song details"].tap()
+        let loop = app.buttons["Saved Loop"]
+        if !loop.isHittable { app.swipeUp() }
+        XCTAssertTrue(loop.waitForExistence(timeout: 5))
+        loop.tap()
+        let take = app.buttons["Practice Take"]
+        XCTAssertTrue(take.waitForExistence(timeout: 5))
+        take.tap()
+        let tempo = app.buttons["Use Loop BPM"]
+        XCTAssertTrue(tempo.waitForExistence(timeout: 5))
+        tempo.tap()
+        XCTAssertEqual(app.textFields["BPM"].value as? String, "96.0")
+        app.buttons["Done"].tap()
+        app.buttons["Save"].tap()
+        XCTAssertTrue(app.buttons["Edit song"].waitForExistence(timeout: 5))
+        app.tabBars.buttons["Songs"].tap()
+        song.tap()
+        app.tabBars.buttons["Jam"].tap()
+        XCTAssertTrue(app.staticTexts["Example Track"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Backing Tracks"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Play file"].isEnabled)
+        XCTAssertFalse(app.buttons["Pause file"].exists)
+        XCTAssertTrue(app.buttons["Play loop"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["Play loop"].isEnabled)
+        XCTAssertFalse(app.buttons["Stop loop"].exists)
+        XCTAssertEqual(app.textFields["Global tempo"].value as? String, "96")
+    }
+
+    @MainActor func testPlayerSpeedDropdown() throws {
+        try XCTSkipUnless(UIDevice.current.userInterfaceIdiom == .phone)
+        continueAfterFailure = false
+        XCUIDevice.shared.orientation = .portrait
+        let app = XCUIApplication()
+        app.launch()
+        app.tabBars.buttons["Jam"].tap()
+
+        let speed = app.buttons["Playback speed"]
+        XCTAssertTrue(speed.isHittable)
+        XCTAssertEqual(speed.value as? String, "100 percent")
+        let field = app.textFields["Playback speed percentage"]
+        XCTAssertFalse(field.exists)
+        speed.tap()
+        XCTAssertTrue(app.sliders["Playback speed slider"].waitForExistence(timeout: 5))
+        XCTAssertTrue(field.isHittable)
+        field.tap()
+        field.typeText("75")
+        app.buttons["Done"].tap()
+        XCTAssertEqual(field.value as? String, "75")
+    }
+
     @MainActor func testPhoneWorkspacesInPortraitAndLandscape() throws {
         try XCTSkipUnless(UIDevice.current.userInterfaceIdiom == .phone)
         continueAfterFailure = false

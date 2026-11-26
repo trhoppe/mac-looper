@@ -19,7 +19,11 @@ import JamCore
                 var restored = saved.draft
                 if !restored.isNew, restored.originalPlaylistIDs == nil, let current = library.library {
                     var upgraded = SongDraft(song: restored.original, playlistIDs: current.playlistIDs(containing: restored.id))
-                    upgraded.chordPro = restored.chordPro; restored = upgraded
+                    upgraded.chordPro = restored.chordPro
+                    upgraded.savedLoopName = restored.savedLoopName
+                    upgraded.backingTrackPath = restored.backingTrackPath
+                    upgraded.backingImport = restored.backingImport
+                    restored = upgraded
                 }
                 draft = restored; restoring = false; recovered = true
             }

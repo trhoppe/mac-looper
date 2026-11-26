@@ -29,6 +29,8 @@ struct ContentView: View, Equatable {
     @State private var loopFailure: String?
     @State private var importKind = ImportKind.libraryFolder
     @State private var editingDraft: SongDraft?
+    @State private var songSetupTask: Task<Void, Never>?
+    @State private var loadingSongSetupID: String?
     #if os(iOS)
     private enum PhoneTab { case songs, chart, jam, tools }
     @State private var phoneTab = PhoneTab.songs
@@ -96,7 +98,7 @@ struct ContentView: View, Equatable {
                         .frame(width: geo.size.width, height: geo.size.height)
                         .allowsHitTesting(true).accessibilityHidden(false)
                 } else if let draft = editingDraft {
-                    SongEditorView(draft: draft, library: library, close: endEditing) { draft in try await library.save(draft) }
+                    SongEditorView(draft: draft, library: library, looper: model, close: endEditing) { draft in try await library.save(draft) }
                         .frame(width: geo.size.width, height: geo.size.height)
                         .accessibilityAddTraits(.isModal)
                         .allowsHitTesting(true).accessibilityHidden(false)
@@ -150,7 +152,9 @@ struct ContentView: View, Equatable {
         .onReceive(model.$saveRequest.compactMap { $0 }.receive(on: RunLoop.main)) { request in
             model.saveRequest = nil; loopSaveName = request.name; namingLoop = request
         }
-        .onReceive(model.$pendingRecall.compactMap { $0 }.receive(on: RunLoop.main)) { _ in confirmingLoopRecall = true }
+        .onReceive(model.$pendingRecall.receive(on: RunLoop.main)) { recall in
+            confirmingLoopRecall = recall != nil
+        }
         .onReceive(model.$loopFileFailure.compactMap { $0 }.receive(on: RunLoop.main)) { failure in model.loopFileFailure = nil; loopFailure = failure }
         .onAppear { files.setOutput(model.output); drumOutput = model.output }
         .onReceive(library.$folderURL.removeDuplicates().receive(on: RunLoop.main)) { model.configureLoopLibrary($0) }
@@ -162,6 +166,7 @@ struct ContentView: View, Equatable {
         .onReceive(files.$requestingFile.filter { $0 }.receive(on: RunLoop.main)) { _ in files.requestingFile = false; beginImport(.audioFile) }
         .onChange(of: library.selectedSongID) { _, _ in
             if library.selectedSong != nil { revealChords() }
+            loadSelectedSongSetup()
         }
         .onChange(of: library.selectedSong?.tempo) { _, tempo in
             if let tempo, tempo.isFinite, model.canEditTiming { model.bpm = min(240, max(30, tempo)) }
@@ -201,7 +206,7 @@ struct ContentView: View, Equatable {
                             .accessibilityValue(showingSongs ? "Shown" : "Hidden")
                             .anchorPreference(key: JamDropdownPopupKey.self, value: .bounds) { anchor in
                                 showingSongs ? JamDropdownRequest(anchor: anchor, title: "Songs",
-                                    content: AnyView(SongBrowserView(library: library, onSelectSong: revealChords, onAddSong: beginAdding)),
+                                    content: AnyView(SongBrowserView(library: library, onSelectSong: chooseSong, onAddSong: beginAdding)),
                                     close: { showingSongs = false }, width: 310, alignLeading: true) : nil
                             }
                         panelButton("Chart", icon: "text.alignleft", visible: showingChords, compact: compactHeader) { showingChords.toggle() }
@@ -248,7 +253,7 @@ struct ContentView: View, Equatable {
     private var phoneWorkspace: some View {
         TabView(selection: $phoneTab) {
             VStack(spacing: 0) {
-                SongBrowserView(library: library, onSelectSong: revealChords, onAddSong: beginAdding)
+                SongBrowserView(library: library, onSelectSong: chooseSong, onAddSong: beginAdding)
                 if library.library == nil && !library.syncing {
                     Button("Choose library folder…") { beginImport(.libraryFolder) }.padding(12)
                 }
@@ -407,6 +412,41 @@ struct ContentView: View, Equatable {
         guard library.library != nil && !library.editing && !library.saving else { return }
         showingSongs = false; library.editing = true
         editingDraft = SongDraft(playlistIDs: library.playlistID.map { Set([$0]) } ?? [])
+    }
+    private func chooseSong() {
+        revealChords()
+        loadSelectedSongSetup()
+    }
+    private func loadSelectedSongSetup() {
+        let song = library.selectedSong
+        let songID = song?.id
+        guard songSetupTask == nil || loadingSongSetupID != songID else { return }
+        if let pending = model.pendingRecall?.songID, pending != songID {
+            model.pendingRecall = nil
+        }
+        let previous = songSetupTask
+        previous?.cancel()
+        loadingSongSetupID = songID
+        let loop = song?.savedLoopName.flatMap { LibraryFiles.songLoopURL(named: $0, in: library.folderURL) }
+        let backing = songID.flatMap { library.backingURL(songID: $0) }
+        guard previous != nil || loop != nil || backing != nil else { return }
+        songSetupTask = Task {
+            await previous?.value
+            guard !Task.isCancelled else { return }
+            async let track: Void = loadSongBacking(backing)
+            if let loop { await model.openLoop(loop, forSong: songID) }
+            await track
+            if !Task.isCancelled { songSetupTask = nil }
+        }
+    }
+    private func loadSongBacking(_ url: URL?) async {
+        guard let url else { return }
+        do {
+            try await library.prepareSongBacking(url)
+            try Task.checkCancellation()
+            files.selectSongBacking(url)
+        } catch is CancellationError {
+        } catch { if !Task.isCancelled { files.error = "Couldn’t load the song’s backing track: " + error.localizedDescription } }
     }
     private func revealChords() {
         #if os(iOS)

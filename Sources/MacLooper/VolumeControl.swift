@@ -43,16 +43,56 @@ struct VolumeControl: View {
     }
 }
 
+struct PlayerSpeedControl: View {
+    @Binding var speed: Double
+    @State private var showingSlider = false
+
+    var body: some View {
+        Button { showingSlider.toggle() } label: {
+            Image(systemName: "speedometer")
+                .foregroundStyle(speed == 100 ? JamDesign.secondary : JamDesign.accent)
+                .frame(width: 28, height: 28)
+        }
+        .buttonStyle(JamPlainButtonStyle())
+        .help("Adjust playback speed")
+        .accessibilityLabel("Playback speed")
+        .accessibilityValue("\(Int(speed)) percent")
+        #if os(macOS)
+        .anchorPreference(key: VolumePopupKey.self, value: .bounds) { anchor in
+            showingSlider ? VolumePopupRequest(anchor: anchor, content: AnyView(slider), close: { showingSlider = false }) : nil
+        }
+        #else
+        .popover(isPresented: $showingSlider, arrowEdge: .top) {
+            slider.presentationCompactAdaptation(.popover)
+        }
+        #endif
+    }
+
+    private var slider: some View {
+        HStack(spacing: 8) {
+            Slider(value: $speed, in: FilePlayback.speedRange, step: 1).hoverHighlight()
+                .accessibilityLabel("Playback speed slider")
+            VolumeNumberField(value: $speed, label: "Playback speed percentage", range: FilePlayback.speedRange)
+                .jamNumberField(width: 36, fontSize: 12, horizontalPadding: 4)
+            Text("%").font(.caption).foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 16).padding(.vertical, 12).frame(width: 236)
+        .background(JamDesign.card)
+    }
+}
+
 // Keep partial input local. Typing replaces the selected percentage rather than
 // having a formatter rewrite the number or caret after every keystroke.
 struct VolumeNumberField {
     @Binding var value: Double
     let label: String
+    var range = 0.0...100.0
     func accept(_ text: String, finishing: Bool) -> Double? {
         guard let number = Double(text), number.isFinite else { return nil }
-        guard finishing || (0...100).contains(number) else { return nil }
-        return min(100, max(0, number.rounded()))
+        guard finishing || range.contains(number) else { return nil }
+        return clamp(number.rounded())
     }
+    func clamp(_ number: Double) -> Double { min(range.upperBound, max(range.lowerBound, number)) }
     var text: String { String(Int(value.rounded())) }
 }
 
@@ -98,7 +138,7 @@ extension VolumeNumberField: NSViewRepresentable {
             guard let field = control as? NSTextField else { return false }
             if selector == #selector(NSResponder.moveUp(_:)) || selector == #selector(NSResponder.moveDown(_:)) {
                 let delta = selector == #selector(NSResponder.moveUp(_:)) ? 1.0 : -1.0
-                parent.value = min(100, max(0, (parent.accept(field.stringValue, finishing: true) ?? parent.value) + delta))
+                parent.value = parent.clamp((parent.accept(field.stringValue, finishing: true) ?? parent.value) + delta)
                 field.stringValue = parent.text; textView.selectAll(nil)
                 return true
             }
@@ -139,7 +179,7 @@ struct WindowVolumePopup: View {
                 Color.black.opacity(0.001).contentShape(Rectangle()).onTapGesture(perform: request.close)
                 JamPopupSurface(edge: .top, pointer: trigger.midX - x) { request.content }
                     .fixedSize().offset(x: x, y: y)
-                Button("Close volume slider", action: request.close).keyboardShortcut(.cancelAction)
+                Button("Close popup", action: request.close).keyboardShortcut(.cancelAction)
                     .frame(width: 0, height: 0).opacity(0).accessibilityHidden(true)
             }
         }
@@ -198,7 +238,7 @@ extension VolumeNumberField: UIViewRepresentable {
         func textFieldShouldReturn(_ field: UITextField) -> Bool { field.resignFirstResponder(); return true }
         @objc func done() { field?.resignFirstResponder() }
         func step(_ field: UITextField, delta: Double) {
-            parent.value = min(100, max(0, (parent.accept(field.text ?? "", finishing: true) ?? parent.value) + delta))
+            parent.value = parent.clamp((parent.accept(field.text ?? "", finishing: true) ?? parent.value) + delta)
             field.text = parent.text; field.selectAll(nil)
         }
         private func finish(_ field: UITextField) {

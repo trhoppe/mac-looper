@@ -56,6 +56,51 @@ final class FilePlaybackTests: XCTestCase {
         XCTAssertEqual(model.selected?.url, audio)
         XCTAssertFalse(model.playing)
     }
+    @MainActor func testSlowPlaybackPreservesPitchAndUsesSourceTime() async throws {
+        let sampleRate = 48_000.0
+        let frequency = 440.0
+        let format = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 2)!
+        let toneURL = folder.appendingPathComponent("Tone.caf")
+        let tone = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 96_000)!
+        tone.frameLength = tone.frameCapacity
+        for channel in 0..<2 {
+            for frame in 0..<Int(tone.frameLength) {
+                tone.floatChannelData![channel][frame] = Float(0.3 * sin(2 * .pi * frequency * Double(frame) / sampleRate))
+            }
+        }
+        try AVAudioFile(forWriting: toneURL, settings: format.settings).write(from: tone)
+
+        let host = AudioEngineHost(playbackSetup: { engine in
+            try engine.enableManualRenderingMode(.offline, format: format, maximumFrameCount: 512)
+            return sampleRate
+        })
+        defer { host.shutdown() }
+        let session = UUID()
+        let route = AudioDevice(id: 0, uid: "offline", name: "Offline", inputs: 0, outputs: 2, rate: sampleRate)
+        host.loadFile(try PlaybackAsset(toneURL), session: session, volume: 1, repeating: false)
+        try await host.playFile(session: session, output: route)
+        let engine = try XCTUnwrap(host.engine)
+        host.setFileSpeed(session: session, percent: 50)
+        XCTAssertTrue(host.fileSnapshot(session: session)?.playing == true)
+
+        let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 512)!
+        for _ in 0..<32 { XCTAssertEqual(try engine.renderOffline(512, to: buffer), .success) }
+        let before = try XCTUnwrap(host.fileSnapshot(session: session)).position
+        var crossings = 0
+        var previous: Float = 0
+        for _ in 0..<48 {
+            XCTAssertEqual(try engine.renderOffline(512, to: buffer), .success)
+            for sample in UnsafeBufferPointer(start: buffer.floatChannelData![0], count: Int(buffer.frameLength)) {
+                if previous <= 0, sample > 0 { crossings += 1 }
+                previous = sample
+            }
+        }
+        let after = try XCTUnwrap(host.fileSnapshot(session: session)).position
+        let elapsed = 48 * 512 / sampleRate
+        XCTAssertEqual(Double(crossings) / elapsed, frequency, accuracy: 8)
+        XCTAssertEqual(after - before, elapsed * 0.5, accuracy: 0.04)
+    }
+
     @MainActor func testPositionPollingSurvivesLoopRouteRebuild() async throws {
         let format = AVAudioFormat(standardFormatWithSampleRate: 48000, channels: 2)!
         let input = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 32)!
