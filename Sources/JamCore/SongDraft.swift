@@ -14,6 +14,7 @@ public struct SongDraft: Identifiable, Equatable, Sendable {
     public var title: String { get { metadata.first("title") ?? "" } set { set("title", newValue) } }
     public var artist: String { get { metadata.values["artist"]?.joined(separator: ", ") ?? "" } set { set("artist", newValue) } }
     public var key: String { get { metadata.first("key") ?? "" } set { set("key", newValue) } }
+    public var capo: String { get { metadata.first("capo") ?? "" } set { set("capo", newValue) } }
     public var tempo: String { get { metadata.first("tempo") ?? "" } set { set("tempo", newValue) } }
     public var timeSignature: String { get { metadata.first("time") ?? "" } set { set("time", newValue) } }
     public var duration: String { get { metadata.first("duration") ?? "" } set { set("duration", newValue) } }

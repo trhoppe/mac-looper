@@ -66,7 +66,7 @@ struct SongEditorView: View {
                         field("Artist", text: $editor.draft.artist, prompt: "Artist name")
                         playlistField.frame(minWidth: 140, maxWidth: 260)
                     }
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 14), count: 4), spacing: 12) {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 14), count: 5), spacing: 12) {
                         metadataFields
                     }
                 }.padding(.horizontal, 18).padding(.bottom, 14).disabled(saving)
@@ -104,9 +104,25 @@ struct SongEditorView: View {
     }
     @ViewBuilder private var metadataFields: some View {
         field("Song key", text: $editor.draft.key, prompt: "C, F# or Am")
+        capoField
         field("BPM", text: $editor.draft.tempo, prompt: "120")
         field("Time signature", text: $editor.draft.timeSignature, prompt: "4/4")
         field("Length", text: $editor.draft.duration, prompt: "3:45")
+    }
+    private var capoField: some View {
+        let frets = (1...5).map(String.init)
+        let current = draft.capo
+        let off = current == "0" ? "0" : ""
+        return VStack(alignment: .leading, spacing: 5) {
+            Text("Capo").font(.caption).foregroundStyle(.secondary).accessibilityHidden(true)
+            Picker("Capo", selection: $editor.draft.capo) {
+                Text("Off").tag(off)
+                ForEach(frets, id: \.self) { fret in Text(fret).tag(fret) }
+                if !current.isEmpty && current != off && !frets.contains(current) {
+                    Text(current).tag(current)
+                }
+            }.labelsHidden().pickerStyle(.menu).accessibilityIdentifier("song-capo-picker")
+        }.frame(maxWidth: .infinity, alignment: .leading)
     }
     private var playlistField: some View {
         VStack(alignment: .leading, spacing: 5) {

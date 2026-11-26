@@ -55,6 +55,25 @@ final class SongEditingTests: XCTestCase {
         for field in ["keyChord", "transpose", "tempo", "timeSignature", "duration"] { XCTAssertNil(song.fields[field]) }
         XCTAssertEqual(song.capo, "2"); XCTAssertEqual(song.chordPro, edit.chordPro)
     }
+    func testCapoFieldUpdatesTheHeaderAndKeepsInlineCapo() throws {
+        let library = try JustChordsLibrary(data: Data(#"{"songs":[{"id":"a","capo":7,"macJamsChordProVersion":1,"rawData":"{title: Song}\n{key: D}\n{capo: 7}\n[D]Verse\n{capo: 2}\n[D]Chorus"}],"playlists":[]}"#.utf8))
+        var draft = SongDraft(song: library.songs[0])
+        XCTAssertEqual(draft.capo, "7")
+        XCTAssertFalse(draft.hasChanges)
+        draft.capo = "3"
+        let changed = try library.applying(draft)
+        XCTAssertEqual(changed.songs[0].capo, "3")
+        XCTAssertEqual(changed.songs[0].fields["capo"], .number(3))
+        XCTAssertEqual(changed.songs[0].chartTransposition, -3)
+
+        draft = SongDraft(song: changed.songs[0])
+        draft.capo = ""
+        let cleared = try changed.applying(draft).songs[0]
+        XCTAssertNil(cleared.capo)
+        XCTAssertNil(cleared.fields["capo"])
+        XCTAssertEqual(ChordProSongSource(cleared.chordPro).body, "[D]Verse\n{capo: 2}\n[D]Chorus")
+    }
+
     func testInvalidMetadataReportsUsefulErrorsWhileDraftRemainsEditable() throws {
         var edit = try draft(); edit.title = "  "
         XCTAssertNotNil(edit.validationError)

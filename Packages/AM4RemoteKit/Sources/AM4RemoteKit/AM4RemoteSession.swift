@@ -39,14 +39,11 @@ import SwiftUI
 /// the remote's preset navigation and block editors.
 @MainActor public struct AM4RemoteScreen: View {
     @ObservedObject private var session: AM4RemoteSession
-    private let embedded: Bool
-    public init(session: AM4RemoteSession, embedded: Bool = false) { self.session = session; self.embedded = embedded }
+    public init(session: AM4RemoteSession) { self.session = session }
     public var body: some View {
         VStack(spacing: 0) {
-            if !embedded {
-                JamScreenHeader("AM4 Remote", icon: "slider.horizontal.3", closeOnEscape: false, close: { session.dismiss() })
-                Divider()
-            }
+            JamScreenHeader("AM4 Remote", icon: "slider.horizontal.3", closeOnEscape: false, close: { session.dismiss() })
+            Divider()
             AM4RemoteView(midi: session.connection)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

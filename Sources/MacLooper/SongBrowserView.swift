@@ -15,6 +15,27 @@ struct SongBrowserView: View {
             onSelectSong()
         })
     }
+    private var isPhone: Bool {
+        #if os(iOS)
+        UIDevice.current.userInterfaceIdiom == .phone
+        #else
+        false
+        #endif
+    }
+
+    private var selectedPlaylistTitle: String {
+        library.library?.playlists.first { $0.id == library.playlistID }?.title ?? "All Songs"
+    }
+
+    private var playlistPicker: some View {
+        Picker("Playlist", selection: $library.playlistID) {
+            Text("All Songs").tag(String?.none)
+            ForEach(library.library?.playlists ?? []) { list in
+                Text(list.title).tag(Optional(list.id))
+            }
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 12) {
@@ -37,10 +58,26 @@ struct SongBrowserView: View {
                 if searching {
                     TextField("Search songs", text: Binding(get: { library.query }, set: { library.query = $0 })).textFieldStyle(.roundedBorder).hoverHighlight().focused($searchFocused)
                 }
-                Picker("Playlist", selection: $library.playlistID) {
-                    Text("All Songs").tag(String?.none)
-                    ForEach(library.library?.playlists ?? []) { list in Text(list.title).tag(Optional(list.id)) }
-                }.labelsHidden().controlSize(.regular).font(.callout).hoverHighlight()
+                if isPhone {
+                    Menu {
+                        playlistPicker
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "folder")
+                            Text(selectedPlaylistTitle).lineLimit(1)
+                            Spacer(minLength: 8)
+                            Image(systemName: "chevron.down").font(.caption.weight(.semibold))
+                        }
+                        .font(.callout)
+                        .padding(.horizontal, 12).frame(minHeight: 44)
+                        .background(JamDesign.control, in: RoundedRectangle(cornerRadius: 8))
+                        .foregroundStyle(JamDesign.text)
+                    }
+                    .accessibilityLabel("Playlist")
+                    .accessibilityValue(selectedPlaylistTitle)
+                } else {
+                    playlistPicker.labelsHidden().controlSize(.regular).font(.callout).hoverHighlight()
+                }
             }.padding(.horizontal, 16).padding(.top, 16).padding(.bottom, 12)
             List(selection: selection) {
                 ForEach(library.songs) { song in
@@ -66,7 +103,7 @@ struct SongBrowserView: View {
                 .contentMargins(.horizontal, 0, for: .scrollContent)
                 #if os(iOS)
                 // Preserve the Songs popover's outline beside the opaque rows.
-                .clipped().padding(.horizontal, 1)
+                .clipped().padding(.horizontal, isPhone ? 0 : 1)
                 #endif
                 .overlay {
                     if library.library != nil && library.songs.isEmpty {

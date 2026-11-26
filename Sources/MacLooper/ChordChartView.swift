@@ -36,6 +36,7 @@ private struct ChartPresentation: View, Equatable {
         false
         #endif
     }
+    private var horizontalInset: CGFloat { isPhone ? 16 : 20 }
     private var showingDiagrams: Bool { isPhone ? phoneDiagrams : wideDiagrams }
     @State private var autoScrolling = false
     @Environment(\.scenePhase) private var scenePhase
@@ -49,26 +50,14 @@ private struct ChartPresentation: View, Equatable {
                 // have been skipped by SwiftUI.
                 let document = library.chartDocument(for: song)
                 if isPhone {
-                    HStack {
+                    VStack(alignment: .leading, spacing: 10) {
                         VStack(alignment: .leading, spacing: 3) {
-                            Text(song.title).font(.headline).lineLimit(2)
+                            Text(song.title).font(.title3.weight(.semibold)).lineLimit(2)
                             songMetadata(song).font(.caption).foregroundStyle(.secondary)
                         }
-                        Spacer(minLength: 4)
-                        Button { autoScrolling.toggle() } label: {
-                            Image(systemName: autoScrolling ? "pause.fill" : "play.fill")
-                        }.buttonStyle(JamIconStyle()).accessibilityLabel(autoScrolling ? "Pause chart auto-scroll" : "Start chart auto-scroll")
-                        Menu {
-                            Button("Edit song", action: edit)
-                            Button("Larger chart text") { changeFont(min(36, fontSize + 1)) }.disabled(fontSize >= 36)
-                            Button("Smaller chart text") { changeFont(max(12, fontSize - 1)) }.disabled(fontSize <= 12)
-                            Button(twoColumns ? "Use one column" : "Use two columns", action: toggleColumns)
-                            if !document.guitarChords.isEmpty {
-                                Button(showingDiagrams ? "Hide chord diagrams" : "Show chord diagrams", action: toggleDiagrams)
-                            }
-                        } label: { Image(systemName: "ellipsis.circle").frame(width: 44, height: 44) }
-                            .accessibilityLabel("Chart options")
-                    }.padding(.horizontal, 14)
+                        phoneChartControls(hasDiagrams: !document.guitarChords.isEmpty)
+                    }.padding(.horizontal, horizontalInset).padding(.top, 12)
+                        .padding(.bottom, showingDiagrams ? 12 : 0)
                 } else {
                     ViewThatFits(in: .horizontal) {
                         HStack(alignment: .top, spacing: 16) {
@@ -80,7 +69,7 @@ private struct ChartPresentation: View, Equatable {
                             songTitle(song, document: document)
                             HStack { Spacer(minLength: 0); chartControls(song, document: document) }
                         }
-                    }.padding(.horizontal, 20).padding(.top, 18).padding(.bottom, showingDiagrams ? 14 : 2)
+                    }.padding(.horizontal, horizontalInset).padding(.top, 18).padding(.bottom, showingDiagrams ? 14 : 2)
                 }
                 if showingDiagrams && !document.guitarChords.isEmpty {
                     HStack(alignment: .top, spacing: 0) {
@@ -91,7 +80,7 @@ private struct ChartPresentation: View, Equatable {
                         }.buttonStyle(JamPlainButtonStyle()).accessibilityLabel("Hide chord diagrams").help("Hide chord diagrams")
                             .padding(.trailing, 12)
                     }.padding(.top, 8).padding(.bottom, 4).jamSurface(padding: 0)
-                        .padding(.horizontal, 20).padding(.bottom, 8)
+                        .padding(.horizontal, horizontalInset).padding(.bottom, 8)
                         .transition(.scale(scale: 0.85, anchor: .topTrailing).combined(with: .opacity))
                 }
                 GeometryReader { geo in
@@ -158,7 +147,7 @@ private struct ChartPresentation: View, Equatable {
                                     .layoutValue(key: ChartSpanKey.self, value: true)
                             }
                         }.lineSpacing(fontSize * 0.1).frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 20).padding(.top, showingDiagrams ? 8 : 0).padding(.bottom, 20)
+                            .padding(.horizontal, horizontalInset).padding(.top, isPhone ? 20 : showingDiagrams ? 8 : 0).padding(.bottom, 20)
                             .background {
                                 ChartAutoScroll(active: $autoScrolling, duration: ChartScrollTiming.duration(song.duration))
                                     .allowsHitTesting(false).accessibilityHidden(true)
@@ -198,6 +187,36 @@ private struct ChartPresentation: View, Equatable {
             if isPhone { phoneDiagrams.toggle() } else { wideDiagrams.toggle() }
         }
     }
+    private func phoneChartControls(hasDiagrams: Bool) -> some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: 6) {
+                Button { autoScrolling.toggle() } label: {
+                    Image(systemName: autoScrolling ? "pause.fill" : "play.fill")
+                        .frame(width: 24)
+                }.accessibilityLabel(autoScrolling ? "Pause chart auto-scroll" : "Start chart auto-scroll")
+                Button { changeFont(max(12, fontSize - 1)) } label: {
+                    Text("A−").frame(width: 24)
+                }.disabled(fontSize <= 12).accessibilityLabel("Smaller chart text")
+                Button { changeFont(min(36, fontSize + 1)) } label: {
+                    Text("A+").frame(width: 24)
+                }.disabled(fontSize >= 36).accessibilityLabel("Larger chart text")
+                Button(action: edit) {
+                    Label("Edit", systemImage: "square.and.pencil")
+                }.accessibilityLabel("Edit song")
+                Button(action: toggleColumns) {
+                    ChartColumnsIcon(count: twoColumns ? 1 : 2).frame(width: 24, height: 14)
+                }.accessibilityLabel(twoColumns ? "Use one chart column" : "Use two chart columns")
+                if hasDiagrams {
+                    Button(action: toggleDiagrams) {
+                        Image(systemName: "guitars").frame(width: 24)
+                    }
+                    .accessibilityLabel(showingDiagrams ? "Hide chord diagrams" : "Show chord diagrams")
+                    .accessibilityValue(showingDiagrams ? "Shown" : "Hidden")
+                }
+            }.buttonStyle(PhoneChartButtonStyle())
+        }.scrollIndicators(.hidden)
+    }
+
     private func chartControls(_ song: LibrarySong, document: ChordProDocument) -> some View {
         VStack(alignment: .trailing, spacing: 8) {
             HStack(spacing: 6) {
@@ -352,6 +371,20 @@ private struct ChartFlowLayout: Layout {
             subviews[index].place(at: CGPoint(x: bounds.minX + item.point.x, y: bounds.minY + item.point.y),
                                  anchor: .topLeading, proposal: ProposedViewSize(item.size))
         }
+    }
+}
+
+private struct PhoneChartButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var enabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.subheadline.weight(.medium))
+            .padding(.horizontal, 10)
+            .frame(minHeight: 44)
+            .foregroundStyle(JamDesign.text)
+            .background(JamDesign.control, in: RoundedRectangle(cornerRadius: 8))
+            .opacity(enabled ? (configuration.isPressed ? 0.65 : 1) : 0.35)
     }
 }
 

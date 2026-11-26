@@ -6,6 +6,8 @@ import LooperAudioUnit
 import JamCore
 #if os(macOS)
 import CoreAudio
+#elseif os(iOS)
+import UIKit
 #endif
 
 @MainActor final class AudioEngineHost {
@@ -253,7 +255,11 @@ import CoreAudio
                 sampleRate = try playbackSetup(e); actualBufferFrames = 32
             } else {
             let session = AVAudioSession.sharedInstance()
-            try session.setCategory(capture ? .playAndRecord : .playback, mode: .default, options: [.mixWithOthers])
+            var options: AVAudioSession.CategoryOptions = [.mixWithOthers]
+            if capture && UIDevice.current.userInterfaceIdiom == .phone {
+                options.insert(.defaultToSpeaker)
+            }
+            try session.setCategory(capture ? .playAndRecord : .playback, mode: .default, options: options)
             try session.setPreferredSampleRate(48000)
             try session.setPreferredIOBufferDuration(32.0 / 48000.0)
             try session.setActive(true)

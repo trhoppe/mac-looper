@@ -29,7 +29,7 @@ struct ChordLibraryView: View {
                                         includeSlashChords: bass != "hide")
         let voicings = groups.flatMap { group in group.shapes.map { Voicing(group: group, shape: $0) } }
         VStack(alignment: .leading, spacing: 0) {
-            JamScreenHeader("Chord Library", icon: "guitars", close: close)
+            JamScreenHeader("Chords", icon: "guitars", close: close)
             Divider()
             VStack(alignment: .leading, spacing: 14) {
                 Picker("Chord library mode", selection: $showingTriads) {

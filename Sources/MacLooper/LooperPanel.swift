@@ -5,6 +5,7 @@ import LooperCore
 struct LooperPanel: View {
     @ObservedObject var model: LooperModel
     var fillsHeight = false
+    var compact = false
     @State private var showingSavedLoops = false
     private let accent = JamDesign.accent
     private var bars: Binding<Double> { Binding(get: { Double(model.bars) }, set: { if $0.isFinite { model.bars = Int(min(8, max(1, $0.rounded()))) } }) }
@@ -19,7 +20,7 @@ struct LooperPanel: View {
         VStack(alignment: .leading, spacing: 14) {
             controls
             LoopWaveform(telemetry: model.telemetry, bars: model.bars, stateColor: stateColor,
-                         showsProgress: model.hasLoop || model.state == TL_RECORDING).frame(height: 56)
+                         showsProgress: model.hasLoop || model.state == TL_RECORDING).frame(height: compact ? 50 : 56)
         }.frame(maxHeight: fillsHeight ? .infinity : nil, alignment: .top)
             .jamSurface(border: model.busy || model.hasLoop ? stateColor.opacity(0.4) : JamDesign.border)
             .tint(accent)
@@ -39,13 +40,15 @@ struct LooperPanel: View {
                     transport
                 }
             }
-            LoopDetail(model: model)
-            HStack(spacing: 10) {
-                Text("Threshold").font(.caption).foregroundStyle(.secondary)
-                LoopInputMeter(telemetry: model.telemetry, threshold: model.thresholdDB)
-                TextField("dB", value: threshold, format: .number.precision(.fractionLength(0)))
-                    .textFieldStyle(.plain).jamNumberField(width: 48).multilineTextAlignment(.trailing).accessibilityLabel("Threshold decibels")
-                Text("dB").font(.caption).foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: compact ? 6 : 10) {
+                LoopDetail(model: model)
+                HStack(spacing: 10) {
+                    Text("Threshold").font(.caption).foregroundStyle(.secondary)
+                    LoopInputMeter(telemetry: model.telemetry, threshold: model.thresholdDB)
+                    TextField("dB", value: threshold, format: .number.precision(.fractionLength(0)))
+                        .textFieldStyle(.plain).jamNumberField(width: 48).multilineTextAlignment(.trailing).accessibilityLabel("Threshold decibels")
+                    Text("dB").font(.caption).foregroundStyle(.secondary)
+                }
             }
         }
     }
@@ -119,15 +122,17 @@ struct LooperPanel: View {
 struct TempoControl: View {
     @ObservedObject var model: LooperModel
     let context: String
+    var iconOnly = false
 
     var body: some View {
-        TimingControl(label: "BPM", value: $model.bpm, bounds: 30...240, accessibilityName: "\(context) tempo")
+        TimingControl(label: "BPM", labelIcon: iconOnly ? "metronome" : nil, value: $model.bpm, bounds: 30...240, accessibilityName: "\(context) tempo")
             .disabled(!model.canEditTiming)
     }
 }
 
 private struct TimingControl: View {
     let label: String
+    let labelIcon: String?
     @Binding var value: Double
     let bounds: ClosedRange<Double>
     let accessibilityName: String
@@ -135,8 +140,9 @@ private struct TimingControl: View {
     @FocusState private var focused: Bool
     @Environment(\.isEnabled) private var enabled
 
-    init(label: String, value: Binding<Double>, bounds: ClosedRange<Double>, accessibilityName: String) {
+    init(label: String, labelIcon: String? = nil, value: Binding<Double>, bounds: ClosedRange<Double>, accessibilityName: String) {
         self.label = label
+        self.labelIcon = labelIcon
         self._value = value
         self.bounds = bounds
         self.accessibilityName = accessibilityName
@@ -177,7 +183,13 @@ private struct TimingControl: View {
                     step(key.key == .upArrow ? 1 : -1)
                     return .handled
                 }
-            Text(label).font(.system(size: 11, weight: .medium)).foregroundStyle(JamDesign.secondary).padding(.trailing, 7)
+            Group {
+                if let labelIcon {
+                    Image(systemName: labelIcon).accessibilityHidden(true)
+                } else {
+                    Text(label)
+                }
+            }.font(.system(size: 11, weight: .medium)).foregroundStyle(JamDesign.secondary).padding(.trailing, 7)
             Button { step(1) } label: { Image(systemName: "plus").font(.system(size: 12, weight: .semibold)).frame(width: 28, height: JamDesign.target) }
                 .disabled(value >= bounds.upperBound).accessibilityLabel("Increase \(label)")
                 .help("Increase \(label)")

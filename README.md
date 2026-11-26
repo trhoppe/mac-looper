@@ -3,8 +3,7 @@
 Planned work: [post-redesign backlog](BACKLOG.md).
 
 A native Mac, iPad, and iPhone guitar-jamming app. Chord charts and backing playback share
-one SwiftUI workspace. A full-app AM4 Remote controls the connected amp over USB MIDI. Header controls show or hide Songs, Chords, Looper, Drummer and
-Player; the chart expands into the available space.
+one SwiftUI workspace. A full-app AM4 Remote controls the connected amp over USB MIDI. On Mac and iPad, Jam shows or hides Player, Drummer and Looper together. The chart expands into the available space.
 A shared C render core provides sample-accurate threshold capture. Live guitar
 monitoring stays on the AM4. No DAW or recording projects are required; optional
 drums use the installed Pop Drummer AUv3 instrument.
@@ -24,7 +23,7 @@ shared-code development. Use the packaged Mac app for normal use.
 
 ### iPhone and iPad
 
-The **MacLooper-iPad** scheme builds a universal iOS app. On iPhone the bottom tabs keep Songs, Chart, Jam, Tools, and AM4 within reach. Selecting a song opens its chart. Jam groups the looper, player, drummer, tempo, and mix. Tools contains chord diagrams, scales, and audio settings. AM4 has separate Presets and Controls views. Switching tabs keeps the audio session running.
+The **MacLooper-iPad** scheme builds a universal iOS app. On iPhone the bottom tabs keep Songs, Chart, Jam and Tools within reach. Selecting a song opens its chart. Jam stacks Player, Drummer and Looper in that order, with shared tempo and mix controls. Tools contains AM4, Chords, Scales and Settings. AM4 has separate Presets and Controls views. Switching tabs keeps the audio session running.
 
 Requires iOS or iPadOS 18 or newer. Open `MacLooper.xcodeproj`, select **MacLooper-iPad**,
 and choose your iPhone or iPad as the destination. In Xcode Settings → Accounts, sign in to
@@ -129,13 +128,13 @@ to reveal title/artist search. The adjacent sort dropdown offers **Song name**
 and **Artist name**, remembers the last choice, and works with search and playlist
 filtering. The file-search icon sits beside the folder button.
 The app opens with no chart selected and a faded logo; choose a song when ready.
-The **Songs / Chords / Looper / Drummer / Player** header buttons toggle their panels.
-Visibility is remembered; hiding a panel keeps its audio playing. The chart widens
-when Player is hidden; Looper or Drummer fills the footer when the other is hidden.
-Hiding both removes the footer. Hide Songs, Player, Looper and Drummer to let
-Chords fill the workspace. Chords can also be hidden for a clean Looper/Drummer
-or Player-only workspace; selecting a song automatically reveals Chords again,
-including reselecting the same song. Header buttons and song/audio rows lighten subtly on hover.
+On Mac and iPad, **Songs** opens the library browser and **Chart** shows or
+hides the selected song. **Jam** shows or hides Player, Drummer and Looper
+together. Hiding Jam leaves audio playing and frees space for the chart.
+Visibility is remembered. Selecting a song reveals the chart again, including
+when reselecting the same song. **AM4**, **Chords** and **Scales** open their
+tools directly from the header. Header buttons and song/audio rows lighten
+subtly on hover.
 The **Ready** indicator beside Settings summarizes connection readiness; output
 device, sample rate and buffer details appear in Settings.
 
@@ -194,9 +193,9 @@ Card heights follow their contents, and the column scrolls in short windows.
 
 On iPad landscape, Player, a compact Drummer strip, and Looper share the right
 column beside the full-height chart. In portrait, a slim Drummer row sits below
-the chart, with Player and Looper side by side beneath it. Songs, More, Settings,
+the chart, with Player and Looper side by side beneath it. Songs, Settings
 and Audio Files use one bounded popup presenter and shared dropdown triggers.
-Hiding a panel leaves its playback running and frees space for the others.
+Hiding Jam leaves playback running and frees space for the chart.
 
 The toolbar has one shared BPM control for Drummer and Looper. **Mix** opens
 all three existing volume controls together. Each card also keeps its speaker
